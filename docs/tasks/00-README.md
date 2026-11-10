@@ -8,7 +8,7 @@
 
 | # | المهمة | تعتمد على | الحالة |
 |---|---|---|---|
-| 01 | [إعداد الـ monorepo](01-repo-setup.md) | - | ⬜ |
+| 01 | [إعداد الـ monorepo](01-repo-setup.md) | - | ✅ |
 | 02 | [مشروع Supabase للتطوير](02-supabase-dev-project.md) | 01 | ⬜ |
 | 03 | [اختبارات قاعدة البيانات pgTAP](03-db-tests.md) | 02 | ⬜ |
 | 04 | [تجربة رسائل OTP بالعراق](04-sms-otp-spike.md) | 02 | ⬜ |
