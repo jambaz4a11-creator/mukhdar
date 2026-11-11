@@ -3,7 +3,8 @@
 ## المشروع
 تطبيق توصيل خضار وفواكه لمدينة بسماية (بغداد). واجهة عربية RTL.
 
-- موبايل: React Native + Expo (TypeScript, Expo Router) — تطبيق الزبون وتطبيق السائق.
+- موبايل: React Native + Expo (TypeScript, Expo Router) — تطبيق الزبون.
+- تطبيق السائق **خارجي**: يبنيه مطوّر منفصل ويُربط لاحقاً (T21 خارج خطة هذا الـ repo). عقد الربط `docs/DRIVER-API.md`؛ لا تغيّر الـ backend الخاص بالسائق إلا باتفاق.
 - أدمن: Next.js.
 - Backend: Supabase (Postgres + RLS + Auth برقم الهاتف + Storage + Edge Functions).
 - المواصفات: `docs/SPEC-*.md`. المهام: `docs/tasks/NN-*.md` (يُشار لها T01..T24، مثلاً T03 = `docs/tasks/03-db-tests.md`). جدول الحالة: `docs/tasks/00-README.md`.
