@@ -142,7 +142,7 @@ All writes go through the functions above; there are no insert/update/delete gra
 
 | Table | Driver can read |
 |---|---|
-| `orders` | only rows where `driver_id = auth.uid()` (all columns, including `customer_name`, `customer_phone`, `address_snapshot`). **Not** unassigned orders (use `available_orders`), not other drivers' orders. Losing the assignment removes access immediately |
+| `orders` | only rows where `driver_id = auth.uid()` **and** the account is an active driver (all columns, including `customer_name`, `customer_phone`, `address_snapshot`). **Not** unassigned orders (use `available_orders`), not other drivers' orders. Losing the assignment, deactivation, or a role change removes access immediately (also for `order_items`, `order_status_history` and Realtime events) |
 | `order_items` | items of orders they can read |
 | `order_status_history` | history of orders they can read |
 | `profiles` | own row only |

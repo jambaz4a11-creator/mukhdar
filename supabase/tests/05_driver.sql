@@ -1,5 +1,5 @@
 -- 05: دوال السائق (available_orders, accept_order, assign_driver) و RLS السائق
-select plan(37);
+select plan(43);
 
 -- طلبات موجودة مسبقاً (مثل seed:demo) لا تزاحم طلبات الاختبار ضمن حد available_orders.
 -- تُعيَّن لسائق مؤقت داخل المعاملة، وكل شيء يُلغى بنهايتها.
@@ -103,8 +103,18 @@ select tests.as_postgres();
 select tests.remember('d_off', tests.new_user('driver'));
 select tests.remember('o_off', tests.order_in('preparing', tests.id('cust'), tests.id('d_off')));
 select tests.remember('o_free', tests.order_in('pending', tests.id('cust')));
+select tests.as_user(tests.id('d_off'));
+select isnt_empty($$ select 1 from public.orders where id = tests.id('o_off') $$,
+  'active driver reads the assigned order');
+select tests.as_postgres();
 update public.profiles set is_active = false where id = tests.id('d_off');
 select tests.as_user(tests.id('d_off'));
+select is_empty($$ select 1 from public.orders $$,
+  'deactivated driver reads no orders, not even assigned ones');
+select is_empty($$ select 1 from public.order_items where order_id = tests.id('o_off') $$,
+  'deactivated driver cannot read items of the assigned order');
+select is_empty($$ select 1 from public.order_status_history where order_id = tests.id('o_off') $$,
+  'deactivated driver cannot read history of the assigned order');
 select throws_ok($$ select * from public.available_orders() $$, 'NOT_ALLOWED',
   'deactivated driver cannot list available orders');
 select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_free')), 'NOT_ALLOWED',
@@ -117,6 +127,15 @@ select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_f
 select tests.as_postgres();
 select is((select driver_id from public.orders where id = tests.id('o_free')), null::uuid,
   'order stays unassigned');
+update public.profiles set is_active = true where id = tests.id('d_off');
+select tests.as_user(tests.id('d_off'));
+select isnt_empty($$ select 1 from public.orders where id = tests.id('o_off') $$,
+  'reactivated driver reads the assigned order again');
+select tests.as_postgres();
+update public.profiles set role = 'customer' where id = tests.id('d_off');
+select tests.as_user(tests.id('d_off'));
+select is_empty($$ select 1 from public.orders where id = tests.id('o_off') $$,
+  'a former driver (now customer) cannot read orders assigned to them as a driver');
 
 -- ---------------------------------------------------------------- list_drivers (موظف/أدمن)
 select tests.as_user(tests.id('staff'));
