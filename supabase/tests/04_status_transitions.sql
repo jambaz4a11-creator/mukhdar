@@ -1,5 +1,5 @@
 -- 04: set_order_status. جدول الأدوار كاملاً، التحويلات غير الصحيحة، الإلغاء والتسليم
-select plan(63);
+select plan(67);
 
 select tests.remember('admin', tests.new_user('admin'));
 select tests.remember('staff', tests.new_user('staff'));
@@ -122,6 +122,24 @@ select row_eq($$ select cancelled_by, cancel_reason, cancelled_at is not null fr
 select isnt_empty($$ select 1 from public.notification_outbox
                      where audience = 'user' and user_id = tests.id('cust') and data ->> 'order_id' = tests.id('o_cancel')::text
                        and data ->> 'status' = 'cancelled' $$, 'customer notified about cancellation');
+
+-- ---------------------------------------------------------------- إلغاء طلب له سائق
+select tests.remember('o_drv_cancel', tests.order_in('preparing', tests.id('cust'), tests.id('driver')));
+select tests.set_uid(tests.id('staff'));
+select public.set_order_status(tests.id('o_drv_cancel'), 'cancelled', repeat('x', 400));
+select tests.as_postgres();
+select isnt_empty($$ select 1 from public.notification_outbox
+                     where audience = 'user' and user_id = tests.id('driver')
+                       and data ->> 'order_id' = tests.id('o_drv_cancel')::text and data ->> 'type' = 'cancelled' $$,
+  'assigned driver is notified when the order is cancelled');
+select is_empty($$ select 1 from public.notification_outbox
+                   where data ->> 'order_id' = tests.id('o_cancel')::text and data ->> 'type' = 'cancelled' $$,
+  'no driver notification when no driver is assigned');
+select is((select char_length(cancel_reason) from public.orders where id = tests.id('o_drv_cancel')), 300,
+  'cancel reason is capped at 300 characters');
+select is((select char_length(note) from public.order_status_history
+            where order_id = tests.id('o_drv_cancel') and to_status = 'cancelled'), 300,
+  'history note is capped at 300 characters');
 
 -- ---------------------------------------------------------------- التسليم يحدّث daily_stats
 -- لقطة قبل: نحفظها بجدول مؤقت (postgres)

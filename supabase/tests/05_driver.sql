@@ -1,5 +1,5 @@
 -- 05: دوال السائق (available_orders, accept_order, assign_driver) و RLS السائق
-select plan(25);
+select plan(32);
 
 -- طلبات موجودة مسبقاً (مثل seed:demo) لا تزاحم طلبات الاختبار ضمن حد available_orders.
 -- تُعيَّن لسائق مؤقت داخل المعاملة، وكل شيء يُلغى بنهايتها.
@@ -81,6 +81,13 @@ select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_d
   'ORDER_NOT_AVAILABLE', 'cannot assign a delivered order');
 select lives_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_mine'), tests.id('d2')),
   'staff reassigns an order to another driver');
+select tests.as_postgres();
+select isnt_empty($$ select 1 from public.notification_outbox where audience = 'user' and user_id = tests.id('d1')
+                       and data ->> 'order_id' = tests.id('o_mine')::text and data ->> 'type' = 'unassigned' $$,
+  'previous driver is notified about the reassignment');
+select is_empty($$ select 1 from public.notification_outbox where true
+                     and data ->> 'order_id' = tests.id('o_preparing')::text and data ->> 'type' = 'unassigned' $$,
+  'first assignment sends no unassigned notice');
 
 select tests.as_user(tests.id('d1'));
 select is_empty($$ select 1 from public.orders where id = tests.id('o_mine') $$,
@@ -90,5 +97,18 @@ select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_m
 select tests.as_user(tests.id('cust'));
 select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_mine'), tests.id('d1')),
   'NOT_ALLOWED', 'customer cannot assign orders');
+
+-- ---------------------------------------------------------------- list_drivers (موظف/أدمن)
+select tests.as_user(tests.id('staff'));
+select is((select count(*)::int from public.list_drivers() where id in (tests.id('d1'), tests.id('d2'))), 2,
+  'staff lists drivers');
+select is((select count(*)::int from public.list_drivers() where id = tests.id('cust')), 0,
+  'list_drivers returns drivers only');
+select is(pg_get_function_result('public.list_drivers()'::regprocedure),
+  'TABLE(id uuid, full_name text, phone text, is_active boolean)', 'list_drivers returns only id, name, phone, active');
+select tests.as_user(tests.id('d1'));
+select throws_ok($$ select * from public.list_drivers() $$, 'NOT_ALLOWED', 'driver cannot list drivers');
+select tests.as_user(tests.id('cust'));
+select throws_ok($$ select * from public.list_drivers() $$, 'NOT_ALLOWED', 'customer cannot list drivers');
 
 select * from finish();

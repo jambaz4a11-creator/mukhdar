@@ -1,5 +1,5 @@
 -- 03: place_order
-select plan(32);
+select plan(46);
 
 -- التجهيز (postgres): إعدادات معروفة، منتجات، زبائن، عناوين
 update public.app_settings set delivery_fee_iqd = 1000, min_order_iqd = 0, store_open = true;
@@ -72,6 +72,84 @@ select throws_ok(format($$ select public.place_order(%L, %L, gen_random_uuid()) 
 select throws_ok(format($$ select public.place_order(%L, %L, null) $$,
   tests.id('a1'), jsonb_build_array(tests.item(tests.id('p2'), 1))),
   'IDEMPOTENCY_KEY_REQUIRED', 'missing idempotency key is rejected');
+
+-- صيغة البنود: تُرفض برموز العقد قبل أي تحويل نوع (لا أخطاء cast خام)
+select tests.as_postgres();
+create function tests.bad_items() returns setof text language plpgsql as $$
+declare c record;
+begin
+  for c in select * from (values
+      ('[5]',                                                   'INVALID_QTY',         'non-object line'),
+      ('[{"product_id": "not-a-uuid", "qty": 1}]',              'PRODUCT_UNAVAILABLE', 'malformed product_id'),
+      ('[{"qty": 1}]',                                          'PRODUCT_UNAVAILABLE', 'missing product_id'),
+      ('[{"product_id": 5, "qty": 1}]',                         'PRODUCT_UNAVAILABLE', 'numeric product_id'),
+      ('[{"product_id": "%s", "qty": "2"}]',                    'INVALID_QTY',         'qty as a string'),
+      ('[{"product_id": "%s", "qty": 1.5}]',                    'INVALID_QTY',         'fractional qty'),
+      ('[{"product_id": "%s", "qty": 100000000000000000000}]', 'INVALID_QTY',         'qty beyond integer range'),
+      ('[{"product_id": "%s", "qty": -1}]',                     'INVALID_QTY',         'negative qty')
+    ) t(items, expected, label)
+  loop
+    perform tests.set_uid(tests.id('c1'));
+    return next is(
+      tests.try(format('select public.place_order(%L, %L::jsonb, gen_random_uuid())',
+                       tests.id('a1'), replace(c.items, '%s', tests.id('p2')::text))),
+      c.expected, c.label || ' is ' || c.expected);
+  end loop;
+end $$;
+select * from tests.bad_items();
+select tests.as_user(tests.id('c1'));
+
+-- عنوان ببناية أو قطاع معطّل
+select tests.as_postgres();
+select tests.remember('a_off', tests.new_address(tests.id('c1')));
+update public.buildings set is_active = false
+ where id = (select building_id from public.addresses where id = tests.id('a_off'));
+select tests.as_user(tests.id('c1'));
+select throws_ok(format($$ select public.place_order(%L, %L, gen_random_uuid()) $$,
+  tests.id('a_off'), jsonb_build_array(tests.item(tests.id('p2'), 1))),
+  'ADDRESS_INACTIVE', 'address in an inactive building is rejected');
+select tests.as_postgres();
+update public.buildings set is_active = true
+ where id = (select building_id from public.addresses where id = tests.id('a_off'));
+update public.sectors set is_active = false
+ where id = (select ss.sector_id from public.addresses a join public.buildings b on b.id = a.building_id
+               join public.subsections ss on ss.id = b.subsection_id where a.id = tests.id('a_off'));
+select tests.as_user(tests.id('c1'));
+select throws_ok(format($$ select public.place_order(%L, %L, gen_random_uuid()) $$,
+  tests.id('a_off'), jsonb_build_array(tests.item(tests.id('p2'), 1))),
+  'ADDRESS_INACTIVE', 'address in an inactive sector is rejected');
+
+-- زبون بلا هاتف
+select tests.as_postgres();
+select tests.remember('c_nophone', tests.new_user('customer'));
+select tests.remember('a_nophone', tests.new_address(tests.id('c_nophone')));
+update public.profiles set phone = null where id = tests.id('c_nophone');
+select tests.as_user(tests.id('c_nophone'));
+select throws_ok(format($$ select public.place_order(%L, %L, gen_random_uuid()) $$,
+  tests.id('a_nophone'), jsonb_build_array(tests.item(tests.id('p2'), 1))),
+  'PHONE_REQUIRED', 'a customer without a phone cannot order');
+
+-- حد الطلبات غير المنتهية (القيمة الحقيقية 3)
+select tests.as_postgres();
+update public.app_settings set max_active_orders = 3;
+select tests.remember('c3', tests.new_user('customer'));
+select tests.remember('p3', tests.new_product(500, 50));
+select tests.remember('o3a', tests.place(tests.id('c3'), jsonb_build_array(tests.item(tests.id('p3'), 1))));
+select tests.place(tests.id('c3'), jsonb_build_array(tests.item(tests.id('p3'), 1)));
+select tests.place(tests.id('c3'), jsonb_build_array(tests.item(tests.id('p3'), 1)));
+select tests.remember('a3', tests.new_address(tests.id('c3')));
+select tests.as_user(tests.id('c3'));
+select throws_ok(format($$ select public.place_order(%L, %L, gen_random_uuid()) $$,
+  tests.id('a3'), jsonb_build_array(tests.item(tests.id('p3'), 1))),
+  'TOO_MANY_ACTIVE_ORDERS', 'a 4th open order is rejected (limit 3)');
+select lives_ok(format($$ select public.set_order_status(%L, 'cancelled') $$, tests.id('o3a')),
+  'customer cancels one open order');
+select lives_ok(format($$ select public.place_order(%L, %L, gen_random_uuid()) $$,
+  tests.id('a3'), jsonb_build_array(tests.item(tests.id('p3'), 1))),
+  'after the cancellation a new order is accepted');
+select tests.as_postgres();
+update public.app_settings set max_active_orders = 1000;
+select tests.as_user(tests.id('c1'));
 
 -- المتجر مغلق
 select tests.as_postgres();

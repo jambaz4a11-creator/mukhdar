@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` (مراجعة T01–T05).
 
 ## 4) توليد أنواع TypeScript
 
@@ -72,9 +72,11 @@ pnpm exec supabase db advisors --remote
 ```
 (أو من اللوحة: Advisors ← Security Advisor).
 
-نتيجة بعد T03 (2026-11-11): **9 تحذيرات فقط، كلها مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC التسع (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
+نتيجة بعد مراجعة T01–T05 (2026-11-11): **10 تحذيرات مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC العشر (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `list_drivers`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
 
-أي تحذير جديد غير هذه التسعة = شيء يحتاج إصلاح. (اختبار `01_schema.sql` يفحص نفس القواعد تلقائياً.)
+بالإضافة: `auth_leaked_password_protection` (إعداد Auth، لا يخص الدخول بالهاتف؛ يُفعَّل من اللوحة إن رغب صاحب المشروع).
+
+أي تحذير جديد غير هذه = شيء يحتاج إصلاح. (اختبار `01_schema.sql` يفحص نفس القواعد تلقائياً.)
 
 تاريخياً، نتيجة T02 كانت 64 تحذيراً، وأصلحتها migration `20261111000001_advisor_fixes.sql`:
 - `search_path` ثابت للدوال الثلاث.

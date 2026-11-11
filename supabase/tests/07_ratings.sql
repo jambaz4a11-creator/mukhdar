@@ -1,5 +1,5 @@
 -- 07: التقييم بعد التسليم، ورموز الإشعارات
-select plan(20);
+select plan(25);
 
 select tests.remember('cust', tests.new_user('customer'));
 select tests.remember('cust2', tests.new_user('customer'));
@@ -49,6 +49,14 @@ select results_eq($$ select token, platform::text from public.push_tokens $$,
   $$ values ('ExponentPushToken[test-1]', 'android') $$, 'token moved to the new account');
 select tests.as_user(tests.id('cust'));
 select is_empty($$ select 1 from public.push_tokens $$, 'previous account no longer has the token');
+select lives_ok(format($$ insert into public.push_tokens (user_id, token, platform) values (%L, 't-own', 'ios') $$,
+  tests.id('cust')), 'own token row can be inserted directly (identity column needs no sequence grant)');
+select throws_ok($$ select public.register_push_token('', 'ios') $$, 'INVALID_TOKEN', 'empty token is rejected');
+select throws_ok($$ select public.register_push_token('   ', 'ios') $$, 'INVALID_TOKEN', 'blank token is rejected');
+select throws_ok(format($$ select public.register_push_token(%L, 'ios') $$, repeat('t', 256)),
+  'INVALID_TOKEN', 'token longer than 255 characters is rejected');
+select throws_ok($$ select public.register_push_token('ExponentPushToken[x]', null) $$, 'INVALID_TOKEN',
+  'missing platform is rejected');
 
 select tests.as_anon();
 select throws_ok($$ select public.register_push_token('t3', 'ios') $$, '42501', null, 'anon cannot register tokens');

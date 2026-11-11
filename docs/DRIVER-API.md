@@ -125,6 +125,7 @@ The driver can also `select`/`delete` their own rows in `push_tokens` (e.g. dele
 | Error | SQL state | When |
 |---|---|---|
 | `NOT_AUTHENTICATED` | 28000 | no session |
+| `INVALID_TOKEN` | P0001 | empty/blank token, token longer than 255 characters, or missing platform |
 
 See section 6 about the token format (open question).
 
@@ -195,10 +196,12 @@ Limits to design around:
 - **New unassigned orders do not arrive over Realtime** (RLS hides them). Use the push
   "new order" (section 6), pull-to-refresh, and polling `available_orders` every 30 s while the
   screen is open.
-- **Reassignment away from you** and **cancellation** (status → `cancelled`, admin/staff only) arrive
-  as an UPDATE only if the new row is still visible to you; a reassigned order is not. There is no push
-  to the driver on cancellation. Re-fetch current orders on app resume, on reconnect, and periodically
-  (e.g. 30 s); treat an order that disappears or turns `cancelled` as removed.
+- **Cancellation** (by the customer while `pending`, or by staff/admin) arrives as an UPDATE with
+  status `cancelled`, and you also get a push (`type: cancelled`, section 6).
+- **Reassignment away from you** does **not** arrive over Realtime (the row is no longer visible to
+  you); you get a push (`type: unassigned`). Still re-fetch current orders on app resume, on reconnect,
+  and periodically (e.g. 30 s), since pushes can be delayed or lost; treat an order that disappears or
+  turns `cancelled` as removed.
 - Unsubscribe on sign-out.
 
 ---
@@ -212,6 +215,8 @@ yet**) sends them. Notifications a driver receives:
 |---|---|---|---|
 | a customer places an order | **all active drivers** | `طلب جديد #<number>` | `{ "order_id": "uuid", "type": "new_order" }` → open "available orders" |
 | staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order |
+| staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
+| an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = reason if given) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
 
 Planned delivery (T07): Expo Push API, batches ≤ 100, Android `channelId: "orders"` with high priority.
 The app should create an Android notification channel with id **`orders`** (high importance, distinct
@@ -260,5 +265,4 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 ## Open questions
 
 1. Push tokens: Expo vs raw FCM/APNs (section 6).
-2. Should the driver be notified when an assigned order is cancelled or reassigned? (Currently no.)
-3. Account deletion rules for a driver holding an unfinished order (T08).
+2. Account deletion rules for a driver holding an unfinished order (T08).

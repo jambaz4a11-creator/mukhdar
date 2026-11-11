@@ -82,6 +82,7 @@ export type Database = {
           closed_message: string | null;
           delivery_fee_iqd: number;
           id: number;
+          max_active_orders: number;
           min_order_iqd: number;
           store_open: boolean;
           updated_at: string;
@@ -91,6 +92,7 @@ export type Database = {
           closed_message?: string | null;
           delivery_fee_iqd?: number;
           id?: number;
+          max_active_orders?: number;
           min_order_iqd?: number;
           store_open?: boolean;
           updated_at?: string;
@@ -99,6 +101,7 @@ export type Database = {
           closed_message?: string | null;
           delivery_fee_iqd?: number;
           id?: number;
+          max_active_orders?: number;
           min_order_iqd?: number;
           store_open?: boolean;
           updated_at?: string;
@@ -1023,6 +1026,15 @@ export type Database = {
       };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_staff_or_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      list_drivers: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          full_name: string;
+          id: string;
+          is_active: boolean;
+          phone: string;
+        }[];
+      };
       place_order: {
         Args: { p_address_id: string; p_idempotency_key: string; p_items: Json; p_note?: string };
         Returns: Json;

@@ -6,6 +6,22 @@
 create schema tests;
 grant usage on schema tests to anon, authenticated;
 
+-- الدوال الجديدة لا تُنفَّذ افتراضياً من PUBLIC (migration 20261111000002)، وامتداد pgtap
+-- يُنشأ داخل المعاملة؛ فنمنح دواله للأدوار التي تُشغَّل بها التأكيدات. يُلغى مع المعاملة.
+do $$
+declare f regprocedure;
+begin
+  for f in select p.oid::regprocedure from pg_proc p
+             join pg_depend d on d.objid = p.oid and d.deptype = 'e'
+             join pg_extension e on e.oid = d.refobjid and e.extname = 'pgtap'
+  loop
+    execute format('grant execute on function %s to anon, authenticated', f);
+  end loop;
+end $$;
+
+-- حد الطلبات غير المنتهية للزبون (افتراضي 3) يُرفع للتجهيز؛ 03_place_order يختبره بقيمته الحقيقية.
+update public.app_settings set max_active_orders = 1000;
+
 create sequence tests.phone_seq start 9647900000000;
 
 -- ---------------------------------------------------------------------

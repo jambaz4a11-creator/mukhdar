@@ -1,5 +1,5 @@
 -- 01: المخطط، RLS، الصلاحيات، والدوال الأساسية
-select plan(24);
+select plan(39);
 
 select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
@@ -32,9 +32,9 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['accept_order', 'adjust_stock', 'assign_driver', 'available_orders', 'place_order', 'rate_order',
-        'register_push_token', 'set_order_status', 'set_user_role'],
-  'authenticated can execute exactly the 9 RPCs among SECURITY DEFINER functions');
+  array['accept_order', 'adjust_stock', 'assign_driver', 'available_orders', 'list_drivers', 'place_order',
+        'rate_order', 'register_push_token', 'set_order_status', 'set_user_role'],
+  'authenticated can execute exactly the 10 RPCs among SECURITY DEFINER functions');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');
@@ -69,6 +69,57 @@ select is(
           ~ '(auth\.uid\(\)|private\.|public\.is_|public\.current_user_role)'),
   0, 'every policy wraps auth.uid()/role helpers in a sub-select');
 
+-- service_role (Edge Functions): بالضبط ما تحتاجه T07/T08، بنفس الشكل محلياً وبالسحابة
+select ok(has_schema_privilege('service_role', 'public', 'usage'), 'service_role has usage on schema public');
+select is(
+  (select array_agg(c.relname || ':' || p.priv order by c.relname, p.priv)
+     from pg_class c cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p(priv)
+    where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+      and has_table_privilege('service_role', c.oid, p.priv)),
+  array['notification_outbox:SELECT', 'notification_outbox:UPDATE', 'orders:SELECT', 'profiles:SELECT',
+        'push_tokens:DELETE', 'push_tokens:SELECT'],
+  'service_role has exactly the table privileges T07/T08 need');
+
+-- الدوال الجديدة لا تُنفَّذ افتراضياً (default privileges عامة، لا بالمخطط فقط)
+create function public.zz_default_acl_probe() returns int language sql set search_path = '' as 'select 1';
+select ok(not has_function_privilege('anon', 'public.zz_default_acl_probe()', 'execute'),
+  'a new function is not executable by anon by default');
+select ok(not has_function_privilege('authenticated', 'public.zz_default_acl_probe()', 'execute'),
+  'a new function is not executable by authenticated by default');
+drop function public.zz_default_acl_probe();
+
+-- sequences: لا حاجة لها (أعمدة identity)
+select is(
+  (select count(*)::int from pg_class c
+    where c.relnamespace = 'public'::regnamespace and c.relkind = 'S'
+      and (has_sequence_privilege('authenticated', c.oid, 'usage')
+           or has_sequence_privilege('authenticated', c.oid, 'update')
+           or has_sequence_privilege('anon', c.oid, 'usage'))),
+  0, 'anon/authenticated have no sequence privileges in public');
+
+-- أعمدة المنتجات والعناوين القابلة للكتابة فقط
+select ok(not has_column_privilege('authenticated', 'public.products', 'in_stock', 'update'),
+  'products.in_stock is not writable (follows stock)');
+select ok(not has_column_privilege('authenticated', 'public.products', 'in_stock', 'insert'),
+  'products.in_stock cannot be set on insert');
+select ok(not has_column_privilege('authenticated', 'public.products', 'id', 'insert'),
+  'products.id cannot be chosen by the client');
+select ok(has_column_privilege('authenticated', 'public.products', 'price_iqd', 'update'),
+  'products.price_iqd is writable (admin via RLS)');
+select ok(not has_column_privilege('authenticated', 'public.addresses', 'customer_id', 'update'),
+  'addresses.customer_id cannot be changed');
+select ok(not has_column_privilege('authenticated', 'public.addresses', 'id', 'insert'),
+  'addresses.id cannot be chosen by the client');
+select ok(has_column_privilege('authenticated', 'public.addresses', 'apartment', 'update'),
+  'addresses.apartment is writable (owner via RLS)');
+
+-- الإعدادات: الحد الأدنى من مضاعفات 250، وحد الطلبات النشطة افتراضياً 3
+select throws_ok($$ update public.app_settings set min_order_iqd = 100 $$, '23514', null,
+  'min_order_iqd must be a multiple of 250');
+select is((select column_default from information_schema.columns
+            where table_schema = 'public' and table_name = 'app_settings' and column_name = 'max_active_orders'),
+  '3', 'max_active_orders defaults to 3');
+
 -- التقريب لأقرب 250 (النصف للأعلى)
 select is(public.round_iqd(0), 0::bigint, 'round_iqd(0) = 0');
 select is(public.round_iqd(124), 0::bigint, 'round_iqd(124) = 0');
@@ -83,6 +134,11 @@ select lives_ok($$ insert into auth.users (id, phone, aud, role)
 select row_eq($$ select role, phone, is_active from public.profiles where id = '00000000-0000-0000-0000-0000000000a1' $$,
   row('customer'::public.user_role, '9647911111111'::text, true),
   'new auth user gets an active customer profile with the phone');
+
+-- تغيير هاتف الحساب ينعكس على الملف الشخصي
+update auth.users set phone = '9647922222222' where id = '00000000-0000-0000-0000-0000000000a1';
+select is((select phone from public.profiles where id = '00000000-0000-0000-0000-0000000000a1'),
+  '9647922222222', 'profiles.phone follows auth.users.phone on update');
 
 -- منتج جديد: صف مخزون بصفر، وغير متوفر
 select tests.remember('p_new', tests.new_product(500, 0));

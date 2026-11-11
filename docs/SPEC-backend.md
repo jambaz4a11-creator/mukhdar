@@ -31,9 +31,9 @@
 | الجدول | الغرض | من يقرأ | من يكتب |
 |---|---|---|---|
 | `profiles` | دور، هاتف، اسم | صاحبه + أدمن | trigger عند التسجيل؛ الاسم من صاحبه |
-| `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر | الجميع | أدمن |
+| `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن |
 | `sectors` / `subsections` / `buildings` | العنوان الهرمي (أكثر من 650 بناية) | الجميع (النشط) | أدمن |
-| `addresses` | عناوين الزبون (بناية + شقة نصاً) | صاحبها + أدمن | صاحبها |
+| `addresses` | عناوين الزبون (بناية + شقة نصاً)، عنوان افتراضي واحد | صاحبها + أدمن | صاحبها (أعمدة محددة) |
 | `categories` / `products` | الكتالوج | الجميع (النشط)، موظف/أدمن الكل | أدمن |
 | `product_costs` | سعر الشراء | أدمن | أدمن |
 | `stock` | الرصيد الحالي | موظف + أدمن | دوال فقط |
@@ -56,15 +56,16 @@
 ### `place_order(p_address_id, p_items, p_idempotency_key, p_note?) → jsonb`
 - `p_items`: `[{"product_id": uuid, "qty": int}]`. **التطبيق لا يرسل أي سعر.**
 - الخطوات بمعاملة واحدة:
-  1. يتحقق أن المستخدم زبون نشط.
-  2. **منع التكرار:** قفل استشاري على (المستخدم، المفتاح). لو وُجد طلب بنفس المفتاح يرجعه مع `replayed: true`. التطبيق يولّد المفتاح مرة لكل محاولة "تأكيد الطلب" ويعيد استخدامه عند إعادة المحاولة.
-  3. المتجر مفتوح؟ العنوان للزبون نفسه؟
-  4. يدمج البنود المكررة، يرفض كمية خارج 1..99 أو أكثر من 50 بنداً.
-  5. **يقفل صفوف `stock` بترتيب `product_id`** (يمنع بيع نفس الحبة مرتين ويمنع الـ deadlock).
-  6. يتحقق من التفعيل والرصيد، يحسب `subtotal = round_iqd(Σ price × qty)`، يتحقق من الحد الأدنى، ثم `total = subtotal + delivery_fee`.
-  7. ينشئ الطلب والبنود وتكاليفها، ينقص المخزون، يسجل الحركات والتاريخ، ويضيف إشعارين (السائقين، الأدمن).
+  1. يتحقق أن المستخدم زبون نشط وله رقم هاتف.
+  2. **منع التكرار:** قفل استشاري لكل زبون. لو وُجد طلب بنفس المفتاح يرجعه مع `replayed: true`. التطبيق يولّد المفتاح مرة لكل محاولة "تأكيد الطلب" ويعيد استخدامه عند إعادة المحاولة.
+  3. **حد الطلبات المفتوحة:** يرفض إن كان للزبون `max_active_orders` (افتراضي 3) طلبات غير منتهية (`pending`/`preparing`/`out_for_delivery`).
+  4. المتجر مفتوح؟ العنوان للزبون نفسه؟ والبناية والقسم والقطاع مفعّلة؟
+  5. يتحقق من صيغة البنود **قبل أي تحويل نوع** (كل بند كائن، `product_id` نص UUID، `qty` عدد صحيح)، ثم يدمج المكرر، ويرفض كمية خارج 1..99 أو أكثر من 50 بنداً.
+  6. **يقفل صفوف `stock` بترتيب `product_id`** (يمنع بيع نفس الحبة مرتين ويمنع الـ deadlock).
+  7. يتحقق من التفعيل والرصيد، يحسب `subtotal = round_iqd(Σ price × qty)`، يتحقق من الحد الأدنى، ثم `total = subtotal + delivery_fee`.
+  8. ينشئ الطلب والبنود وتكاليفها، ينقص المخزون، يسجل الحركات والتاريخ، ويضيف إشعارين (السائقين، الأدمن).
 - يرجع: `{order_id, order_number, total_iqd, status, replayed}`.
-- أخطاء: `NOT_AUTHENTICATED`, `NOT_CUSTOMER`, `IDEMPOTENCY_KEY_REQUIRED`, `STORE_CLOSED`, `ADDRESS_NOT_FOUND`, `EMPTY_CART`, `TOO_MANY_ITEMS`, `INVALID_QTY`, `PRODUCT_UNAVAILABLE`, `INSUFFICIENT_STOCK`, `BELOW_MIN_ORDER`.
+- أخطاء: `NOT_AUTHENTICATED`, `NOT_CUSTOMER`, `PHONE_REQUIRED`, `IDEMPOTENCY_KEY_REQUIRED`, `TOO_MANY_ACTIVE_ORDERS` (`detail` = الحد), `STORE_CLOSED`, `ADDRESS_NOT_FOUND`, `ADDRESS_INACTIVE`, `EMPTY_CART`, `TOO_MANY_ITEMS`, `INVALID_QTY` (يشمل بنداً ليس كائناً أو `qty` ليس عدداً صحيحاً), `PRODUCT_UNAVAILABLE` (يشمل `product_id` مفقوداً أو بصيغة خاطئة؛ `detail` = القيمة المرسلة), `INSUFFICIENT_STOCK`, `BELOW_MIN_ORDER`.
 
 ### `set_order_status(p_order_id, p_status, p_reason?) → orders`
 مخطط الحالات:
@@ -80,17 +81,18 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 | driver (المعيَّن فقط) | ← `out_for_delivery` (يتطلب أن يكون معيَّناً)، ← `delivered` |
 | customer (صاحب الطلب) | الإلغاء وهو `pending` فقط |
 
-آثار جانبية: طوابع الوقت، سجل التاريخ، إشعار للزبون. الإلغاء **يرجع المخزون** بحركة `cancel_return`. التسليم يحدّث `daily_stats` (الإيراد، الأجرة، التكلفة من `order_item_costs`، الربح الإجمالي).
+آثار جانبية: طوابع الوقت، سجل التاريخ، إشعار للزبون. `p_reason` يُقص لـ 300 حرف. الإلغاء **يرجع المخزون** بحركة `cancel_return`، ويُبلّغ السائق المعيَّن (إن وُجد) بإشعار `type: cancelled`. التسليم يحدّث `daily_stats` (الإيراد، الأجرة، التكلفة من `order_item_costs`، الربح الإجمالي).
 أخطاء: `ORDER_NOT_FOUND`, `INVALID_TRANSITION`, `NOT_ALLOWED`, `NO_DRIVER_ASSIGNED`.
 
 ### دوال السائق
 - `available_orders(p_limit=20)`: الطلبات غير المعيَّنة (`pending`/`preparing`) **بدون هاتف الزبون واسمه**، حد أقصى 50.
 - `accept_order(p_order_id)`: أول سائق يقبل يأخذ الطلب؛ الثاني يحصل `ORDER_NOT_AVAILABLE`. بعد القبول يرى السائق الهاتف والعنوان الكامل عبر RLS.
-- `assign_driver(p_order_id, p_driver_id)` (موظف/أدمن): تعيين أو تغيير يدوي، مع إشعار للسائق.
+- `assign_driver(p_order_id, p_driver_id)` (موظف/أدمن): تعيين أو تغيير يدوي، مع إشعار للسائق (`type: assigned`)، وإشعار السائق السابق عند التغيير (`type: unassigned`).
+- `list_drivers()` (موظف/أدمن): السائقون فقط، بالأعمدة `id, full_name, phone, is_active` (لقائمة التعيين واسم السائق بجدول الطلبات). غيرهم: `NOT_ALLOWED`.
 
 ### دوال أخرى
 - `rate_order(p_order_id, p_stars, p_comment?)`: `INVALID_STARS`, `ORDER_NOT_RATEABLE`, `ALREADY_RATED`.
-- `register_push_token(p_token, p_platform)`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي.
+- `register_push_token(p_token, p_platform)`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي. رمز فارغ أو أطول من 255 حرفاً أو بلا منصة: `INVALID_TOKEN`.
 - `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب.
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن).
 
@@ -101,7 +103,11 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 4. الدوال `security definer` مع `set search_path = public, pg_temp`. دوال الأدوار المستخدمة داخل RLS (`current_user_role`، `is_admin`، `is_staff_or_admin`) تعيش بمخطط `private` غير المكشوف بالـ API، والأسماء بـ `public` أغلفة security invoker. كل الدوال لها `search_path` ثابت.
 5. مفتاح `service_role` يُستخدم **فقط** داخل Edge Functions، ولا يوضع أبداً بتطبيق موبايل أو بكود الويب في المتصفح.
 6. `anon` يقرأ الكتالوج والعناوين والإعدادات فقط (التصفح قبل الدخول).
-7. السياسات تستخدم `(select auth.uid())` و`(select private.is_admin())` (تُحسب مرة لكل استعلام)، ولا توجد سياستان permissive لنفس الدور والعملية. الهدف: Advisor بلا تحذيرات عدا دوال RPC التسع المقصودة.
+7. السياسات تستخدم `(select auth.uid())` و`(select private.is_admin())` (تُحسب مرة لكل استعلام)، ولا توجد سياستان permissive لنفس الدور والعملية. الهدف: Advisor بلا تحذيرات عدا دوال RPC العشر المقصودة.
+8. الدوال الجديدة **لا تُنفَّذ افتراضياً** من `PUBLIC` (`alter default privileges for role postgres` عامة، لا بالمخطط)، فكل دالة RPC جديدة تحتاج `grant execute` صريحاً.
+9. `service_role` (لـ Edge Functions فقط) له صلاحيات محددة: `usage` على `public`، `select/update` على `notification_outbox`، `select/delete` على `push_tokens`، `select` على `profiles` و`orders`. أي حاجة جديدة تُمنح بـ migration المهمة. `01_schema.sql` يفحص القائمة بالضبط (محلياً وبالسحابة).
+10. الكتابة المباشرة على `products` و`addresses` بأعمدة محددة فقط (لا `in_stock` ولا `id` ولا `created_at`، ولا نقل عنوان لزبون آخر). لا صلاحيات على الـ sequences لـ `anon`/`authenticated`.
+11. bucket الصور عام (العرض بالرابط العام)، لكن **قائمة الملفات** للأدمن فقط.
 
 ## 7) المصادقة (الهاتف + OTP)
 - Supabase Auth بمزوّد SMS (Twilio أو Vonage أو MessageBird، يُحدد بعد الاختبار؛ انظر ARCHITECTURE §8).
@@ -174,3 +180,8 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 18. اختبارات pgTAP (T03) تعمل عبر `scripts/db-test.mjs` لا `supabase test db` (يحتاج Docker محلياً). كل ملف داخل `BEGIN ... ROLLBACK` مع إنشاء pgtap والدوال المساعدة داخل المعاملة. CI يشغلها على `supabase start` محلي على runner GitHub، لا على السحابة.
 19. البيانات التجريبية (T05): سكربتات `seed:demo`/`seed:reset` تتصل بقاعدة التطوير مباشرة (كلمة سر القاعدة) بدل `service_role`، لأن الطلبات يجب أن تمر بـ `place_order`/`set_order_status` بهوية كل مستخدم (`auth.uid()`)، وهذا غير ممكن بمفتاح `service_role` عبر الـ API. مستخدمو العرض يُنشأون بـ `auth.users` + `auth.identities` (هاتف مؤكد). الطلبات تُنشأ "الآن" ثم تُرجَع طوابعها الزمنية ليومها، وتُنقل مساهمتها بـ `daily_stats` لنفس اليوم. `service_role` يُستخدم فقط لرفع صور المنتجات (اختياري، من `.env.local`). الحماية: قائمة مشاريع تطوير مسموحة + `MUKHDAR_ENV` + `DB_URL` محلي فقط.
 20. هيكل عناوين بسماية بـ `seed.sql` مؤقت (10 قطاعات A..J × 3 أقسام × 22 بناية = 660). المالك يستبدله بالقوائم الحقيقية.
+21. حد الطلبات المفتوحة للزبون **3** افتراضياً (`app_settings.max_active_orders`، 1..1000، يعدّله الأدمن). يحمي المخزون (يُحجز عند الطلب) ويمنع إغراق السائقين بالإشعارات. `replay` بنفس المفتاح يعمل حتى لو وصل الحد.
+22. الطلب يتطلب رقم هاتف بالملف الشخصي (`PHONE_REQUIRED`)، لأن السائق يتصل بالزبون. `profiles.phone` يتبع `auth.users.phone` عند الإنشاء والتغيير.
+23. عنوان افتراضي واحد لكل زبون (فهرس فريد جزئي). لتغييره: إلغاء القديم ثم تعيين الجديد (أو بعكس الترتيب بتعديلين متتاليين).
+24. سبب الإلغاء وملاحظة السجل يُقصّان لـ 300 حرف (بدون خطأ).
+25. الحد الأدنى للطلب من مضاعفات 250 (مثل الأجرة).

@@ -25,6 +25,7 @@ const IMAGES_ONLY = args.includes('--images-only');
 const DAYS = 30;
 const ORDERS = 500;
 const LOAD_CUSTOMERS = 1000;
+const MAX_OPEN_PER_CUSTOMER = 3;
 
 // ---------------------------------------------------------------- عشوائية قابلة للتكرار
 function mulberry32(seed) {
@@ -301,6 +302,8 @@ async function seedDemo() {
 
   let created = 0;
   let failed = 0;
+  // طلبات اليوم تبقى مفتوحة: لا أكثر من الحد لكل زبون (app_settings.max_active_orders، افتراضي 3)
+  const openToday = new Map();
   let firstError = null;
   for (let d = 0; d < DAYS; d++) {
     const daysAgo = DAYS - 1 - d;
@@ -310,7 +313,11 @@ async function seedDemo() {
     const times = [];
 
     for (let i = 0; i < counts[d]; i++) {
-      const cust = pick(customers);
+      let cust = pick(customers);
+      if (isToday) {
+        while ((openToday.get(cust.id) ?? 0) >= MAX_OPEN_PER_CUSTOMER) cust = pick(customers);
+        openToday.set(cust.id, (openToday.get(cust.id) ?? 0) + 1);
+      }
       const driver = pick(drivers);
       const items = [];
       const chosen = new Set();
