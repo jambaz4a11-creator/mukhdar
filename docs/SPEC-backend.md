@@ -169,3 +169,4 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 14. لا كوبونات ولا خصومات ولا جدولة توصيل بالمرحلة الأولى.
 15. عند حذف حساب الزبون تبقى طلباته (للمحاسبة) مع نسخة الاسم والهاتف. **يُراجع قانونياً** ضمن سياسة الخصوصية؛ البديل مسح `customer_name`/`customer_phone` بعد التسليم بفترة.
 16. أدوات التطوير (T01): Node 24 LTS (`.nvmrc`)، pnpm 12 (`packageManager`)، TypeScript مثبّت على 6.0 لأن typescript-eslint وts-jest لا يدعمان TypeScript 7 بعد. `pnpm lint` يشمل ESLint وفحص Prettier. سكربت البناء مسموح لحزمة `supabase` فقط (`allowBuilds` بـ `pnpm-workspace.yaml`).
+17. المناطق (T02): مشروع التطوير `mukhdar-dev` بسنغافورة (`ap-southeast-1`) لأنه أُنشئ مسبقاً. مشروع الإنتاج **يُنشأ بفرانكفورت (`eu-central-1`)** لزمن استجابة أقل من العراق. التطوير بلا Docker، على المشروع السحابي مباشرة (`--remote`). التفاصيل بـ `docs/RUNBOOK.md`.
