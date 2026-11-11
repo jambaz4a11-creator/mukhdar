@@ -29,7 +29,7 @@
 | 19 | [العناوين والموظفون والإعدادات](19-admin-addresses-staff-settings.md) | 16 | ⬜ |
 | 20 | [التقارير](20-admin-reports.md) | 17 | ⬜ |
 | 21 | [تطبيق السائق](21-driver-app.md) | - | 🔗 خارجي (external: built by a separate developer) |
-| 22 | [اختبار الحمل k6](22-load-test.md) | 13، 21 | ⬜ |
+| 22 | [اختبار الحمل k6](22-load-test.md) | 13 | ⬜ |
 | 23 | [مراجعة الأمان](23-security-review.md) | 22 | ⬜ |
 | 24 | [الإطلاق](24-release.md) | 23 | ⬜ |
 
