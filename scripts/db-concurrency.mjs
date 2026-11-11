@@ -52,7 +52,7 @@ async function createUsers(role, count, offset) {
   );
   const userIds = rows.map((r) => r.id);
   await q(
-    `update public.profiles set role = $1, full_name = $1 || ' (concurrency)' where id = any ($2)`,
+    `update public.profiles set role = $1::public.user_role, full_name = $1::text || ' (concurrency)' where id = any ($2)`,
     [role, userIds],
   );
   ids.users.push(...userIds);
@@ -146,7 +146,7 @@ try {
   const drivers = await createUsers('driver', DRIVERS, 1001);
   const { rows: addrRows } = await q(
     `insert into public.addresses (customer_id, building_id, apartment)
-     select c, $2, '1' from unnest($1::uuid[]) c returning customer_id, id`,
+     select c, $2::int, '1' from unnest($1::uuid[]) c returning customer_id, id`,
     [customers, building],
   );
   const addressOf = new Map(addrRows.map((r) => [r.customer_id, r.id]));
