@@ -85,16 +85,18 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 أخطاء: `ORDER_NOT_FOUND`, `INVALID_TRANSITION`, `NOT_ALLOWED`, `NO_DRIVER_ASSIGNED`.
 
 ### دوال السائق
-- `available_orders(p_limit=20)`: الطلبات غير المعيَّنة (`pending`/`preparing`) **بدون هاتف الزبون واسمه**، حد أقصى 50.
+- `available_orders(p_limit=20)`: الطلبات غير المعيَّنة (`pending`/`preparing`) **بدون هاتف الزبون واسمه**، حد أقصى 50. لغير السائق النشط: `NOT_ALLOWED`.
 - `accept_order(p_order_id)`: أول سائق يقبل يأخذ الطلب؛ الثاني يحصل `ORDER_NOT_AVAILABLE`. بعد القبول يرى السائق الهاتف والعنوان الكامل عبر RLS.
-- `assign_driver(p_order_id, p_driver_id)` (موظف/أدمن): تعيين أو تغيير يدوي، مع إشعار للسائق (`type: assigned`)، وإشعار السائق السابق عند التغيير (`type: unassigned`).
+- `assign_driver(p_order_id, p_driver_id)` (موظف/أدمن): تعيين أو تغيير يدوي، مع إشعار للسائق (`type: assigned`)، وإشعار السائق السابق عند التغيير (`type: unassigned`). أخطاء: `NOT_ALLOWED`, `DRIVER_NOT_FOUND` (ليس سائقاً نشطاً), `ORDER_NOT_AVAILABLE` (الطلب منتهٍ أو غير موجود).
 - `list_drivers()` (موظف/أدمن): السائقون فقط، بالأعمدة `id, full_name, phone, is_active` (لقائمة التعيين واسم السائق بجدول الطلبات). غيرهم: `NOT_ALLOWED`.
 
 ### دوال أخرى
 - `rate_order(p_order_id, p_stars, p_comment?)`: `INVALID_STARS`, `ORDER_NOT_RATEABLE`, `ALREADY_RATED`.
 - `register_push_token(p_token, p_platform)`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي. رمز فارغ أو أطول من 255 حرفاً أو بلا منصة: `INVALID_TOKEN`.
-- `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب.
-- `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن).
+- `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`.
+- `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
+
+كل رموز هذا القسم لها رسالة عربية بـ `packages/shared/src/errors.ts`، واختبار Jest يفشل إن نقص رمز أو اختلف هذا القسم عن الرموز التي يرفعها SQL.
 
 ## 6) الأمان
 1. RLS مفعّل على **كل** جدول. `notification_outbox` بلا سياسات (service_role فقط).
