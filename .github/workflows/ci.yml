@@ -2,15 +2,26 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+# دفعة جديدة على نفس الفرع تلغي التشغيل القديم
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# الـ actions مثبّتة بـ commit SHA (الوسم بالتعليق) حتى لا يتغير ما يُشغَّل بدون مراجعة.
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -22,27 +33,43 @@ jobs:
   # اختبارات pgTAP على Supabase محلي (Docker على الـ runner). لا اتصال بالسحابة ولا كلمة سر.
   db-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Start local Supabase (Postgres + Auth + Storage, migrations applied)
+        timeout-minutes: 10
         run: >-
           pnpm exec supabase start
           -x realtime,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: pgTAP (seed.sql only)
         run: pnpm db:test
+      - name: Concurrency (40 orders on stock 10; 8 drivers accept one order)
+        run: pnpm db:concurrency
       - name: seed:demo (500 orders over 30 days + 1000 load customers)
         run: pnpm seed:demo --scale=load --no-images
       - name: pgTAP (with demo data; 09 = daily_stats matches orders)
         run: pnpm db:test
       - name: seed:reset, then check again
         run: pnpm seed:reset && pnpm db:test 09
-      - name: seed:demo refuses a non-local target
-        run: '! DB_URL=postgresql://postgres:x@db.example.com:5432/postgres pnpm seed:demo'
+      - name: seed:demo refuses a non-local target (and says why)
+        run: |
+          set +e
+          out=$(DB_URL=postgresql://postgres:x@db.example.com:5432/postgres pnpm seed:demo 2>&1)
+          code=$?
+          echo "$out"
+          test "$code" -ne 0 && echo "$out" | grep -q 'Refusing: DB_URL host db.example.com is not local'
+      - name: db:concurrency refuses a remote target
+        run: |
+          set +e
+          out=$(pnpm db:concurrency --remote 2>&1)
+          code=$?
+          echo "$out"
+          test "$code" -ne 0 && echo "$out" | grep -q 'Refusing: db:concurrency'
       - if: always()
         run: pnpm exec supabase stop --no-backup

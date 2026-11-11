@@ -73,6 +73,15 @@ exception when others then
   return sqlerrm;
 end $$;
 
+-- ينفّذ SQL (بدور الجلسة الحالي) ويرجع عدد الصفوف المتأثرة: لاختبار RLS على update/delete
+create function tests.affected(p_sql text) returns int language plpgsql as $$
+declare n int;
+begin
+  execute p_sql;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
 -- ---------------------------------------------------------------------
 -- تجهيز البيانات
 -- ---------------------------------------------------------------------

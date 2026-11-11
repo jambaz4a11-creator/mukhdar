@@ -13,6 +13,7 @@
     "test": "pnpm -r --if-present test && node --test \"scripts/**/*.test.mjs\"",
     "db:test": "node scripts/db-test.mjs",
     "db:test:remote": "node scripts/db-test.mjs --remote",
+    "db:concurrency": "node scripts/db-concurrency.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:reset": "node scripts/seed-reset.mjs",
     "supabase": "supabase"

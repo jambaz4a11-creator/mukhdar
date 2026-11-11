@@ -115,7 +115,7 @@ pnpm exec supabase db advisors --remote
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملفات: `supabase/tests/NN_*.sql` (253 فحصاً)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+الملفات: `supabase/tests/NN_*.sql` (10 ملفات، 319 فحصاً)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
 
 - كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
 - لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
@@ -132,11 +132,22 @@ pnpm db:test:remote 03 04    # ملفات محددة
    بصمة SHA-256: `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA` (صالحة حتى 2031-04-26).
 
 ### في CI
-وظيفة `db-tests` بـ `.github/workflows/ci.yml`: `supabase start` (Docker على runner GitHub، تُطبَّق الـ migrations تلقائياً) ثم `pnpm db:test` على القاعدة المحلية. **لا اتصال بالسحابة ولا كلمة سر بـ GitHub.**
+وظيفة `db-tests` بـ `.github/workflows/ci.yml`، على Supabase محلي (Docker على runner GitHub، تُطبَّق الـ migrations و`seed.sql` تلقائياً). **لا اتصال بالسحابة ولا كلمة سر بـ GitHub.** الخطوات:
+1. `pnpm db:test` على البيانات الأساسية.
+2. `pnpm db:concurrency`: تزامن حقيقي باتصالات متعددة (40 طلباً على رصيد 10 ← 10 تنجح بالضبط بلا deadlocks؛ 8 سائقين يقبلون نفس الطلب ← واحد فقط). ينشئ بياناته فعلاً ثم يحذفها، لذلك **يرفض أي قاعدة غير محلية** (لا يعمل على `mukhdar-dev`).
+3. `seed:demo --scale=load`، ثم `pnpm db:test` مرة ثانية، ثم `seed:reset` و`db:test 09`.
+4. التأكد أن `seed:demo` و`db:concurrency` يرفضان هدفاً غير محلي (مع نص الرفض).
+
+الـ actions مثبّتة بـ commit SHA، ولكل وظيفة `timeout-minutes`، ودفعة جديدة تلغي التشغيل القديم لنفس الفرع.
+
+### Supabase المحلي (`supabase/config.toml`)
+مثل الإنتاج المقصود: الدخول **بالهاتف فقط** (email معطّل)، مع Test OTP محلية `9647000000901..903` = `123456` (بدون إرسال رسائل). هذا للمكدس المحلي فقط؛ إعدادات Auth السحابية تُدار من اللوحة (§6).
 
 ### كتابة اختبار جديد
 - `tests.new_user(role)`، `tests.new_product(price, stock, active, cost)`، `tests.new_address(customer)`، `tests.place(customer, items)`، `tests.order_in(status, customer, driver)` للتجهيز (بدور postgres).
 - `tests.as_user(uid)` / `tests.as_anon()` / `tests.as_postgres()` للتبديل. `tests.remember(name, id)` و `tests.id(name)` لحفظ المعرّفات بين الأدوار.
+- `tests.try(sql)` يرجع `OK` أو رمز الخطأ، و`tests.affected(sql)` يرجع عدد الصفوف المتأثرة (لاختبار RLS على update/delete).
+- الدوال الجديدة لا تُنفَّذ افتراضياً من `PUBLIC`: دالة تُنشأ داخل ملف اختبار (بعد `_helpers.sql`) أنشئها واستدعها بدور postgres (`tests.as_postgres()`).
 - `select plan(N)` يجب أن يساوي عدد الفحوص، والمشغّل يفشل إذا اختلف.
 
 ## 9) فحص place_order السريع (T02)

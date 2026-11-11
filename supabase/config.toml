@@ -221,7 +221,8 @@ web3 = 30
 [auth.email]
 # Allow/disallow the email provider. When false, users can't sign up or sign in with email.
 # To block new signups only, set enable_signup = false under [auth] instead.
-enabled = true
+# المخضر: الدخول برقم الهاتف فقط (محلياً فقط؛ إعدادات Auth السحابية تُدار من اللوحة).
+enabled = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
@@ -263,7 +264,7 @@ otp_expiry = 3600
 [auth.sms]
 # Allow/disallow the phone provider. When false, users can't sign up or sign in with SMS.
 # To block new signups only, set enable_signup = false under [auth] instead.
-enabled = false
+enabled = true
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
@@ -273,8 +274,12 @@ max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
 # Keys are the phone number with country code and without the + prefix.
-# [auth.sms.test_otp]
-# 14152127777 = "123456"
+# المخضر: أرقام اختبار محلية بالبادئة 9647000 (لا تتبع أي شركة اتصالات). لا ترسل رسائل.
+# لا تعطِ رقم اختبار دور admin/staff/driver خارج التطوير (RUNBOOK §6).
+[auth.sms.test_otp]
+9647000000901 = "123456"
+9647000000902 = "123456"
+9647000000903 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
