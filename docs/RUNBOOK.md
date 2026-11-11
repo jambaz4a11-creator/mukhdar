@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` (مراجعة T01–T05).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05).
 
 ## 4) توليد أنواع TypeScript
 
