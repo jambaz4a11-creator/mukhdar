@@ -1,6 +1,12 @@
 -- 05: دوال السائق (available_orders, accept_order, assign_driver) و RLS السائق
 select plan(25);
 
+-- طلبات موجودة مسبقاً (مثل seed:demo) لا تزاحم طلبات الاختبار ضمن حد available_orders.
+-- تُعيَّن لسائق مؤقت داخل المعاملة، وكل شيء يُلغى بنهايتها.
+with d as (select tests.new_user('driver') as id)
+update public.orders o set driver_id = d.id from d
+ where o.driver_id is null and o.status in ('pending', 'preparing');
+
 select tests.remember('staff', tests.new_user('staff'));
 select tests.remember('d1', tests.new_user('driver'));
 select tests.remember('d2', tests.new_user('driver'));

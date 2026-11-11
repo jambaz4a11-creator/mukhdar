@@ -10,9 +10,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --if-present test && node --test \"scripts/**/*.test.mjs\"",
     "db:test": "node scripts/db-test.mjs",
     "db:test:remote": "node scripts/db-test.mjs --remote",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:reset": "node scripts/seed-reset.mjs",
     "supabase": "supabase"
   },
   "devDependencies": {

@@ -12,7 +12,7 @@
 | 02 | [مشروع Supabase للتطوير](02-supabase-dev-project.md) | 01 | ✅ |
 | 03 | [اختبارات قاعدة البيانات pgTAP](03-db-tests.md) | 02 | ✅ |
 | 04 | [تجربة رسائل OTP بالعراق](04-sms-otp-spike.md) | 02 | ⬜ |
-| 05 | [بيانات تجريبية seed](05-seed-demo.md) | 02 | ⬜ |
+| 05 | [بيانات تجريبية seed](05-seed-demo.md) | 02 | ✅ |
 | 06 | [الحزمة المشتركة](06-shared-package.md) | 02 | ⬜ |
 | 07 | [Edge Function: push-dispatch](07-edge-push-dispatch.md) | 03 | ⬜ |
 | 08 | [Edge Function: delete-account](08-edge-delete-account.md) | 03 | ⬜ |

@@ -9,48 +9,12 @@
 // وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى بنهايتها. لا شيء يبقى بقاعدة البيانات.
 import fs from 'node:fs';
 import path from 'node:path';
-import pg from 'pg';
+import { connect, describe, resolveTarget, root } from './lib/db.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
 const testsDir = path.join(root, 'supabase', 'tests');
-const LOCAL_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
-
 const args = process.argv.slice(2);
-const remote = args.includes('--remote');
+const target = resolveTarget(args);
 const filters = args.filter((a) => !a.startsWith('--'));
-
-function readPassword() {
-  if (process.env.SUPABASE_DB_PASSWORD) return process.env.SUPABASE_DB_PASSWORD;
-  const envFile = path.join(root, '.env.local');
-  if (fs.existsSync(envFile)) {
-    const m = fs.readFileSync(envFile, 'utf8').match(/^SUPABASE_DB_PASSWORD=(.*)$/m);
-    if (m) return m[1].trim();
-  }
-  throw new Error('SUPABASE_DB_PASSWORD is not set (env or .env.local)');
-}
-
-function connectionConfig() {
-  if (!remote) return { connectionString: process.env.DB_URL ?? LOCAL_URL };
-  const poolerFile = path.join(root, 'supabase', '.temp', 'pooler-url');
-  if (!fs.existsSync(poolerFile)) throw new Error('Not linked: run `supabase link` first');
-  const url = new URL(fs.readFileSync(poolerFile, 'utf8').trim());
-  url.password = readPassword();
-  // شهادة الـ pooler موقّعة من "Supabase Root 2021 CA" (غير موجودة بمخزن Node).
-  // نتحقق منها بملف الـ CA المنزّل من اللوحة (انظر docs/RUNBOOK.md)، مع تحقق كامل.
-  const caFile =
-    process.env.SUPABASE_CA_CERT ?? path.join(root, 'supabase', 'certs', 'prod-ca-2021.crt');
-  if (!fs.existsSync(caFile)) {
-    throw new Error(
-      `Supabase CA certificate not found at ${caFile}. Download it from ` +
-        'Dashboard > Project Settings > Database > SSL Configuration (see docs/RUNBOOK.md).',
-    );
-  }
-  url.searchParams.delete('sslmode');
-  return {
-    connectionString: url.toString(),
-    ssl: { ca: fs.readFileSync(caFile, 'utf8'), servername: url.hostname },
-  };
-}
 
 function tapLines(results) {
   const lines = [];
@@ -83,9 +47,8 @@ const files = fs
   .sort();
 const helpers = fs.readFileSync(path.join(testsDir, '_helpers.sql'), 'utf8');
 
-const client = new pg.Client(connectionConfig());
-await client.connect();
-console.log(`target: ${remote ? 'remote (linked project)' : 'local'}\n`);
+const client = await connect(target);
+console.log(`target: ${describe(target)}\n`);
 
 let total = 0;
 let failedFiles = 0;

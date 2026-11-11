@@ -34,6 +34,15 @@ jobs:
         run: >-
           pnpm exec supabase start
           -x realtime,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
-      - run: pnpm db:test
+      - name: pgTAP (seed.sql only)
+        run: pnpm db:test
+      - name: seed:demo (500 orders over 30 days + 1000 load customers)
+        run: pnpm seed:demo --scale=load --no-images
+      - name: pgTAP (with demo data; 09 = daily_stats matches orders)
+        run: pnpm db:test
+      - name: seed:reset, then check again
+        run: pnpm seed:reset && pnpm db:test 09
+      - name: seed:demo refuses a non-local target
+        run: '! DB_URL=postgresql://postgres:x@db.example.com:5432/postgres pnpm seed:demo'
       - if: always()
         run: pnpm exec supabase stop --no-backup
