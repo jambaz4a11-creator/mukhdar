@@ -13,5 +13,9 @@ export default tseslint.config(
     files: ['**/*.cjs'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { sourceType: 'module', globals: globals.node },
+  },
   prettier,
 );

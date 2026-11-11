@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev` (T02): `20261110000001_init.sql`، `20261110000002_storage.sql`.
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03).
 
 ## 4) توليد أنواع TypeScript
 
@@ -72,11 +72,14 @@ pnpm exec supabase db advisors --remote
 ```
 (أو من اللوحة: Advisors ← Security Advisor).
 
-نتيجة T02 (2026-11-11): **لا توجد نتائج بمستوى ERROR**. التحذيرات (WARN) الموجودة:
-- `authenticated_security_definer_function_executable` (12 دالة RPC): **مقصود**. هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
-- `anon_security_definer_function_executable` على `current_user_role`، `is_admin`، `is_staff_or_admin`: دوال مساعدة تُستخدم داخل سياسات RLS، وترجع null/false للزائر. تُراجع بـ T03.
-- `function_search_path_mutable` على `set_updated_at`، `baghdad_today`، `round_iqd`: ليست security definer، فالخطر منخفض. تُصلَح بـ migration جديدة (تثبيت `search_path`) ضمن مهمة لاحقة.
-- أداء: `auth_rls_initplan` (6) و `multiple_permissive_policies` (40). تُعالج ضمن مراجعة الأداء (SPEC-backend §9)، وليست أمنية.
+نتيجة بعد T03 (2026-11-11): **9 تحذيرات فقط، كلها مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC التسع (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
+
+أي تحذير جديد غير هذه التسعة = شيء يحتاج إصلاح. (اختبار `01_schema.sql` يفحص نفس القواعد تلقائياً.)
+
+تاريخياً، نتيجة T02 كانت 64 تحذيراً، وأصلحتها migration `20261111000001_advisor_fixes.sql`:
+- `search_path` ثابت للدوال الثلاث.
+- دوال الأدوار security definer انتقلت لمخطط `private` (غير مكشوف بالـ API)، والأسماء بـ `public` صارت security invoker.
+- السياسات تستخدم `(select auth.uid())` و `(select private.is_admin())`، وسياسات الأدمن `for all` انقسمت لـ insert/update/delete.
 
 ## 6) Auth: الدخول برقم الهاتف (خطوات يدوية من اللوحة)
 
@@ -104,13 +107,39 @@ pnpm exec supabase db advisors --remote
    select id, phone, role from public.profiles;
    ```
 
-## 8) فحص place_order (اختبار T02)
+## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملف: `supabase/tests/smoke_place_order.sql`. يعمل كله داخل معاملة تنتهي بـ `ROLLBACK`، فلا يترك أي بيانات.
+الملفات: `supabase/tests/NN_*.sql` (253 فحصاً)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+
+- كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
+- لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
+
+### على مشروع التطوير (من ويندوز)
+```bash
+pnpm db:test:remote          # كل الملفات
+pnpm db:test:remote 03 04    # ملفات محددة
+```
+يحتاج:
+1. `supabase link` (يوفر `supabase/.temp/pooler-url`).
+2. `SUPABASE_DB_PASSWORD` بـ `.env.local`.
+3. شهادة **Supabase Root 2021 CA** بـ `supabase/certs/prod-ca-2021.crt` (مرفوعة بالـ git؛ شهادة عامة). المصدر: Dashboard ← Project Settings ← Database ← SSL Configuration ← Download certificate. الاتصال يتحقق من الشهادة بالكامل.
+   بصمة SHA-256: `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA` (صالحة حتى 2031-04-26).
+
+### في CI
+وظيفة `db-tests` بـ `.github/workflows/ci.yml`: `supabase start` (Docker على runner GitHub، تُطبَّق الـ migrations تلقائياً) ثم `pnpm db:test` على القاعدة المحلية. **لا اتصال بالسحابة ولا كلمة سر بـ GitHub.**
+
+### كتابة اختبار جديد
+- `tests.new_user(role)`، `tests.new_product(price, stock, active, cost)`، `tests.new_address(customer)`، `tests.place(customer, items)`، `tests.order_in(status, customer, driver)` للتجهيز (بدور postgres).
+- `tests.as_user(uid)` / `tests.as_anon()` / `tests.as_postgres()` للتبديل. `tests.remember(name, id)` و `tests.id(name)` لحفظ المعرّفات بين الأدوار.
+- `select plan(N)` يجب أن يساوي عدد الفحوص، والمشغّل يفشل إذا اختلف.
+
+## 9) فحص place_order السريع (T02)
+
+الملف: `supabase/scripts/smoke_place_order.sql`. يعمل كله داخل معاملة تنتهي بـ `ROLLBACK`، فلا يترك أي بيانات.
 يفحص: طلب صحيح بمجموع محسوب من القاعدة (السعر المرسل من التطبيق يُتجاهل)، تكرار نفس مفتاح idempotency، رفض عنوان زبون آخر، رفض كمية أكبر من المخزون، منع الزبون من قراءة المخزون وسعر الشراء، ونقص المخزون فعلاً.
 
 ```bash
-pnpm exec supabase db query --remote -f supabase/tests/smoke_place_order.sql --yes
+pnpm exec supabase db query --remote -f supabase/scripts/smoke_place_order.sql --yes
 ```
 النجاح: يرجع صفاً واحداً `"result": "SMOKE OK"`. الفشل: خطأ يبدأ بـ `SMOKE FAIL` أو اسم الخطأ.
 

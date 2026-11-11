@@ -98,9 +98,10 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 1. RLS مفعّل على **كل** جدول. `notification_outbox` بلا سياسات (service_role فقط).
 2. الصلاحيات تُسحب بالكامل ثم تُمنح صراحة لكل جدول ولكل دالة (`revoke all` + `grant`)، حتى لا تتسرب صلاحيات Supabase الافتراضية.
 3. لا سياسات `insert/update/delete` على الطلبات والمخزون؛ الكتابة فقط من خلال الدوال.
-4. الدوال `security definer` مع `set search_path = public, pg_temp`.
+4. الدوال `security definer` مع `set search_path = public, pg_temp`. دوال الأدوار المستخدمة داخل RLS (`current_user_role`، `is_admin`، `is_staff_or_admin`) تعيش بمخطط `private` غير المكشوف بالـ API، والأسماء بـ `public` أغلفة security invoker. كل الدوال لها `search_path` ثابت.
 5. مفتاح `service_role` يُستخدم **فقط** داخل Edge Functions، ولا يوضع أبداً بتطبيق موبايل أو بكود الويب في المتصفح.
 6. `anon` يقرأ الكتالوج والعناوين والإعدادات فقط (التصفح قبل الدخول).
+7. السياسات تستخدم `(select auth.uid())` و`(select private.is_admin())` (تُحسب مرة لكل استعلام)، ولا توجد سياستان permissive لنفس الدور والعملية. الهدف: Advisor بلا تحذيرات عدا دوال RPC التسع المقصودة.
 
 ## 7) المصادقة (الهاتف + OTP)
 - Supabase Auth بمزوّد SMS (Twilio أو Vonage أو MessageBird، يُحدد بعد الاختبار؛ انظر ARCHITECTURE §8).
@@ -170,3 +171,4 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 15. عند حذف حساب الزبون تبقى طلباته (للمحاسبة) مع نسخة الاسم والهاتف. **يُراجع قانونياً** ضمن سياسة الخصوصية؛ البديل مسح `customer_name`/`customer_phone` بعد التسليم بفترة.
 16. أدوات التطوير (T01): Node 24 LTS (`.nvmrc`)، pnpm 12 (`packageManager`)، TypeScript مثبّت على 6.0 لأن typescript-eslint وts-jest لا يدعمان TypeScript 7 بعد. `pnpm lint` يشمل ESLint وفحص Prettier. سكربت البناء مسموح لحزمة `supabase` فقط (`allowBuilds` بـ `pnpm-workspace.yaml`).
 17. المناطق (T02): مشروع التطوير `mukhdar-dev` بسنغافورة (`ap-southeast-1`) لأنه أُنشئ مسبقاً. مشروع الإنتاج **يُنشأ بفرانكفورت (`eu-central-1`)** لزمن استجابة أقل من العراق. التطوير بلا Docker، على المشروع السحابي مباشرة (`--remote`). التفاصيل بـ `docs/RUNBOOK.md`.
+18. اختبارات pgTAP (T03) تعمل عبر `scripts/db-test.mjs` لا `supabase test db` (يحتاج Docker محلياً). كل ملف داخل `BEGIN ... ROLLBACK` مع إنشاء pgtap والدوال المساعدة داخل المعاملة. CI يشغلها على `supabase start` محلي على runner GitHub، لا على السحابة.

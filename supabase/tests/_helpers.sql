@@ -1,0 +1,152 @@
+-- دوال مساعدة لاختبارات pgTAP.
+-- لا تُطبَّق كـ migration: سكربت scripts/db-test.mjs ينشئها داخل معاملة كل ملف اختبار
+-- (BEGIN ... ROLLBACK)، فلا يبقى منها شيء بقاعدة البيانات.
+-- الدوال تُستدعى بدور postgres، عدا as_*، وهي متاحة لكل الأدوار للتبديل بينها.
+
+create schema tests;
+grant usage on schema tests to anon, authenticated;
+
+create sequence tests.phone_seq start 9647900000000;
+
+-- ---------------------------------------------------------------------
+-- التبديل بين المستخدمين
+-- ---------------------------------------------------------------------
+-- مستخدم مسجل حقيقي: role authenticated + JWT sub (مثل طلب من التطبيق)
+create function tests.as_user(p_uid uuid) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+end $$;
+
+-- زائر غير مسجل
+create function tests.as_anon() returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+  perform set_config('role', 'anon', true);
+end $$;
+
+-- رجوع لدور postgres (لتجهيز البيانات والتحقق بدون RLS)
+create function tests.as_postgres() returns void language plpgsql as $$
+begin
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claims', '{}', true);
+end $$;
+
+-- يضبط auth.uid() فقط بدون تغيير الدور: لاستدعاء دوال RPC من التجهيز
+create function tests.set_uid(p_uid uuid) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+end $$;
+
+-- حفظ معرّفات التجهيز بإعداد جلسة محلي (يُقرأ من أي دور، ويُلغى مع المعاملة)
+create function tests.remember(p_name text, p_id uuid) returns uuid language sql as $$
+  select set_config('t.' || p_name, p_id::text, true)::uuid
+$$;
+create function tests.id(p_name text) returns uuid language sql stable as $$
+  select current_setting('t.' || p_name)::uuid
+$$;
+
+-- ينفّذ SQL ويرجع 'OK' أو رسالة الخطأ (رمز مثل NOT_ALLOWED)
+create function tests.try(p_sql text) returns text language plpgsql as $$
+begin
+  execute p_sql;
+  return 'OK';
+exception when others then
+  return sqlerrm;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- تجهيز البيانات
+-- ---------------------------------------------------------------------
+create function tests.new_user(p_role public.user_role default 'customer', p_name text default null)
+returns uuid language plpgsql as $$
+declare v_id uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, phone, aud, role)
+  values (v_id, nextval('tests.phone_seq')::text, 'authenticated', 'authenticated');
+  update public.profiles set role = p_role, full_name = coalesce(p_name, 'test ' || p_role::text)
+   where id = v_id;
+  return v_id;
+end $$;
+
+create function tests.new_product(
+  p_price bigint, p_stock int default 100, p_active boolean default true, p_cost bigint default null)
+returns uuid language plpgsql as $$
+declare v_cat int; v_id uuid;
+begin
+  insert into public.categories (name) values ('test-cat ' || gen_random_uuid()) returning id into v_cat;
+  insert into public.products (category_id, name, unit, price_iqd, is_active)
+  values (v_cat, 'test-product ' || left(gen_random_uuid()::text, 8), 'كيلو', p_price, p_active)
+  returning id into v_id;
+  if p_stock > 0 then
+    update public.stock set qty = p_stock where product_id = v_id;
+  end if;
+  if p_cost is not null then
+    insert into public.product_costs (product_id, cost_iqd) values (v_id, p_cost);
+  end if;
+  return v_id;
+end $$;
+
+create function tests.new_address(p_customer uuid) returns uuid language plpgsql as $$
+declare v_sec int; v_sub int; v_bld int; v_id uuid;
+begin
+  insert into public.sectors (name) values ('test-sector ' || gen_random_uuid()) returning id into v_sec;
+  insert into public.subsections (sector_id, name) values (v_sec, 'A') returning id into v_sub;
+  insert into public.buildings (subsection_id, number) values (v_sub, '12') returning id into v_bld;
+  insert into public.addresses (customer_id, building_id, apartment)
+  values (p_customer, v_bld, '3') returning id into v_id;
+  return v_id;
+end $$;
+
+create function tests.item(p_product uuid, p_qty int) returns jsonb language sql immutable as $$
+  select jsonb_build_object('product_id', p_product, 'qty', p_qty)
+$$;
+
+-- طلب جديد للزبون (بعنوان جديد إن لم يُعطَ). يرجع order_id.
+create function tests.place(p_customer uuid, p_items jsonb, p_address uuid default null)
+returns uuid language plpgsql as $$
+declare r jsonb;
+begin
+  perform tests.set_uid(p_customer);
+  r := public.place_order(coalesce(p_address, tests.new_address(p_customer)), p_items, gen_random_uuid());
+  perform set_config('request.jwt.claims', '{}', true);
+  return (r ->> 'order_id')::uuid;
+end $$;
+
+-- طلب بحالة معينة. السائق p_driver يُعيَّن (يُنشأ سائق إن احتاجت الحالة ولم يُعطَ).
+create function tests.order_in(
+  p_status public.order_status, p_customer uuid default null, p_driver uuid default null)
+returns uuid language plpgsql as $$
+declare
+  v_admin  uuid := tests.new_user('admin');
+  v_cust   uuid := coalesce(p_customer, tests.new_user('customer'));
+  v_driver uuid := p_driver;
+  v_order  uuid;
+begin
+  v_order := tests.place(v_cust, jsonb_build_array(tests.item(tests.new_product(1000, 10), 1)));
+  if v_driver is null and p_status in ('out_for_delivery', 'delivered') then
+    v_driver := tests.new_user('driver');
+  end if;
+
+  perform tests.set_uid(v_admin);
+  if v_driver is not null then
+    perform public.assign_driver(v_order, v_driver);
+  end if;
+  if p_status = 'cancelled' then
+    perform public.set_order_status(v_order, 'cancelled');
+  elsif p_status <> 'pending' then
+    perform public.set_order_status(v_order, 'preparing');
+    if p_status in ('out_for_delivery', 'delivered') then
+      perform public.set_order_status(v_order, 'out_for_delivery');
+    end if;
+    if p_status = 'delivered' then
+      perform public.set_order_status(v_order, 'delivered');
+    end if;
+  end if;
+  perform set_config('request.jwt.claims', '{}', true);
+  return v_order;
+end $$;
+
+grant execute on all functions in schema tests to anon, authenticated;
