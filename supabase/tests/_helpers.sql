@@ -4,7 +4,7 @@
 -- الدوال تُستدعى بدور postgres، عدا as_*، وهي متاحة لكل الأدوار للتبديل بينها.
 
 create schema tests;
-grant usage on schema tests to anon, authenticated;
+grant usage on schema tests to anon, authenticated, service_role;
 
 -- الدوال الجديدة لا تُنفَّذ افتراضياً من PUBLIC (migration 20261111000002)، وامتداد pgtap
 -- يُنشأ داخل المعاملة؛ فنمنح دواله للأدوار التي تُشغَّل بها التأكيدات. يُلغى مع المعاملة.
@@ -15,7 +15,7 @@ begin
              join pg_depend d on d.objid = p.oid and d.deptype = 'e'
              join pg_extension e on e.oid = d.refobjid and e.extname = 'pgtap'
   loop
-    execute format('grant execute on function %s to anon, authenticated', f);
+    execute format('grant execute on function %s to anon, authenticated, service_role', f);
   end loop;
 end $$;
 
@@ -40,6 +40,13 @@ create function tests.as_anon() returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
   perform set_config('role', 'anon', true);
+end $$;
+
+-- Edge Function (service_role، مثل push-dispatch)
+create function tests.as_service() returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  perform set_config('role', 'service_role', true);
 end $$;
 
 -- رجوع لدور postgres (لتجهيز البيانات والتحقق بدون RLS)
@@ -174,4 +181,4 @@ begin
   return v_order;
 end $$;
 
-grant execute on all functions in schema tests to anon, authenticated;
+grant execute on all functions in schema tests to anon, authenticated, service_role;

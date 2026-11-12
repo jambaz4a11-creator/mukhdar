@@ -17,5 +17,10 @@ export default tseslint.config(
     files: ['scripts/**/*.mjs'],
     languageOptions: { sourceType: 'module', globals: globals.node },
   },
+  {
+    // اختبارات Deno: assert يتحقق قبل الوصول، فالـ non-null assertion مقبول هنا.
+    files: ['supabase/functions/**/*_test.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
+  },
   prettier,
 );

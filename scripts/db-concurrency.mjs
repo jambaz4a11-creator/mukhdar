@@ -60,16 +60,16 @@ async function createUsers(role, count, offset) {
 }
 
 /** يشغّل fn لكل عامل باتصال مستقل، ويطلقهم جميعاً بنفس اللحظة. يرجع 'OK' أو رمز الخطأ لكل عامل. */
-async function race(actors, fn) {
+async function race(actors, fn, role = 'authenticated') {
   const clients = await Promise.all(actors.map(() => newClient()));
   await q('select pg_advisory_lock($1)', [BARRIER]);
   const runs = clients.map(async (c, i) => {
     try {
       await c.query('begin');
       await c.query(`select set_config('request.jwt.claims', $1, true)`, [
-        JSON.stringify({ sub: actors[i], role: 'authenticated' }),
+        JSON.stringify({ sub: actors[i], role }),
       ]);
-      await c.query('set local role authenticated');
+      await c.query(`set local role ${role}`);
       await c.query('select pg_advisory_xact_lock_shared($1)', [BARRIER]);
       await fn(c, i);
       await c.query('commit');
@@ -192,6 +192,38 @@ try {
   check(
     drivers.includes(assigned[0].driver_id),
     'the order is assigned to one of the racing drivers',
+  );
+
+  // 3) push-dispatch: 4 عمال (service_role) يحجزون من الصندوق بنفس اللحظة ← مجموعات منفصلة
+  const { rows: pendingRows } = await q(
+    `select count(*)::int as n from public.notification_outbox
+      where sent_at is null and attempts < 5 and claimed_at is null`,
+  );
+  const WORKERS = 4;
+  const PER_WORKER = Math.max(1, Math.floor(pendingRows[0].n / 2));
+  /** @type {number[][]} */
+  const claimedBy = [];
+  const claimResults = await race(
+    Array.from({ length: WORKERS }, () => null),
+    async (c, i) => {
+      const { rows } = await c.query(`select id from public.claim_push_notifications($1::int)`, [
+        PER_WORKER,
+      ]);
+      claimedBy[i] = rows.map((r) => Number(r.id));
+    },
+    'service_role',
+  );
+  const allClaimed = claimedBy.flat();
+  console.log(
+    'claim_push_notifications per worker:',
+    claimedBy.map((r) => r.length),
+  );
+  check(tally(claimResults).OK === WORKERS, 'every worker claims without error');
+  check(pendingRows[0].n >= 2, `outbox has pending rows to claim (${pendingRows[0].n})`);
+  check(new Set(allClaimed).size === allClaimed.length, 'no outbox row is claimed by two workers');
+  check(
+    allClaimed.length === Math.min(pendingRows[0].n, WORKERS * PER_WORKER),
+    'workers together claim every available row (skip locked, no waiting)',
   );
 } catch (err) {
   console.error(`error: ${err.message}`);

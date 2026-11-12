@@ -29,6 +29,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Edge Functions (deno check + deno test, fetch mocked)
+        run: pnpm test:functions
 
   # اختبارات pgTAP على Supabase محلي (Docker على الـ runner). لا اتصال بالسحابة ولا كلمة سر.
   db-tests:
@@ -49,7 +51,7 @@ jobs:
           -x realtime,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: pgTAP (seed.sql only)
         run: pnpm db:test
-      - name: Concurrency (40 orders on stock 10; 8 drivers accept one order)
+      - name: Concurrency (40 orders on stock 10; 8 drivers accept one order; 4 parallel outbox claims)
         run: pnpm db:concurrency
       - name: seed:demo (500 orders over 30 days + 1000 load customers)
         run: pnpm seed:demo --scale=load --no-images

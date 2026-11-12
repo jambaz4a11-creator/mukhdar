@@ -43,8 +43,8 @@
 | `order_item_costs` | تكلفة البند لحظة الطلب | أدمن | `place_order` |
 | `order_status_history` | سجل التحويلات | من يرى الطلب | دوال |
 | `ratings` | تقييم 1..5 + تعليق | الزبون + موظف/أدمن | `rate_order` |
-| `push_tokens` | رموز الإشعارات (Expo حالياً؛ دعم FCM/APNs لتطبيق السائق الخارجي سؤال مفتوح، انظر DRIVER-API §6) | صاحبها | `register_push_token` |
-| `notification_outbox` | إشعارات بانتظار الإرسال | service_role فقط | دوال |
+| `push_tokens` | رموز الإشعارات، ولكل رمز مزوّد `provider`: `expo` (افتراضي، مُنفَّذ) أو `fcm` (محجوز، يُتخطى عند الإرسال). انظر DRIVER-API §6 | صاحبها | `register_push_token` |
+| `notification_outbox` | إشعارات بانتظار الإرسال (`claimed_at` = حجز عامل الإرسال، 5 دقائق) | service_role فقط | دوال |
 | `daily_stats` | تقارير يومية (توقيت بغداد) | أدمن | دوال |
 | `cities` / `vendors` | للتوسع لاحقاً | الجميع (النشط) | أدمن |
 
@@ -92,7 +92,8 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 
 ### دوال أخرى
 - `rate_order(p_order_id, p_stars, p_comment?)`: `INVALID_STARS`, `ORDER_NOT_RATEABLE`, `ALREADY_RATED`.
-- `register_push_token(p_token, p_platform)`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي. رمز فارغ أو أطول من 255 حرفاً أو بلا منصة: `INVALID_TOKEN`.
+- `register_push_token(p_token, p_platform, p_provider = 'expo')`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي (مع مزوّده). رمز فارغ أو أطول من 255 حرفاً أو بلا منصة/مزوّد، أو رمز `expo` ليس بصيغة `ExponentPushToken[...]`/`ExpoPushToken[...]`: `INVALID_TOKEN`.
+- دوال `push-dispatch` (service_role فقط، T07): `claim_push_notifications(p_limit = 200)` تحجز صفوفاً غير مرسلة (`for update skip locked` + `claimed_at`) وترجع لكل صف مستلميه (رمز + مزوّد)؛ `finish_push_notifications(p_results, p_dead_tokens)` تسجل النتيجة وتحذف الرموز الميتة؛ `push_dispatch_authorized(p_secret)` تتحقق من السر المشترك.
 - `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`.
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
 
@@ -122,7 +123,7 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 ## 8) Edge Functions
 | الدالة | المُشغِّل | العمل |
 |---|---|---|
-| `push-dispatch` | Database Webhook على `insert` بـ `notification_outbox` + pg_cron كل دقيقة للمتبقي | تجمع الرموز حسب الجمهور (`user` / كل السائقين النشطين / كل الأدمن)، ترسل عبر Expo Push API بدفعات ≤100، تحدّث `sent_at` أو `attempts` و`last_error` (حد أقصى 5 محاولات)، وتحذف الرموز التي يرجع لها `DeviceNotRegistered` |
+| `push-dispatch` | trigger (`after insert for each statement`) على `notification_outbox` يطلب الدالة بـ `pg_net`، + `pg_cron` كل دقيقة إن بقي شيء غير مرسل. المصادقة بترويسة `x-dispatch-secret` (سر بـ Vault، `verify_jwt = false`) | تحجز حتى 200 صف، تجمع الرموز حسب الجمهور (`user` / كل السائقين النشطين / الأدمن والموظفون النشطون)، ترسل كل رمز عبر مزوّده: Expo Push API بدفعات ≤100 (`channelId: orders`، أولوية عالية)؛ `fcm` يُتخطى بملاحظة بـ `last_error`. تحدّث `sent_at` أو `attempts` و`last_error` (حد أقصى 5 محاولات)، وتحذف الرموز التي يرجع لها `DeviceNotRegistered` |
 | `delete-account` | يستدعيها التطبيق (مطلوب من Apple وGoogle) | تتحقق من JWT، ترفض إن كان للمستخدم طلب غير منتهٍ، ثم `auth.admin.deleteUser`. الحذف يمتد: `profiles` ← العناوين والرموز تُحذف، والطلبات تبقى بنسخها مع `customer_id = null` |
 
 ## 9) كيف نضمن الأداء
@@ -187,3 +188,8 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 23. عنوان افتراضي واحد لكل زبون (فهرس فريد جزئي). لتغييره: إلغاء القديم ثم تعيين الجديد (أو بعكس الترتيب بتعديلين متتاليين).
 24. سبب الإلغاء وملاحظة السجل يُقصّان لـ 300 حرف (بدون خطأ).
 25. الحد الأدنى للطلب من مضاعفات 250 (مثل الأجرة).
+26. **push-dispatch (T07):** مزوّد لكل رمز (`expo` مُنفَّذ، `fcm` محجوز: يُقبل ويُخزن لكن يُتخطى بـ `last_error = "fcm: N token(s) skipped (provider not implemented)"`). APNs المباشر غير مخطط (iOS عبر Expo).
+27. نتيجة الصف: وصل لرمز واحد على الأقل ← مرسل (لا إعادة كي لا يتكرر الإشعار، والفشل الجزئي يُكتب ملاحظة)؛ بلا مستلمين ← مرسل مع `no recipients`؛ أخطاء مؤقتة فقط ← إعادة بعد 5 دقائق (الحجز يبقى كمهلة)، حتى 5 محاولات؛ رموز ميتة/متخطاة فقط ← فشل نهائي.
+28. **الإيصالات (receipts) مؤجلة:** نعتمد على تذكرة الإرسال (ticket) فقط؛ `DeviceNotRegistered` المتأخر يظهر بالإرسال التالي لنفس الرمز. تُضاف إن ظهرت حاجة.
+29. السر المشترك بين القاعدة والدالة (`push_dispatch_secret`) يولّده الـ migration داخل Vault لكل بيئة، فلا يمر بأحد ولا بالـ git. رابط الدالة (`push_dispatch_url`) يُضبط بـ Vault لكل بيئة يدوياً (RUNBOOK)؛ بدونه (محلياً/CI) لا طلبات HTTP. `EXPO_ACCESS_TOKEN` اختياري (يُستخدم إن ضُبط، مطلوب فقط إن فُعّل "Enhanced push security" بحساب Expo).
+30. اختبار "إشعار على جهاز حقيقي خلال 10 ثوانٍ" مؤجل لـ T14 (لا تطبيق بعد). التحقق الحالي على `mukhdar-dev`: من الإدخال للمعالجة عبر Expo الحقيقي ≈ 4 ثوانٍ.

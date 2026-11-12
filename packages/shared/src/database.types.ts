@@ -284,6 +284,7 @@ export type Database = {
           attempts: number;
           audience: string;
           body: string;
+          claimed_at: string | null;
           created_at: string;
           data: NonNullable<Json>;
           id: number;
@@ -297,6 +298,7 @@ export type Database = {
           attempts?: number;
           audience: string;
           body: string;
+          claimed_at?: string | null;
           created_at?: string;
           data?: NonNullable<Json>;
           id?: never;
@@ -309,6 +311,7 @@ export type Database = {
           attempts?: number;
           audience?: string;
           body?: string;
+          claimed_at?: string | null;
           created_at?: string;
           data?: NonNullable<Json>;
           id?: never;
@@ -712,6 +715,7 @@ export type Database = {
           id: number;
           last_seen_at: string;
           platform: Database['public']['Enums']['push_platform'];
+          provider: Database['public']['Enums']['push_provider'];
           token: string;
           user_id: string;
         };
@@ -721,6 +725,7 @@ export type Database = {
           id?: never;
           last_seen_at?: string;
           platform: Database['public']['Enums']['push_platform'];
+          provider?: Database['public']['Enums']['push_provider'];
           token: string;
           user_id: string;
         };
@@ -729,6 +734,7 @@ export type Database = {
           id?: never;
           last_seen_at?: string;
           platform?: Database['public']['Enums']['push_platform'];
+          provider?: Database['public']['Enums']['push_provider'];
           token?: string;
           user_id?: string;
         };
@@ -1020,9 +1026,24 @@ export type Database = {
         }[];
       };
       baghdad_today: { Args: Record<PropertyKey, never>; Returns: string };
+      claim_push_notifications: {
+        Args: { p_limit?: number };
+        Returns: {
+          attempts: number;
+          body: string;
+          data: Json;
+          id: number;
+          recipients: Json;
+          title: string;
+        }[];
+      };
       current_user_role: {
         Args: Record<PropertyKey, never>;
         Returns: Database['public']['Enums']['user_role'];
+      };
+      finish_push_notifications: {
+        Args: { p_dead_tokens?: string[]; p_results: Json };
+        Returns: undefined;
       };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_staff_or_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -1039,12 +1060,17 @@ export type Database = {
         Args: { p_address_id: string; p_idempotency_key: string; p_items: Json; p_note?: string };
         Returns: Json;
       };
+      push_dispatch_authorized: { Args: { p_secret: string }; Returns: boolean };
       rate_order: {
         Args: { p_comment?: string; p_order_id: string; p_stars: number };
         Returns: undefined;
       };
       register_push_token: {
-        Args: { p_platform: Database['public']['Enums']['push_platform']; p_token: string };
+        Args: {
+          p_platform: Database['public']['Enums']['push_platform'];
+          p_provider?: Database['public']['Enums']['push_provider'];
+          p_token: string;
+        };
         Returns: undefined;
       };
       round_iqd: { Args: { amount: number }; Returns: number };
@@ -1100,6 +1126,7 @@ export type Database = {
       movement_type: 'purchase' | 'sale' | 'waste' | 'adjust' | 'cancel_return';
       order_status: 'pending' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled';
       push_platform: 'ios' | 'android';
+      push_provider: 'expo' | 'fcm';
       user_role: 'customer' | 'driver' | 'staff' | 'admin';
     };
     CompositeTypes: {
@@ -1218,6 +1245,7 @@ export const Constants = {
       movement_type: ['purchase', 'sale', 'waste', 'adjust', 'cancel_return'],
       order_status: ['pending', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'],
       push_platform: ['ios', 'android'],
+      push_provider: ['expo', 'fcm'],
       user_role: ['customer', 'driver', 'staff', 'admin'],
     },
   },

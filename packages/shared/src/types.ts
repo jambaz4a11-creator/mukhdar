@@ -18,6 +18,7 @@ export type OrderStatus = Enums<'order_status'>;
 export type UserRole = Enums<'user_role'>;
 export type MovementType = Enums<'movement_type'>;
 export type PushPlatform = Enums<'push_platform'>;
+export type PushProvider = Enums<'push_provider'>;
 
 export type Profile = Tables<'profiles'>;
 export type AppSettings = Tables<'app_settings'>;

@@ -402,6 +402,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# T07: تُستدعى من القاعدة (pg_net) بسر مشترك بترويسة x-dispatch-secret (يُتحقق منه بـ Vault)، لا بـ JWT.
+[functions.push-dispatch]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/push-dispatch/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

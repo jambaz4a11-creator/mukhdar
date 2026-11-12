@@ -116,18 +116,21 @@ Checks run in this order; the first failure is returned:
 Side effects: timestamps (`out_for_delivery_at`, `delivered_at`), a history row, a push to the
 customer, and on `delivered` the daily reports are updated.
 
-### 3.4 `register_push_token(p_token text, p_platform push_platform)` → void
+### 3.4 `register_push_token(p_token text, p_platform push_platform, p_provider push_provider default 'expo')` → void
 
-`p_platform` is `'ios'` or `'android'`. Call after sign-in, after the token changes, and on app start.
+`p_platform` is `'ios'` or `'android'`. `p_provider` says which push service the token belongs to:
+`'expo'` (default; an Expo push token `ExponentPushToken[...]` / `ExpoPushToken[...]` from
+`expo-notifications`) or `'fcm'` (a raw FCM registration token; **reserved**, see section 6).
+Call after sign-in, after the token changes, and on app start.
 If the same token was registered by another account (shared device), it moves to the current user.
 The driver can also `select`/`delete` their own rows in `push_tokens` (e.g. delete on sign-out).
 
 | Error | SQL state | When |
 |---|---|---|
 | `NOT_AUTHENTICATED` | 28000 | no session |
-| `INVALID_TOKEN` | P0001 | empty/blank token, token longer than 255 characters, or missing platform |
+| `INVALID_TOKEN` | P0001 | empty/blank token, token longer than 255 characters, missing platform or provider, or an `expo` token not in the `ExponentPushToken[...]` / `ExpoPushToken[...]` format |
 
-See section 6 about the token format (open question).
+See section 6 for which providers are delivered today.
 
 ### 3.5 Not for drivers
 
@@ -208,8 +211,9 @@ Limits to design around:
 
 ## 6) Push notifications
 
-Functions write to `notification_outbox`; the Edge Function `push-dispatch` (task T07, **not built
-yet**) sends them. Notifications a driver receives:
+Functions write to `notification_outbox`; the Edge Function `push-dispatch` (T07) sends them,
+usually within a few seconds (a database trigger calls it on every insert; `pg_cron` retries every
+minute). Notifications a driver receives:
 
 | Trigger | Audience | Title (Arabic) | `data` |
 |---|---|---|---|
@@ -218,16 +222,23 @@ yet**) sends them. Notifications a driver receives:
 | staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
 | an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = reason if given) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
 
-Planned delivery (T07): Expo Push API, batches ≤ 100, Android `channelId: "orders"` with high priority.
+Delivery is chosen **per token** by its provider (`push_tokens.provider`, set by `register_push_token`):
+
+| Provider | Status | Details |
+|---|---|---|
+| `expo` (default) | **implemented** | Expo Push API, batches ≤ 100, `priority: "high"`, `sound: "default"`, Android `channelId: "orders"` |
+| `fcm` | **reserved, not implemented** | tokens are accepted and stored, but skipped when sending. The outbox row records `last_error = "fcm: N token(s) skipped (provider not implemented)"` (and, if the user has no other token, it is not retried) |
+
+**Recommendation for the driver app:** use `expo-notifications` and register the Expo push token
+(provider `expo`). If you build without Expo and need raw FCM / APNs, tell us first. The FCM sender
+will be added to `push-dispatch` (a server change, no change to this API). APNs is not planned: on iOS use
+Expo tokens.
+
 The app should create an Android notification channel with id **`orders`** (high importance, distinct
 sound) and ask for notification permission right after sign-in. Tokens that come back
-`DeviceNotRegistered` are deleted server-side.
-
-> **Open question: token format.** `push-dispatch` is designed for **Expo push tokens**
-> (`ExponentPushToken[...]`) registered via `register_push_token`. If the driver app is **not** built with
-> Expo (or does not use `expo-notifications`), it will register raw FCM / APNs tokens, and
-> `push-dispatch` must be extended to send via FCM / APNs directly (and possibly a token-type column).
-> To be decided with the driver app developer before T07 is implemented.
+`DeviceNotRegistered` are deleted server-side, so register again on every app start.
+Delivery is best effort: Expo outages are retried (up to 5 attempts, about 5 minutes apart). A
+notification that reached at least one of the user's devices is not re-sent.
 
 ---
 
@@ -264,5 +275,6 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 
 ## Open questions
 
-1. Push tokens: Expo vs raw FCM/APNs (section 6).
+1. ~~Push tokens: Expo vs raw FCM/APNs~~ resolved in T07: a provider per token; `expo` is implemented
+   and `fcm` is reserved (section 6). Tell us if the app needs `fcm`.
 2. Account deletion rules for a driver holding an unfinished order (T08).

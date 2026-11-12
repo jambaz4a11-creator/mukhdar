@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`.
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07).
 
 ## 4) توليد أنواع TypeScript
 
@@ -115,7 +115,7 @@ pnpm exec supabase db advisors --remote
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملفات: `supabase/tests/NN_*.sql` (10 ملفات، 325 فحصاً)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+الملفات: `supabase/tests/NN_*.sql` (11 ملفاً، 375 فحصاً)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
 
 - كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
 - لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
@@ -134,9 +134,11 @@ pnpm db:test:remote 03 04    # ملفات محددة
 ### في CI
 وظيفة `db-tests` بـ `.github/workflows/ci.yml`، على Supabase محلي (Docker على runner GitHub، تُطبَّق الـ migrations و`seed.sql` تلقائياً). **لا اتصال بالسحابة ولا كلمة سر بـ GitHub.** الخطوات:
 1. `pnpm db:test` على البيانات الأساسية.
-2. `pnpm db:concurrency`: تزامن حقيقي باتصالات متعددة (40 طلباً على رصيد 10 ← 10 تنجح بالضبط بلا deadlocks؛ 8 سائقين يقبلون نفس الطلب ← واحد فقط). ينشئ بياناته فعلاً ثم يحذفها، لذلك **يرفض أي قاعدة غير محلية** (لا يعمل على `mukhdar-dev`).
+2. `pnpm db:concurrency`: تزامن حقيقي باتصالات متعددة (40 طلباً على رصيد 10 ← 10 تنجح بالضبط بلا deadlocks؛ 8 سائقين يقبلون نفس الطلب ← واحد فقط؛ 4 عمال push-dispatch يحجزون من الصندوق بنفس اللحظة ← مجموعات منفصلة). ينشئ بياناته فعلاً ثم يحذفها، لذلك **يرفض أي قاعدة غير محلية** (لا يعمل على `mukhdar-dev`).
 3. `seed:demo --scale=load`، ثم `pnpm db:test` مرة ثانية، ثم `seed:reset` و`db:test 09`.
 4. التأكد أن `seed:demo` و`db:concurrency` يرفضان هدفاً غير محلي (مع نص الرفض).
+
+وظيفة `ci` تشغّل أيضاً `pnpm test:functions` (`deno check` + `deno test` لـ Edge Functions، fetch مزيف). Deno يُنزَّل عبر `devEngines` بـ `package.json` (مثبّت 2.9.6).
 
 الـ actions مثبّتة بـ commit SHA، ولكل وظيفة `timeout-minutes`، ودفعة جديدة تلغي التشغيل القديم لنفس الفرع.
 
@@ -207,3 +209,40 @@ SUPABASE_SERVICE_ROLE_KEY=...   # Dashboard ← Project Settings ← API Keys �
 - **العَرَض:** فشل `seed:demo` بخطأ عمود/قيد بـ `auth.*`، أو مستخدمو عرض لا يستطيعون الدخول.
 - **الإجراء:** قارن أعمدة `auth.users`/`auth.identities` الحالية بـ `CREATE_USERS_SQL` بـ `scripts/seed-demo.mjs` وعدّلها. البديل الأكثر ثباتاً: إنشاء المستخدمين عبر Auth Admin API (`service_role`) ثم بقية البيانات بالاتصال المباشر.
 - CI يكشفها مبكراً لأن وظيفة `db-tests` تشغّل `seed:demo` على أحدث Supabase محلي.
+
+## 11) الإشعارات: Edge Function `push-dispatch` (T07)
+
+**المسار:** دالة تكتب بـ `notification_outbox` ← trigger (لكل جملة insert) يستدعي `private.kick_push_dispatch()` ← `pg_net` يرسل `POST` (بعد commit) لرابط الدالة مع ترويسة `x-dispatch-secret` ← الدالة تتحقق من السر (`push_dispatch_authorized`)، تحجز الصفوف (`claim_push_notifications`)، ترسل عبر Expo، وتسجل النتيجة (`finish_push_notifications`). احتياط: `pg_cron` job باسم `push-dispatch` كل دقيقة (يطلب الدالة فقط إن بقي شيء غير مرسل).
+
+### النشر (لكل بيئة، بموافقة صاحب المشروع)
+```bash
+pnpm exec supabase db push --remote --yes                       # migration 20261112000003 (pg_net، pg_cron، السر بـ Vault)
+pnpm exec supabase functions deploy push-dispatch --remote=<ref> --use-api --no-verify-jwt --yes
+```
+ثم رابط الدالة بـ Vault (مرة واحدة لكل بيئة؛ من SQL Editor أو اتصال القاعدة):
+```sql
+select vault.create_secret('https://<ref>.supabase.co/functions/v1/push-dispatch', 'push_dispatch_url',
+                           'push-dispatch Edge Function URL');
+-- لتغييره: select vault.update_secret((select id from vault.secrets where name = 'push_dispatch_url'), '<url>');
+```
+- **السر المشترك** `push_dispatch_secret` يولّده الـ migration داخل Vault (32 بايت عشوائية)؛ لا يُنسخ لأي مكان. لتدويره: `vault.update_secret` بقيمة جديدة عشوائية (الدالة تقرؤه من القاعدة بكل طلب، فلا حاجة لإعادة النشر).
+- **أسرار الدالة:** `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase تلقائياً. `EXPO_ACCESS_TOKEN` **اختياري**: يُضبط فقط إن فُعّل "Enhanced push security" بحساب Expo (`supabase secrets set EXPO_ACCESS_TOKEN=... --remote=<ref>`؛ يضبطه صاحب المشروع بنفسه).
+- محلياً و CI: لا `push_dispatch_url` ← لا طلبات HTTP (الـ trigger والـ cron لا يفعلان شيئاً).
+
+### الحالة على mukhdar-dev (2026-11-12)
+الـ migration مطبّق، الدالة منشورة (`verify_jwt = false`)، `push_dispatch_url` مضبوط، `EXPO_ACCESS_TOKEN` غير مضبوط (غير مطلوب). فحص طرفي: صف بالصندوق لمستخدم برمز Expo وهمي + رمز fcm ← عولج خلال ≈ 4 ثوانٍ عبر Expo الحقيقي (`DeviceNotRegistered` ← حُذف الرمز؛ fcm ← "skipped (provider not implemented)")، ثم حُذفت بيانات الفحص. **فحص جهاز حقيقي خلال 10 ثوانٍ مؤجل لـ T14.**
+
+### المراقبة
+```sql
+-- غير المرسل والأخطاء الأخيرة
+select id, audience, attempts, claimed_at, last_error, created_at from public.notification_outbox
+ where sent_at is null order by id desc limit 20;
+-- ردود الدالة (pg_net يحتفظ بها ~6 ساعات)
+select id, status_code, left(content, 200), error_msg, created from net._http_response order by id desc limit 10;
+-- تشغيلات cron
+select status, return_message, start_time from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'push-dispatch') order by start_time desc limit 10;
+```
+سجلات الدالة: Dashboard ← Edge Functions ← push-dispatch ← Logs (`push-dispatch done {...}`).
+- صف بـ `attempts = 5` لن يُعاد. لإعادته يدوياً: `update public.notification_outbox set attempts = 0, claimed_at = null where id = ...`.
+- `401` بـ `net._http_response`: السر بـ Vault تغيّر أو الرابط يشير لمشروع آخر.
