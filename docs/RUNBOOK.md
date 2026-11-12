@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08).
 
 ## 4) توليد أنواع TypeScript
 
@@ -115,7 +115,7 @@ pnpm exec supabase db advisors --remote
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملفات: `supabase/tests/NN_*.sql` (11 ملفاً، 375 فحصاً)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+الملفات: `supabase/tests/NN_*.sql` (12 ملفاً، 407 فحوص)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
 
 - كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
 - لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
@@ -246,3 +246,24 @@ select status, return_message, start_time from cron.job_run_details
 سجلات الدالة: Dashboard ← Edge Functions ← push-dispatch ← Logs (`push-dispatch done {...}`).
 - صف بـ `attempts = 5` لن يُعاد. لإعادته يدوياً: `update public.notification_outbox set attempts = 0, claimed_at = null where id = ...`.
 - `401` بـ `net._http_response`: السر بـ Vault تغيّر أو الرابط يشير لمشروع آخر.
+
+## 12) حذف الحساب: Edge Function `delete-account` (T08)
+
+يستدعيها التطبيق بـ JWT المستخدم (`supabase.functions.invoke('delete-account', { method: 'POST' })`). لا أسرار إضافية (`SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` محقونة).
+
+```bash
+pnpm exec supabase db push --remote --yes          # migration 20261112000004
+pnpm exec supabase functions deploy delete-account --remote=<ref> --use-api --yes   # verify_jwt = true
+```
+
+### اختبار التكامل (مشروع التطوير فقط)
+```bash
+pnpm it:delete-account
+```
+ينشئ مستخدماً مؤقتاً (هاتف `9647005xxxxxx` + بريد `t08-…@example.com`، كلمة سر عشوائية) عبر Auth Admin API، يجرّب الرفض والحذف عبر الدالة المنشورة، ويحذف كل ما أنشأه حتى عند الفشل. يحتاج `SUPABASE_DB_PASSWORD` و`SUPABASE_SERVICE_ROLE_KEY` بـ `.env.local`. ليس بـ CI (يحتاج الدالة المنشورة ومفتاح الخدمة). دخول الهاتف معطّل بمشروع التطوير، لذلك يدخل المستخدم المؤقت بالبريد.
+
+### الحالة على mukhdar-dev (2026-11-12)
+الـ migration مطبّق والدالة منشورة. اختبار التكامل: 15/15، بلا بقايا.
+
+### حذف حساب أدمن (يدوياً)
+الدالة ترفض حساب `admin`. لحذفه: أنزل دوره أولاً من أدمن آخر (`set_user_role`)، ثم يحذف حسابه من التطبيق، أو احذفه من Dashboard ← Authentication ← Users.

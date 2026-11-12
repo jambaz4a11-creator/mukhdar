@@ -74,6 +74,18 @@ describe('parseBackendError', () => {
     });
   });
 
+  it('maps an Edge Function error body {error: CODE} (delete-account)', () => {
+    expect(parseBackendError({ error: 'ACTIVE_ORDER' })).toEqual({
+      code: 'ACTIVE_ORDER',
+      message: ERROR_MESSAGES.ACTIVE_ORDER,
+      detail: null,
+    });
+    expect(parseBackendError({ error: 'delete failed' }).message).toBe(DEFAULT_ERROR_MESSAGE);
+    expect(parseBackendError({ error: 'nope', message: 'ADMIN_ACCOUNT' }).code).toBe(
+      'ADMIN_ACCOUNT',
+    );
+  });
+
   it('maps a bare code string', () => {
     expect(errorMessage('TOO_MANY_ACTIVE_ORDERS')).toBe(ERROR_MESSAGES.TOO_MANY_ACTIVE_ORDERS);
   });

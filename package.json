@@ -17,7 +17,8 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:reset": "node scripts/seed-reset.mjs",
     "supabase": "supabase",
-    "test:functions": "deno check --config supabase/functions/deno.json supabase/functions/push-dispatch/index.ts && deno test --no-prompt --config supabase/functions/deno.json supabase/functions"
+    "test:functions": "deno check --config supabase/functions/deno.json supabase/functions/push-dispatch/index.ts supabase/functions/delete-account/index.ts && deno test --no-prompt --config supabase/functions/deno.json supabase/functions",
+    "it:delete-account": "node scripts/delete-account-it.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

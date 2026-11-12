@@ -96,6 +96,7 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 - دوال `push-dispatch` (service_role فقط، T07): `claim_push_notifications(p_limit = 200)` تحجز صفوفاً غير مرسلة (`for update skip locked` + `claimed_at`) وترجع لكل صف مستلميه (رمز + مزوّد)؛ `finish_push_notifications(p_results, p_dead_tokens)` تسجل النتيجة وتحذف الرموز الميتة؛ `push_dispatch_authorized(p_secret)` تتحقق من السر المشترك.
 - `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`.
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
+- حذف الحساب (service_role فقط، تستدعيها Edge Function `delete-account`، T08): `begin_account_deletion(p_user_id) → boolean` (is_active السابق) تأخذ قفل `place_order` لنفس المستخدم، ترفض `ADMIN_ACCOUNT` (أدمن) و`ACTIVE_ORDER` (طلب غير منتهٍ كزبون أو كسائق معيَّن)، وتعطّل الحساب حتى يكتمل `auth.admin.deleteUser`؛ `abort_account_deletion(p_user_id, p_was_active)` ترجع الحالة إن فشل الحذف. `USER_NOT_FOUND` إن لم يوجد ملف شخصي. الدالة ترجع نفس الرموز بـ `{error}` مع HTTP 403/409/404.
 
 كل رموز هذا القسم لها رسالة عربية بـ `packages/shared/src/errors.ts`، واختبار Jest يفشل إن نقص رمز أو اختلف هذا القسم عن الرموز التي يرفعها SQL.
 
@@ -124,7 +125,7 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 | الدالة | المُشغِّل | العمل |
 |---|---|---|
 | `push-dispatch` | trigger (`after insert for each statement`) على `notification_outbox` يطلب الدالة بـ `pg_net`، + `pg_cron` كل دقيقة إن بقي شيء غير مرسل. المصادقة بترويسة `x-dispatch-secret` (سر بـ Vault، `verify_jwt = false`) | تحجز حتى 200 صف، تجمع الرموز حسب الجمهور (`user` / كل السائقين النشطين / الأدمن والموظفون النشطون)، ترسل كل رمز عبر مزوّده: Expo Push API بدفعات ≤100 (`channelId: orders`، أولوية عالية)؛ `fcm` يُتخطى بملاحظة بـ `last_error`. تحدّث `sent_at` أو `attempts` و`last_error` (حد أقصى 5 محاولات)، وتحذف الرموز التي يرجع لها `DeviceNotRegistered` |
-| `delete-account` | يستدعيها التطبيق (مطلوب من Apple وGoogle) | تتحقق من JWT، ترفض إن كان للمستخدم طلب غير منتهٍ، ثم `auth.admin.deleteUser`. الحذف يمتد: `profiles` ← العناوين والرموز تُحذف، والطلبات تبقى بنسخها مع `customer_id = null` |
+| `delete-account` | يستدعيها التطبيق بـ JWT المستخدم (`POST`، مطلوب من Apple وGoogle؛ `verify_jwt = true` + `auth.getUser`) | `begin_account_deletion` (يرفض `ADMIN_ACCOUNT` ← 403، `ACTIVE_ORDER` ← 409 لطلب غير منتهٍ كزبون أو كسائق معيَّن؛ ويعطّل الحساب)، ثم `auth.admin.deleteUser`؛ إن فشل: `abort_account_deletion` و500. الحذف يمتد: `profiles` ← العناوين والرموز تُحذف، والطلبات والتقييمات والسجل تبقى بنسخها مع `customer_id`/`driver_id` = null |
 
 ## 9) كيف نضمن الأداء
 | الإجراء | التفصيل |
@@ -193,3 +194,6 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 28. **الإيصالات (receipts) مؤجلة:** نعتمد على تذكرة الإرسال (ticket) فقط؛ `DeviceNotRegistered` المتأخر يظهر بالإرسال التالي لنفس الرمز. تُضاف إن ظهرت حاجة.
 29. السر المشترك بين القاعدة والدالة (`push_dispatch_secret`) يولّده الـ migration داخل Vault لكل بيئة، فلا يمر بأحد ولا بالـ git. رابط الدالة (`push_dispatch_url`) يُضبط بـ Vault لكل بيئة يدوياً (RUNBOOK)؛ بدونه (محلياً/CI) لا طلبات HTTP. `EXPO_ACCESS_TOKEN` اختياري (يُستخدم إن ضُبط، مطلوب فقط إن فُعّل "Enhanced push security" بحساب Expo).
 30. اختبار "إشعار على جهاز حقيقي خلال 10 ثوانٍ" مؤجل لـ T14 (لا تطبيق بعد). التحقق الحالي على `mukhdar-dev`: من الإدخال للمعالجة عبر Expo الحقيقي ≈ 4 ثوانٍ.
+31. **حذف الحساب (T08):** حساب `admin` لا يُحذف من التطبيق (يدوياً فقط). الموظف يحذف حسابه مثل غيره. السائق المعيَّن لطلب غير منتهٍ يُرفض (`ACTIVE_ORDER`) مثل الزبون صاحب طلب غير منتهٍ. حساب معطّل من الأدمن يستطيع حذف نفسه.
+32. الحذف فوري ونهائي (لا فترة سماح ولا حذف ناعم). رمز الوصول القديم يبقى صالح التوقيع حتى انتهائه (≈ ساعة) لكنه لا يصل لشيء (لا ملف شخصي؛ `auth.getUser` يرفضه؛ رمز التحديث مُلغى)، والتطبيق يسجّل الخروج محلياً بعد النجاح. نفس الرقم يستطيع التسجيل لاحقاً كحساب جديد.
+33. صفحة الويب العامة "طلب حذف الحساب" (Google Play) مؤجلة لـ T16 (تحتاج تطبيق الأدمن).

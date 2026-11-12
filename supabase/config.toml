@@ -408,6 +408,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/push-dispatch/index.ts"
 
+# T08: يستدعيها التطبيق بـ JWT المستخدم (البوابة تتحقق منه، والدالة تتحقق ثانيةً عبر auth.getUser).
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

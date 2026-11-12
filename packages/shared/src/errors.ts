@@ -35,6 +35,10 @@ export const ERROR_MESSAGES = {
   ALREADY_RATED: 'قيّمت هذا الطلب مسبقاً',
   INVALID_TOKEN: 'تعذّر تفعيل الإشعارات على هذا الجهاز',
 
+  // حذف الحساب (Edge Function delete-account)
+  ACTIVE_ORDER: 'لا يمكن حذف الحساب أثناء وجود طلب جارٍ',
+  ADMIN_ACCOUNT: 'حساب المدير لا يُحذف من التطبيق، تواصل مع الإدارة',
+
   // الأدمن
   INVALID_MOVEMENT: 'حركة المخزون غير صحيحة',
   PRODUCT_NOT_FOUND: 'المنتج غير موجود',
@@ -65,16 +69,24 @@ const NETWORK_PATTERN =
   /failed to fetch|network request failed|networkerror|load failed|fetch failed/i;
 
 /**
- * يحوّل أي خطأ (رمز نصي، خطأ PostgREST {message, details}، أو Error) إلى رسالة عربية.
+ * يحوّل أي خطأ (رمز نصي، خطأ PostgREST {message, details}، جسم رد Edge Function {error}، أو Error)
+ * إلى رسالة عربية.
  * لا يعرض للمستخدم نص الخطأ الخام أبداً.
  */
 export function parseBackendError(error: unknown): BackendError {
+  // جسم رد Edge Function: {"error": "ACTIVE_ORDER"}
+  const bodyCode =
+    typeof error === 'object' && error !== null && 'error' in error
+      ? (error as { error: unknown }).error
+      : null;
   const raw =
     typeof error === 'string'
       ? error
-      : typeof error === 'object' && error !== null && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : '';
+      : isErrorCode(typeof bodyCode === 'string' ? bodyCode.trim() : bodyCode)
+        ? String(bodyCode)
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : '';
   const detailValue =
     typeof error === 'object' && error !== null && 'details' in error
       ? (error as { details: unknown }).details

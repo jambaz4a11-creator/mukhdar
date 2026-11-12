@@ -266,8 +266,24 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 
 ## 8) Other requirements
 
-- **Account deletion** inside the app is required by Apple/Google. It will be provided by the Edge
-  Function `delete-account` (task T08, not built yet; called with the user's JWT).
+- **Account deletion** inside the app is required by Apple/Google. Edge Function `delete-account` (T08):
+  ```ts
+  const { data, error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
+  // on error: const body = await error.context.json()  ->  { error: 'ACTIVE_ORDER' | ... }
+  ```
+  It uses the signed-in user's JWT (sent automatically by `functions.invoke`). Responses:
+
+  | HTTP | Body | Meaning |
+  |---|---|---|
+  | 200 | `{ "deleted": true }` | account deleted; sign out locally and clear local data |
+  | 401 | `{ "error": "NOT_AUTHENTICATED" }` (or a gateway 401) | no/expired session |
+  | 409 | `{ "error": "ACTIVE_ORDER" }` | **a driver with an assigned order that is not delivered/cancelled cannot delete** (also a customer with an unfinished order). Finish or hand back the order first (call the administration) |
+  | 403 | `{ "error": "ADMIN_ACCOUNT" }` | admin accounts are not deleted from an app |
+  | 500 | `{ "error": "delete failed" }` | nothing was deleted; try again |
+
+  After deletion: the profile, push tokens and addresses are removed; delivered orders stay (for
+  accounting) with `driver_id = null`; the refresh token is revoked and the old access token is
+  rejected. The same phone number can sign up again later as a new account.
 - No live GPS tracking in phase 1. No limit on how many orders a driver carries at once. No
   "available / unavailable" switch yet (every active driver gets every new-order push).
 - Concurrency: the accept is a single conditional `update`, so of two drivers accepting the same order
@@ -277,4 +293,5 @@ pending ──► preparing ──► out_for_delivery ──► delivered
 
 1. ~~Push tokens: Expo vs raw FCM/APNs~~ resolved in T07: a provider per token; `expo` is implemented
    and `fcm` is reserved (section 6). Tell us if the app needs `fcm`.
-2. Account deletion rules for a driver holding an unfinished order (T08).
+2. ~~Account deletion rules for a driver holding an unfinished order~~ resolved in T08: refused with
+   `409 ACTIVE_ORDER` (section 8).

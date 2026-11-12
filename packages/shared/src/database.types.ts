@@ -932,6 +932,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      abort_account_deletion: {
+        Args: { p_user_id: string; p_was_active: boolean };
+        Returns: undefined;
+      };
       accept_order: {
         Args: { p_order_id: string };
         Returns: {
@@ -1026,6 +1030,7 @@ export type Database = {
         }[];
       };
       baghdad_today: { Args: Record<PropertyKey, never>; Returns: string };
+      begin_account_deletion: { Args: { p_user_id: string }; Returns: boolean };
       claim_push_notifications: {
         Args: { p_limit?: number };
         Returns: {
