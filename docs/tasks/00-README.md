@@ -17,7 +17,7 @@
 | 07 | [Edge Function: push-dispatch](07-edge-push-dispatch.md) | 03 | ✅ (فحص الجهاز الحقيقي ← T14) |
 | 08 | [Edge Function: delete-account](08-edge-delete-account.md) | 03 | ✅ (صفحة الويب ← T16) |
 | 09 | [هيكل تطبيق الزبون](09-customer-scaffold.md) | 06 | ✅ (فحص Expo Go وSentry يدوي) |
-| 10 | [دخول الزبون](10-customer-auth.md) | 09 | ⬜ |
+| 10 | [دخول الزبون](10-customer-auth.md) | 09 | ✅ (فحص الأجهزة يدوي) |
 | 11 | [الكتالوج](11-customer-catalog.md) | 05، 09 | ✅ (فحص التمرير وبدون شبكة يدوي) |
 | 12 | [العناوين](12-customer-addresses.md) | 10 | ⬜ |
 | 13 | [السلة وتأكيد الطلب](13-customer-cart-checkout.md) | 11، 12 | ⬜ |

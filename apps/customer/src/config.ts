@@ -4,12 +4,15 @@ export interface AppConfig {
   supabaseUrl: string;
   supabaseKey: string;
   sentryDsn: string;
+  /** رقم واتساب المتجر لـ "نسيت الرمز؟" (افتراض SPEC-customer §2.1، حتى يُضاف لـ app_settings). */
+  shopWhatsapp: string;
 }
 
 export const config: AppConfig = {
   supabaseUrl: (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim(),
   supabaseKey: (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '').trim(),
   sentryDsn: (process.env.EXPO_PUBLIC_SENTRY_DSN ?? '').trim(),
+  shopWhatsapp: (process.env.EXPO_PUBLIC_SHOP_WHATSAPP ?? '').trim(),
 };
 
 export function isSupabaseConfigured(c: AppConfig = config): boolean {

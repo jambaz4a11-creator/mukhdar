@@ -312,6 +312,7 @@ pnpm it:delete-account
 EXPO_PUBLIC_SUPABASE_URL=https://ghcohlrzvehtcettaaiu.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # Dashboard ← Project Settings ← API Keys ← Publishable key
 EXPO_PUBLIC_SENTRY_DSN=                                   # فارغ = Sentry معطّل
+EXPO_PUBLIC_SHOP_WHATSAPP=9647XXXXXXXXX                   # رقم واتساب المتجر ("نسيت الرمز؟")؛ القيمة الوهمية = الرابط مخفي
 ```
 **التشغيل** (من جذر المستودع): `pnpm --filter @mukhdar/customer start`، ثم امسح رمز QR بتطبيق **Expo Go** (SDK 58) على نفس شبكة الـ Wi-Fi. إن لم يتصل الهاتف (شبكة مختلفة/جدار حماية): `pnpm --filter @mukhdar/customer start -- --tunnel`. بعد تعديل `.env`: أعد التشغيل مع `-- --clear`.
 

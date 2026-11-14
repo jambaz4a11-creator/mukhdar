@@ -9,6 +9,7 @@ import {
 import type { Database } from './database.types';
 
 export type MukhdarClient = SupabaseClient<Database>;
+export type { Session } from '@supabase/supabase-js';
 export type AuthStorage = NonNullable<
   NonNullable<SupabaseClientOptions<'public'>['auth']>['storage']
 >;

@@ -9,4 +9,5 @@ export * from './phone';
 export * from './pin';
 export * from './status';
 export * from './errors';
+export * from './auth-errors';
 export * from './supabase';

@@ -29,6 +29,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-font',
+    // T10: الجلسة بـ Keychain / Keystore
+    'expo-secure-store',
     // بالبناء (dev/preview/production): RTL مفروض أصلياً. في Expo Go يفرضه src/lib/rtl.ts عند التشغيل.
     ['expo-localization', { supportsRTL: true, forcesRTL: true }],
     [
