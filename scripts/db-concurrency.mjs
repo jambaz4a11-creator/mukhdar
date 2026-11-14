@@ -136,7 +136,7 @@ try {
   ).rows[0].id;
   ids.product = (
     await q(
-      `insert into public.products (category_id, name, unit, price_iqd) values ($1, 'concurrency', 'كيلو', 1000) returning id`,
+      `insert into public.products (category_id, name, unit, price_iqd) values ($1, 'concurrency', 'نص كيلو', 1000) returning id`,
       [ids.category],
     )
   ).rows[0].id;

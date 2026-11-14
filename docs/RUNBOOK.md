@@ -57,6 +57,8 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 
 المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08).
 
+**بانتظار موافقة التطبيق على `mukhdar-dev`:** `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"). مُختبرة على `mukhdar-dev` بـ `--prelude` (داخل المعاملة، بلا تطبيق) وعلى CI.
+
 ## 4) توليد أنواع TypeScript
 
 بعد كل migration جديدة:
@@ -124,6 +126,7 @@ pnpm exec supabase db advisors --remote
 ```bash
 pnpm db:test:remote          # كل الملفات
 pnpm db:test:remote 03 04    # ملفات محددة
+pnpm db:test:remote --prelude=supabase/migrations/<new>.sql   # migration غير مطبّقة، تُنفَّذ داخل معاملة كل ملف وتُلغى
 ```
 يحتاج:
 1. `supabase link` (يوفر `supabase/.temp/pooler-url`).
@@ -169,13 +172,13 @@ pnpm exec supabase db query --remote -f supabase/scripts/smoke_place_order.sql -
 **للتطوير فقط.** السكربتات ترفض أي مشروع غير `mukhdar-dev` (قائمة مسموحة بـ `scripts/lib/db.mjs`)، وترفض إذا `MUKHDAR_ENV=production`، وترفض أي `DB_URL` غير محلي.
 
 ### 1. البيانات الأساسية: `supabase/seed.sql`
-مدينة بسماية، 10 قطاعات × 3 أقسام × 22 بناية = **660 بناية** (أرقام 1..660)، 6 أقسام، 60 منتجاً بأسعار شراء ورصيد ابتدائي.
+مدينة بسماية، قطاعان (A، B) × وحدات (A1..A9، B1..B8 = 17) × عمارات 1..100 لكل وحدة = **1700 عمارة**، 6 أقسام، 60 منتجاً (الخضار والفواكه بوحدة "نص كيلو"، الأعشاب "باقة") بأسعار شراء ورصيد ابتدائي.
 - محلياً تُحمَّل تلقائياً مع `supabase start` / `db reset`.
 - على mukhdar-dev (قابلة للإعادة، لا تكرر ولا تغيّر ما عدّله الأدمن):
   ```bash
   pnpm exec supabase db query --remote -f supabase/seed.sql --yes
   ```
-- **افتراض:** هيكل القطاعات مؤقت، والمالك يستبدله بالقوائم الحقيقية من لوحة الأدمن.
+- الهيكل من قرار المالك (2026-11-14). `seed.sql` لا يحذف شيئاً ولا يعدّل منتجاً موجوداً؛ لتغيير الهيكل أو الكتالوج على `mukhdar-dev` انظر "إعادة بناء الكتالوج والعناوين" أدناه.
 
 ### 2. بيانات العرض: `pnpm seed:demo`
 ```bash
@@ -191,6 +194,14 @@ pnpm seed:reset -- --remote                 # يمسح بيانات العرض �
 - السكربت يرفض العمل إذا كانت بيانات العرض موجودة: شغّل `seed:reset` أولاً.
 - في النهاية يفحص أن `daily_stats` يطابق الطلبات المسلّمة والملغاة لكل يوم (نفس فحص `09_daily_stats.sql`).
 
+### إعادة بناء الكتالوج والعناوين على mukhdar-dev (عند تغيير قرار تجاري)
+بموافقة صاحب المشروع فقط. بالترتيب:
+1. `pnpm seed:reset -- --remote` (يحذف مستخدمي العرض وطلباتهم ويعكس أثرها).
+2. تأكد أنه لا توجد طلبات ولا عناوين لغير مستخدمي العرض، ثم امسح بمعاملة واحدة: `addresses` ← `buildings` ← `subsections` ← `sectors`، و`products` (تمتد للتكاليف والمخزون والحركات) ← `categories`، وصور `product-images/demo/`.
+3. `pnpm exec supabase db query --remote -f supabase/seed.sql --yes`، ثم `pnpm seed:demo -- --remote` (يرفع الصور أيضاً).
+
+آخر تنفيذ: 2026-11-14 (وحدة نص كيلو + قطاعان A/B بـ 17 وحدة).
+
 ### 3. `seed:reset`
 يحذف مستخدمي العرض/الحمل (بالبادئة) وطلباتهم وعناوينهم وإشعاراتهم، ويطرح مساهمتهم من `daily_stats`، ويعكس حركات المخزون التي أنشأوها. لا يمس الكتالوج ولا الصور. كله بمعاملة واحدة، ويُلغى إذا لم يتطابق `daily_stats` بعده.
 
@@ -201,8 +212,8 @@ SUPABASE_SERVICE_ROLE_KEY=...   # Dashboard ← Project Settings ← API Keys �
 ```
 ثم `pnpm seed:demo -- --remote --images-only`. بدون المفتاح تُتخطى الصور برسالة. **لا يوضع هذا المفتاح أبداً بتطبيق أو بكود يعمل بالمتصفح.**
 
-### الحالة على mukhdar-dev (2026-11-11)
-`seed.sql` مطبّق، و`seed:demo` مشغّل: 25 مستخدماً، 500 طلب (430 مسلّم، 55 ملغى، 15 نشط)، 252 تقييماً، `daily_stats` لـ 29 يوماً ومتطابق. صور المنتجات مرفوعة (60/60 بـ `product-images/demo/`، تُعرض بالرابط العام).
+### الحالة على mukhdar-dev (2026-11-14)
+أُعيد البناء بعد قرارَي المالك (وحدة نص كيلو، قطاعان A/B): `seed.sql` الجديد (قطاعان، 17 وحدة، 1700 عمارة، 60 منتجاً منها 33 بنص كيلو) و`seed:demo`: 25 مستخدماً، 500 طلب، `daily_stats` متطابق، صور المنتجات 60/60 (تُعرض بالرابط العام).
 
 ### مخاطرة معروفة: الكتابة المباشرة بجداول Auth
 `seed:demo` ينشئ المستخدمين بإدراج مباشر في `auth.users` و`auth.identities` (هاتف مؤكد، أعمدة الرموز نصوص فارغة)، لأن الطلبات يجب أن تمر بـ `place_order` بهوية كل مستخدم (SPEC-backend افتراض 19). هذه جداول داخلية لـ Supabase Auth وقد يتغير شكلها مع تحديثات Supabase بدون إعلان:

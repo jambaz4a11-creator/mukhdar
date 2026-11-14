@@ -110,7 +110,7 @@ declare v_cat int; v_id uuid;
 begin
   insert into public.categories (name) values ('test-cat ' || gen_random_uuid()) returning id into v_cat;
   insert into public.products (category_id, name, unit, price_iqd, is_active)
-  values (v_cat, 'test-product ' || left(gen_random_uuid()::text, 8), 'كيلو', p_price, p_active)
+  values (v_cat, 'test-product ' || left(gen_random_uuid()::text, 8), 'نص كيلو', p_price, p_active)
   returning id into v_id;
   if p_stock > 0 then
     update public.stock set qty = p_stock where product_id = v_id;
@@ -125,7 +125,7 @@ create function tests.new_address(p_customer uuid) returns uuid language plpgsql
 declare v_sec int; v_sub int; v_bld int; v_id uuid;
 begin
   insert into public.sectors (name) values ('test-sector ' || gen_random_uuid()) returning id into v_sec;
-  insert into public.subsections (sector_id, name) values (v_sec, 'A') returning id into v_sub;
+  insert into public.subsections (sector_id, name) values (v_sec, 'A1') returning id into v_sub;
   insert into public.buildings (subsection_id, number) values (v_sub, '12') returning id into v_bld;
   insert into public.addresses (customer_id, building_id, apartment)
   values (p_customer, v_bld, '3') returning id into v_id;

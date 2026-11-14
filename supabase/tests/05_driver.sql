@@ -1,5 +1,5 @@
 -- 05: دوال السائق (available_orders, accept_order, assign_driver) و RLS السائق
-select plan(43);
+select plan(44);
 
 -- طلبات موجودة مسبقاً (مثل seed:demo) لا تزاحم طلبات الاختبار ضمن حد available_orders.
 -- تُعيَّن لسائق مؤقت داخل المعاملة، وكل شيء يُلغى بنهايتها.
@@ -73,6 +73,9 @@ select is((select driver_id from public.orders where id = tests.id('o_preparing'
 select isnt_empty($$ select 1 from public.notification_outbox where audience = 'user' and user_id = tests.id('d2')
                        and data ->> 'order_id' = tests.id('o_preparing')::text and data ->> 'type' = 'assigned' $$,
   'assigned driver is notified');
+select is((select body from public.notification_outbox where audience = 'user' and user_id = tests.id('d2')
+            and data ->> 'order_id' = tests.id('o_preparing')::text and data ->> 'type' = 'assigned'),
+  'وحدة A1 - عمارة 12', 'assignment push names the unit and the building');
 
 select tests.as_user(tests.id('staff'));
 select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_preparing'), tests.id('cust')),

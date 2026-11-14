@@ -108,7 +108,7 @@ try {
     orderIds.push(rows[0].id);
     await db.query(
       `insert into public.order_items (order_id, name_snapshot, unit_snapshot, price_snapshot_iqd, qty, line_total_iqd)
-       values ($1, 'T08 item', 'كيلو', 1000, 1, 1000)`,
+       values ($1, 'T08 item', 'نص كيلو', 1000, 1, 1000)`,
       [rows[0].id],
     );
   }

@@ -4,6 +4,9 @@
 //   node scripts/db-test.mjs            -> القاعدة المحلية (supabase start)، أو DB_URL إن وُجد
 //   node scripts/db-test.mjs --remote   -> المشروع السحابي المربوط (pooler-url + SUPABASE_DB_PASSWORD)
 //   node scripts/db-test.mjs 03 05      -> ملفات محددة فقط (بادئة الاسم)
+//   node scripts/db-test.mjs --remote --prelude=supabase/migrations/X.sql
+//                                       -> ينفّذ migration غير مطبّقة داخل معاملة كل ملف قبل الاختبار
+//                                          (تُلغى مع ROLLBACK): فحص migration جديدة بلا تطبيقها على السحابة
 //
 // كل ملف يعمل داخل BEGIN ... ROLLBACK: امتداد pgtap والدوال المساعدة (_helpers.sql)
 // وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى بنهايتها. لا شيء يبقى بقاعدة البيانات.
@@ -15,6 +18,9 @@ const testsDir = path.join(root, 'supabase', 'tests');
 const args = process.argv.slice(2);
 const target = resolveTarget(args);
 const filters = args.filter((a) => !a.startsWith('--'));
+const preludeArg = args.find((a) => a.startsWith('--prelude='));
+const preludePath = preludeArg ? preludeArg.slice('--prelude='.length) : null;
+const prelude = preludePath ? fs.readFileSync(path.resolve(root, preludePath), 'utf8') : null;
 
 function tapLines(results) {
   const lines = [];
@@ -48,7 +54,8 @@ const files = fs
 const helpers = fs.readFileSync(path.join(testsDir, '_helpers.sql'), 'utf8');
 
 const client = await connect(target);
-console.log(`target: ${describe(target)}\n`);
+console.log(`target: ${describe(target)}${preludePath ? ` (+ ${preludePath}, rolled back)` : ''}
+`);
 
 let total = 0;
 let failedFiles = 0;
@@ -57,6 +64,7 @@ for (const file of files) {
   let outcome;
   try {
     await client.query('begin');
+    if (prelude) await client.query(prelude);
     await client.query('create extension if not exists pgtap with schema extensions');
     await client.query(helpers);
     outcome = evaluate(tapLines(await client.query(sql)));

@@ -68,7 +68,7 @@ select results_eq($$ with u as (update public.products set price_iqd = 1250 wher
 select results_eq($$ with u as (update public.app_settings set delivery_fee_iqd = 1500 returning 1)
                      select count(*)::int from u $$, array[1], 'admin updates app_settings');
 select throws_ok($$ insert into public.products (category_id, name, unit, price_iqd)
-                    select id, 'bad price', 'كيلو', 1100 from public.categories limit 1 $$,
+                    select id, 'bad price', 'نص كيلو', 1100 from public.categories limit 1 $$,
   '23514', null, 'price not a multiple of 250 is rejected');
 select results_eq($$ select count(*)::int from public.addresses where id in (tests.id('a1'), tests.id('a2')) $$,
   array[2], 'admin sees all customers'' addresses');

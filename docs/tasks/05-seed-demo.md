@@ -17,7 +17,7 @@
 - السكربت يرفض العمل إذا كان الرابط لمشروع الإنتاج (فحص اسم المشروع/متغير بيئة).
 
 ## ما نُفّذ (2026-11-11)
-- `supabase/seed.sql` (660 بناية، 6 أقسام، 60 منتجاً) و`pnpm seed:demo` / `pnpm seed:reset` و`--scale=load`. التفاصيل بـ RUNBOOK §10.
+- `supabase/seed.sql` (660 بناية، 6 أقسام، 60 منتجاً؛ استُبدل في 2026-11-14 بقطاعين A/B × 17 وحدة × 100 عمارة ووحدة نص كيلو، انظر RUNBOOK §10) و`pnpm seed:demo` / `pnpm seed:reset` و`--scale=load`. التفاصيل بـ RUNBOOK §10.
 - الاختبارات: `09_daily_stats.sql` (التطابق)، `scripts/lib/db.test.mjs` (رفض غير التطوير)، وCI يشغّل seed:demo ← الاختبارات ← seed:reset ← الفحص على Supabase محلي.
 - طُبّق على mukhdar-dev: 500 طلب، `daily_stats` متطابق.
 - **فرق عن الخطوات:** السكربت يستخدم اتصال قاعدة مباشر لا `service_role` (السبب بـ SPEC-backend افتراض 19).

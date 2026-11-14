@@ -71,8 +71,8 @@ oldest first. `p_limit` is clamped to 1..50.
 | `id` | uuid | |
 | `order_number` | bigint | number shown to people |
 | `status` | `'pending' \| 'preparing'` | |
-| `sector`, `subsection`, `building` | text | address without apartment |
-| `item_count` | bigint | sum of quantities |
+| `sector`, `subsection`, `building` | text | address without apartment: sector (`قطاع A`), unit (`A3`), building number (`12`) |
+| `item_count` | bigint | sum of quantities, in sale units (a half kilo counts as 1) |
 | `total_iqd` | bigint | amount to collect in cash |
 | `created_at` | timestamptz | |
 
@@ -155,9 +155,21 @@ All writes go through the functions above; there are no insert/update/delete gra
 
 `orders.address_snapshot` (jsonb, frozen at order time):
 ```json
-{ "address_id": "uuid", "sector": "قطاع A", "subsection": "القسم 1", "building": "12",
+{ "address_id": "uuid", "sector": "قطاع A", "subsection": "A3", "building": "12",
   "apartment": "5", "note": "optional text or null" }
 ```
+
+**Address layout (Bismayah):** two sectors, `قطاع A` and `قطاع B`. Sector A has units `A1`–`A9`, sector B
+has units `B1`–`B8` (table `subsections`), and each unit has buildings `1`–`100` (table `buildings`).
+**Building numbers repeat across units**, so always show the unit with the building. Arabic UI labels:
+subsection = **"وحدة"**, building = **"عمارة"**, e.g. `قطاع A، وحدة A3، عمارة 12، شقة 5`. Push bodies
+use the same wording (`وحدة A3 - عمارة 12`).
+
+**Quantities and units:** `order_items.qty` is an integer count of the product's sale unit
+(`unit_snapshot`). Produce is sold per **`نص كيلو`** (half kilo) at a fixed price per half kilo (no
+weighing), herbs per `باقة`, and some items per piece (`حبة`, `علبة`, `قنينة`, `سلة`). Display rule
+(same as `formatQuantity` in `packages/shared`): for `نص كيلو`, qty 1 → `نص كيلو`, 2 → `1 كيلو`,
+3 → `1.5 كيلو`, n → `n/2 كيلو`; otherwise `n <unit>` (e.g. `3 باقة`).
 
 Useful queries:
 ```ts

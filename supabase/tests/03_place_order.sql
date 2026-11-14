@@ -1,5 +1,5 @@
 -- 03: place_order
-select plan(46);
+select plan(48);
 
 -- التجهيز (postgres): إعدادات معروفة، منتجات، زبائن، عناوين
 update public.app_settings set delivery_fee_iqd = 1000, min_order_iqd = 0, store_open = true;
@@ -203,6 +203,12 @@ select results_eq($$ select i.qty, c.cost_snapshot_iqd from public.order_items i
 select results_eq($$ select audience from public.notification_outbox
                      where data ->> 'order_id' = tests.id('o1')::text order by audience $$,
   array['admins', 'drivers'], 'drivers and admins are notified');
+select is((select body from public.notification_outbox
+            where data ->> 'order_id' = tests.id('o1')::text and audience = 'drivers'),
+  'وحدة A1 - عمارة 12', 'driver push names the unit and the building (numbers repeat across units)');
+select is((select address_snapshot ->> 'subsection' || '/' || (address_snapshot ->> 'building')
+             from public.orders where id = tests.id('o1')),
+  'A1/12', 'address snapshot keeps unit and building');
 select results_eq($$ select from_status::text, to_status::text from public.order_status_history where order_id = tests.id('o1') $$,
   $$ values (null::text, 'pending') $$, 'history row for creation');
 select is((select customer_phone from public.orders where id = tests.id('o1')),
