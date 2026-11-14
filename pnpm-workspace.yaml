@@ -5,3 +5,5 @@ packages:
 allowBuilds:
   supabase: true
   '@parcel/watcher': false
+  # binary only for source-map upload (EAS build with SENTRY_AUTH_TOKEN, later)
+  '@sentry/cli': false

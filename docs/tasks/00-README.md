@@ -16,7 +16,7 @@
 | 06 | [الحزمة المشتركة](06-shared-package.md) | 02 | ✅ |
 | 07 | [Edge Function: push-dispatch](07-edge-push-dispatch.md) | 03 | ✅ (فحص الجهاز الحقيقي ← T14) |
 | 08 | [Edge Function: delete-account](08-edge-delete-account.md) | 03 | ✅ (صفحة الويب ← T16) |
-| 09 | [هيكل تطبيق الزبون](09-customer-scaffold.md) | 06 | ⬜ |
+| 09 | [هيكل تطبيق الزبون](09-customer-scaffold.md) | 06 | ✅ (فحص Expo Go وSentry يدوي) |
 | 10 | [دخول الزبون](10-customer-auth.md) | 04، 09 | ⬜ |
 | 11 | [الكتالوج](11-customer-catalog.md) | 05، 09 | ⬜ |
 | 12 | [العناوين](12-customer-addresses.md) | 10 | ⬜ |

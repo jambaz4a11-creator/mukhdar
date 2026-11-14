@@ -1,4 +1,4 @@
-# 09: هيكل تطبيق الزبون
+# 09: هيكل تطبيق الزبون ✅
 
 **الهدف:** تطبيق Expo يفتح بالعربية RTL ويتصل بـ Supabase.
 
@@ -18,3 +18,8 @@
 ## الاختبارات
 - اختبار RNTL: التبويبات تُعرض بالعربية.
 - اختبار: خطأ متعمد يصل لـ Sentry (يدوي، مرة واحدة).
+
+## الحالة (2026-11-14)
+- ✅ Expo SDK 58 + Expo Router (`apps/customer`)، RTL، IBM Plex Sans Arabic، TanStack Query (+ persist)، Supabase من `packages/shared`، التبويبات الأربعة، الثيم من `docs/design/README.md`، Sentry (معطّل بلا DSN)، `eas.json`.
+- ✅ اختبارات: RNTL للتبويبات بالعربية، الرئيسية تقرأ `app_settings`، Sentry no-op، حماية RTL، تطابق الثيم مع README. `expo export` (Android وiOS) و`expo-doctor` 20/20. قراءة `app_settings` من `mukhdar-dev` بالمفتاح العام تحققت عبر REST.
+- ⏳ يدوي لدى صاحب المشروع: فتح التطبيق على Expo Go (iOS وAndroid) والتأكد من RTL بكل الشاشات، و"خطأ متعمد يصل لـ Sentry" (يحتاج DSN).

@@ -288,3 +288,18 @@ pnpm it:delete-account
 
 ### حذف حساب أدمن (يدوياً)
 الدالة ترفض حساب `admin`. لحذفه: أنزل دوره أولاً من أدمن آخر (`set_user_role`)، ثم يحذف حسابه من التطبيق، أو احذفه من Dashboard ← Authentication ← Users.
+
+## 13) تطبيق الزبون (T09)
+
+**مرة واحدة:** أنشئ `apps/customer/.env` (انسخ `.env.example`):
+```
+EXPO_PUBLIC_SUPABASE_URL=https://ghcohlrzvehtcettaaiu.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # Dashboard ← Project Settings ← API Keys ← Publishable key
+EXPO_PUBLIC_SENTRY_DSN=                                   # فارغ = Sentry معطّل
+```
+**التشغيل** (من جذر المستودع): `pnpm --filter @mukhdar/customer start`، ثم امسح رمز QR بتطبيق **Expo Go** (SDK 58) على نفس شبكة الـ Wi-Fi. إن لم يتصل الهاتف (شبكة مختلفة/جدار حماية): `pnpm --filter @mukhdar/customer start -- --tunnel`. بعد تعديل `.env`: أعد التشغيل مع `-- --clear`.
+
+- أول فتح بـ Expo Go قد يعيد التحميل مرة واحدة لتفعيل RTL (طبيعي).
+- الرئيسية تعرض "حالة المتجر" من `app_settings` (اختبار الاتصال). رسالة "إعداد الاتصال ناقص" = `.env` غير موجود أو ناقص.
+- `expo export` محلياً يحتاج ذاكرة أكبر لـ Node على هذا الجهاز: `NODE_OPTIONS=--max-old-space-size=6144`.
+- الاختبارات: `pnpm --filter @mukhdar/customer test` (jest-expo + RNTL)، وهي ضمن `pnpm test` و CI.
