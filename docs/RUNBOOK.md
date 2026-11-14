@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع).
 
 ## 4) توليد أنواع TypeScript
 

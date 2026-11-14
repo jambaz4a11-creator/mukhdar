@@ -8,6 +8,18 @@ export const HALF_KILO_UNIT = 'نص كيلو';
 export const BUNCH_UNIT = 'باقة';
 
 /**
+ * وحدات البيع المسموحة (قائمة ثابتة لحقل الوحدة بلوحة الأدمن). مطابقة لقيد قاعدة البيانات
+ * products_unit_allowed؛ إضافة وحدة = migration جديد يعدّل القيد + تحديث هذه القائمة
+ * (اختبار quantity.test.ts يفشل إن اختلفتا).
+ */
+export const SALE_UNITS = [HALF_KILO_UNIT, BUNCH_UNIT, 'حبة', 'علبة', 'قنينة', 'سلة'] as const;
+export type SaleUnit = (typeof SALE_UNITS)[number];
+
+export function isSaleUnit(value: unknown): value is SaleUnit {
+  return typeof value === 'string' && (SALE_UNITS as readonly string[]).includes(value);
+}
+
+/**
  * "نص كيلو"، "1 كيلو"، "1.5 كيلو"، "2 كيلو"... لوحدة نص الكيلو؛
  * "N باقة" (وأي وحدة أخرى: "N حبة"، "N سلة"...).
  * qty عدد صحيح موجب (كما تفرضه قاعدة البيانات 1..99)، وإلا RangeError.

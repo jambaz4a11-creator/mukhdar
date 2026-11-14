@@ -149,7 +149,7 @@ All writes go through the functions above; there are no insert/update/delete gra
 | `order_items` | items of orders they can read |
 | `order_status_history` | history of orders they can read |
 | `profiles` | own row only |
-| `push_tokens` | own rows (select, insert, update, delete) |
+| `push_tokens` | own rows: select and delete only. Insert/update only through `register_push_token` (since 2026-11-14) |
 | `app_settings`, `cities`, `sectors`, `subsections`, `buildings`, active `categories` / `products` | public catalog data |
 | `addresses`, `ratings`, `stock`, costs, `daily_stats`, `inventory_movements`, `notification_outbox` | **no access** |
 

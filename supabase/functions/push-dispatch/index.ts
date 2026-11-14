@@ -1,7 +1,7 @@
 // Edge Function: push-dispatch
 // تُستدعى من القاعدة (trigger بعد insert بـ notification_outbox، و pg_cron كل دقيقة) عبر pg_net.
 // SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY تحقنهما Supabase تلقائياً. EXPO_ACCESS_TOKEN اختياري.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { dispatchAll, type OutboxRow, type RowResult, type Store } from './dispatch.ts';
 import { createExpoSender } from './expo.ts';
 import { createHandler } from './handler.ts';

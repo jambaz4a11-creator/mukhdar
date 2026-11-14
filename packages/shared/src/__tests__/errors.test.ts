@@ -7,7 +7,9 @@ import {
   NETWORK_ERROR_MESSAGE,
   errorMessage,
   parseBackendError,
+  parseFunctionError,
 } from '../errors';
+import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 
 const repo = path.resolve(__dirname, '../../../..');
 
@@ -84,6 +86,23 @@ describe('parseBackendError', () => {
     expect(parseBackendError({ error: 'nope', message: 'ADMIN_ACCOUNT' }).code).toBe(
       'ADMIN_ACCOUNT',
     );
+  });
+
+  it('parseFunctionError reads the code from a functions.invoke error (S6)', async () => {
+    const http = new FunctionsHttpError(Response.json({ error: 'ACTIVE_ORDER' }, { status: 409 }));
+    // بدون القراءة غير المتزامنة: الرسالة العامة فقط
+    expect(parseBackendError(http).code).toBeNull();
+    expect(await parseFunctionError(http)).toEqual({
+      code: 'ACTIVE_ORDER',
+      message: ERROR_MESSAGES.ACTIVE_ORDER,
+      detail: null,
+    });
+    const notJson = new FunctionsHttpError(new Response('<html>502</html>', { status: 502 }));
+    expect((await parseFunctionError(notJson)).message).toBe(DEFAULT_ERROR_MESSAGE);
+    expect((await parseFunctionError(new FunctionsFetchError(new TypeError('x')))).message).toBe(
+      NETWORK_ERROR_MESSAGE,
+    );
+    expect((await parseFunctionError('ADMIN_ACCOUNT')).code).toBe('ADMIN_ACCOUNT');
   });
 
   it('maps a bare code string', () => {

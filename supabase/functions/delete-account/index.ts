@@ -2,7 +2,7 @@
 // يستدعيها التطبيق (الزبون أو السائق) بـ JWT المستخدم:
 //   supabase.functions.invoke('delete-account', { method: 'POST' })
 // SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY تحقنهما Supabase تلقائياً (لا يغادران الخادم).
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { createDeleteAccountHandler } from './handler.ts';
 
 const url = Deno.env.get('SUPABASE_URL');

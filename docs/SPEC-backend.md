@@ -43,7 +43,7 @@
 | `order_item_costs` | تكلفة البند لحظة الطلب | أدمن | `place_order` |
 | `order_status_history` | سجل التحويلات | من يرى الطلب | دوال |
 | `ratings` | تقييم 1..5 + تعليق | الزبون + موظف/أدمن | `rate_order` |
-| `push_tokens` | رموز الإشعارات، ولكل رمز مزوّد `provider`: `expo` (افتراضي، مُنفَّذ) أو `fcm` (محجوز، يُتخطى عند الإرسال). انظر DRIVER-API §6 | صاحبها | `register_push_token` |
+| `push_tokens` | رموز الإشعارات، ولكل رمز مزوّد `provider`: `expo` (افتراضي، مُنفَّذ) أو `fcm` (محجوز، يُتخطى عند الإرسال). انظر DRIVER-API §6 | صاحبها (قراءة وحذف) | `register_push_token` فقط (لا insert/update مباشر) |
 | `notification_outbox` | إشعارات بانتظار الإرسال (`claimed_at` = حجز عامل الإرسال، 5 دقائق) | service_role فقط | دوال |
 | `daily_stats` | تقارير يومية (توقيت بغداد) | أدمن | دوال |
 | `cities` / `vendors` | للتوسع لاحقاً | الجميع (النشط) | أدمن |
@@ -205,3 +205,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 39. فشل تشغيل الإرسال (Vault أو `pg_net`) لا يُفشل المعاملة التي كتبت الإشعار (مثل `place_order`): يتحول إلى `warning` و`pg_cron` يلتقط الصف خلال دقيقة (S1).
 40. طلب HTTP واحد على الأكثر من الـ trigger لكل معاملة (علامة محلية `mukhdar.push_kicked`)، لا لكل جملة insert (S2). **افتراض:** لا نافذة زمنية بين المعاملات (كانت مقترحة: ثانيتان)، لأن صف معاملة متأخرة قد ينتظر دورة الـ cron (حتى دقيقة) إن حجزت الدالة قبل الـ commit.
 41. تنظيف يومي (`push-history-purge`، 00:30 UTC): سجل `cron.job_run_details` أقدم من 7 أيام، وإشعارات منتهية (مرسلة، أو فاشلة نهائياً بـ 5 محاولات) أقدم من 30 يوماً (N3).
+42. **الكتابة على `push_tokens` (مراجعة 2026-11-14، S3):** عبر `register_push_token` فقط (يتحقق من صيغة Expo والمزوّد)؛ التطبيق يقرأ ويحذف رموزه (تسجيل الخروج) فقط. migration `20261115000004_hardening.sql`.
+43. **وحدات البيع قائمة ثابتة (S7):** `نص كيلو`، `باقة`، `حبة`، `علبة`، `قنينة`، `سلة` (وحدات `seed.sql`)، بقيد `products_unit_allowed` و`SALE_UNITS` بـ `packages/shared` (اختبار يتأكد من تطابقهما). إضافة وحدة = migration جديد + تحديث `SALE_UNITS`. `order_items.unit_snapshot` بلا قيد (نسخة تاريخية).
+44. **اعتماديات Edge Functions مثبّتة (S4):** `npm:@supabase/supabase-js@2.119.0` (نفس نسخة `packages/shared`) و`supabase/functions/deno.lock` (`frozen`؛ تغيير الاعتماديات = تحديث الملف عمداً). النسخ المنشورة على `mukhdar-dev` تُحدَّث بالنشر القادم (لم يُعَد النشر بهذا التغيير).
+45. **أخطاء Edge Functions بالتطبيقات (S6):** `parseFunctionError(error)` (غير متزامن) بـ `packages/shared` يقرأ `{"error": CODE}` من رد `functions.invoke`؛ يُستخدم بدل `parseBackendError` لنتائج الدوال (مثل `delete-account`).

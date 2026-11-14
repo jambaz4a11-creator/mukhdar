@@ -100,6 +100,36 @@ export function parseBackendError(error: unknown): BackendError {
   return { code: null, message: DEFAULT_ERROR_MESSAGE, detail: null };
 }
 
+/**
+ * خطأ من supabase.functions.invoke (مثل delete-account). FunctionsHttpError يحمل الرد بـ
+ * error.context (Response) وجسمه {"error": "CODE"} يحتاج قراءة غير متزامنة؛ تمريره مباشرة
+ * لـ parseBackendError يعطي الرسالة العامة. FunctionsFetchError = فشل الاتصال.
+ */
+export async function parseFunctionError(error: unknown): Promise<BackendError> {
+  if (typeof error === 'object' && error !== null) {
+    const name = (error as { name?: unknown }).name;
+    if (name === 'FunctionsFetchError') {
+      return { code: null, message: NETWORK_ERROR_MESSAGE, detail: null };
+    }
+    const context = (error as { context?: unknown }).context;
+    if (
+      typeof context === 'object' &&
+      context !== null &&
+      typeof (context as { json?: unknown }).json === 'function'
+    ) {
+      try {
+        const res = context as Response;
+        const body: unknown = await (typeof res.clone === 'function' ? res.clone() : res).json();
+        const parsed = parseBackendError(body);
+        if (parsed.code) return parsed;
+      } catch {
+        // جسم غير JSON أو مقروء مسبقاً: نكمل بالخطأ نفسه
+      }
+    }
+  }
+  return parseBackendError(error);
+}
+
 /** اختصار: الرسالة العربية فقط. */
 export function errorMessage(error: unknown): string {
   return parseBackendError(error).message;

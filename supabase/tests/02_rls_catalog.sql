@@ -1,5 +1,5 @@
 -- 02: RLS للكتالوج والعناوين والإعدادات (anon / customer / staff / admin)
-select plan(35);
+select plan(38);
 
 -- التجهيز (postgres)
 select tests.remember('admin', tests.new_user('admin'));
@@ -70,6 +70,16 @@ select results_eq($$ with u as (update public.app_settings set delivery_fee_iqd 
 select throws_ok($$ insert into public.products (category_id, name, unit, price_iqd)
                     select id, 'bad price', 'نص كيلو', 1100 from public.categories limit 1 $$,
   '23514', null, 'price not a multiple of 250 is rejected');
+select throws_ok($$ insert into public.products (category_id, name, unit, price_iqd)
+                    select id, 'free-text unit', 'كيلو', 1000 from public.categories limit 1 $$,
+  '23514', null, 'a unit outside the fixed list is rejected (S7)');
+select throws_ok($$ update public.products set unit = 'نصف كيلو' where id = tests.id('p_active') $$,
+  '23514', null, 'changing a product to a free-text unit is rejected');
+select lives_ok($$ insert into public.products (category_id, name, unit, price_iqd)
+                   select c.id, 'unit ' || u, u, 1000 from public.categories c,
+                          unnest(array['نص كيلو', 'باقة', 'حبة', 'علبة', 'قنينة', 'سلة']) u
+                    where c.id = (select id from public.categories limit 1) $$,
+  'every allowed sale unit is accepted');
 select results_eq($$ select count(*)::int from public.addresses where id in (tests.id('a1'), tests.id('a2')) $$,
   array[2], 'admin sees all customers'' addresses');
 

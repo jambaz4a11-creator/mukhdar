@@ -1,5 +1,5 @@
 -- 07: التقييم بعد التسليم، ورموز الإشعارات
-select plan(25);
+select plan(28);
 
 select tests.remember('cust', tests.new_user('customer'));
 select tests.remember('cust2', tests.new_user('customer'));
@@ -49,8 +49,13 @@ select results_eq($$ select token, platform::text from public.push_tokens $$,
   $$ values ('ExponentPushToken[test-1]', 'android') $$, 'token moved to the new account');
 select tests.as_user(tests.id('cust'));
 select is_empty($$ select 1 from public.push_tokens $$, 'previous account no longer has the token');
-select lives_ok(format($$ insert into public.push_tokens (user_id, token, platform) values (%L, 't-own', 'ios') $$,
-  tests.id('cust')), 'own token row can be inserted directly (identity column needs no sequence grant)');
+select throws_ok(format($$ insert into public.push_tokens (user_id, token, platform) values (%L, 't-own', 'ios') $$,
+  tests.id('cust')), '42501', null, 'direct insert of an own token is denied (register_push_token only, S3)');
+select lives_ok($$ select public.register_push_token('ExponentPushToken[own-2]', 'ios') $$, 'register_push_token still works');
+select throws_ok($$ update public.push_tokens set token = 'not-an-expo-token' $$, '42501', null,
+  'direct update of an own token is denied (no bypass of the format check)');
+select lives_ok($$ delete from public.push_tokens where token = 'ExponentPushToken[own-2]' $$,
+  'own token can still be deleted (sign-out)');
 select throws_ok($$ select public.register_push_token('', 'ios') $$, 'INVALID_TOKEN', 'empty token is rejected');
 select throws_ok($$ select public.register_push_token('   ', 'ios') $$, 'INVALID_TOKEN', 'blank token is rejected');
 select throws_ok(format($$ select public.register_push_token(%L, 'ios') $$, repeat('t', 256)),
