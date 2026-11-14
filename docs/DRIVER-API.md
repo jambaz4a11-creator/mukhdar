@@ -63,14 +63,14 @@ state, and `error.details` carries extra info where noted. Match on `error.messa
 
 ### 3.1 `available_orders(p_limit int default 20)` → `setof row`
 
-Unassigned orders a driver can take: `driver_id is null` and status `pending` or `preparing`,
+Unassigned orders a driver can take: `driver_id is null` and status `ready` (prepared, waiting for a driver),
 oldest first. `p_limit` is clamped to 1..50.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | |
 | `order_number` | bigint | number shown to people |
-| `status` | `'pending' \| 'preparing'` | |
+| `status` | `'ready'` | always `ready` |
 | `sector`, `subsection`, `building` | text | address without apartment: sector (`قطاع A`), unit (`A3`), building number (`12`) |
 | `item_count` | bigint | sum of quantities, in sale units (a half kilo counts as 1) |
 | `total_iqd` | bigint | amount to collect in cash |
@@ -84,14 +84,14 @@ oldest first. `p_limit` is clamped to 1..50.
 
 ### 3.2 `accept_order(p_order_id uuid)` → `orders` row
 
-First driver wins (atomic `update ... where driver_id is null`). Sets `driver_id = me`,
+Only unassigned orders in status `ready`. First driver wins (atomic `update ... where driver_id is null and status = 'ready'`). Sets `driver_id = me`,
 `assigned_at = now()`, records history note `driver_accepted`. Status does **not** change.
 After success the driver can read the full order (section 4).
 
 | Error | SQL state | When |
 |---|---|---|
 | `NOT_ALLOWED` | 42501 | caller is not an active driver |
-| `ORDER_NOT_AVAILABLE` | P0001 | already taken by another driver, cancelled, delivered, out for delivery, or not found. Show "taken by another driver" and refresh the list |
+| `ORDER_NOT_AVAILABLE` | P0001 | not `ready` (still `pending`/`preparing`, out for delivery, delivered, cancelled), already taken by another driver, or not found. Show "taken by another driver" and refresh the list |
 
 ### 3.3 `set_order_status(p_order_id uuid, p_status order_status, p_reason text default null)` → `orders` row
 
@@ -100,7 +100,7 @@ assigned to them:
 
 | From | To | Meaning |
 |---|---|---|
-| `preparing` | `out_for_delivery` | picked up, on the way |
+| `ready` | `out_for_delivery` | picked up, on the way |
 | `out_for_delivery` | `delivered` | delivered and cash collected (confirm twice in the UI) |
 
 Checks run in this order; the first failure is returned:
@@ -109,7 +109,7 @@ Checks run in this order; the first failure is returned:
 |---|---|---|
 | `NOT_AUTHENTICATED` | 28000 | no session, or profile missing / inactive |
 | `ORDER_NOT_FOUND` | P0001 | no such order |
-| `INVALID_TRANSITION` | P0001 | not a valid transition from the current status; `details` = `"<from> -> <to>"` (e.g. trying `out_for_delivery` while still `pending`, or acting on a `cancelled` order) |
+| `INVALID_TRANSITION` | P0001 | not a valid transition from the current status; `details` = `"<from> -> <to>"` (e.g. trying `out_for_delivery` while still `preparing`, or acting on a `cancelled` order) |
 | `NOT_ALLOWED` | 42501 | valid transition but not allowed for a driver: not your order (e.g. reassigned), or a target other than the two above (drivers **cannot cancel**) |
 | `NO_DRIVER_ASSIGNED` | P0001 | not reachable for drivers (kept for completeness) |
 
@@ -176,7 +176,7 @@ Useful queries:
 // current orders (assigned to me, not final), oldest first
 supabase.from('orders')
   .select('id, order_number, status, address_snapshot, customer_name, customer_phone, total_iqd, note, created_at')
-  .eq('driver_id', uid).in('status', ['pending', 'preparing', 'out_for_delivery'])
+  .eq('driver_id', uid).in('status', ['preparing', 'ready', 'out_for_delivery'])
   .order('created_at');
 
 // order details with items
@@ -229,7 +229,8 @@ minute). Notifications a driver receives:
 
 | Trigger | Audience | Title (Arabic) | `data` |
 |---|---|---|---|
-| a customer places an order | **all active drivers** | `طلب جديد #<number>` | `{ "order_id": "uuid", "type": "new_order" }` → open "available orders" |
+| staff/admin marks an unassigned order `ready` | **all active drivers** | `طلب جديد #<number>` (body: unit and building) | `{ "order_id": "uuid", "type": "new_order" }` → open "available orders" |
+| staff/admin marks `ready` an order already assigned to you | that driver | `الطلب #<number> جاهز للاستلام` | `{ "order_id": "uuid", "type": "ready" }` → open the order |
 | staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order |
 | staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
 | an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = reason if given) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
@@ -257,20 +258,21 @@ notification that reached at least one of the user's devices is not re-sent.
 ## 7) Status flow
 
 ```
-pending ──► preparing ──► out_for_delivery ──► delivered
-   │            │                 │
-   └────────────┴─────────────────┴──► cancelled
+pending ──► preparing ──► ready ──► out_for_delivery ──► delivered
+   │            │           │              │
+   └────────────┴───────────┴──────────────┴──► cancelled
 ```
 
 | Step | Who | How |
 |---|---|---|
-| order created (`pending`) | customer | `place_order`; push "new order" to all drivers |
-| driver takes it (status unchanged) | driver | `accept_order` from `pending` or `preparing` |
-| or assigned manually | staff/admin | `assign_driver`; push "assigned" to that driver |
-| `pending → preparing` | staff/admin | driver sees status `pending` with the button disabled ("waiting for preparation") |
-| `preparing → out_for_delivery` | **assigned driver** | `set_order_status` (requires a driver assigned) |
+| order created (`pending`) | customer | `place_order`; push to admins/staff only (**drivers are not notified yet**) |
+| `pending → preparing` | staff/admin | |
+| `preparing → ready` | staff/admin | push "new order" to all active drivers (or "ready" to the pre-assigned driver) and to the customer |
+| driver takes it (status unchanged) | driver | `accept_order`, only while `ready` and unassigned |
+| or assigned manually | staff/admin | `assign_driver` from `preparing` or `ready`; push "assigned" to that driver. A pre-assigned `preparing` order shows the button disabled ("waiting for preparation") |
+| `ready → out_for_delivery` | **assigned driver** | `set_order_status` (requires a driver assigned) |
 | `out_for_delivery → delivered` | **assigned driver** | `set_order_status`; collect `total_iqd` in cash |
-| `→ cancelled` | customer (pending only), staff (before out_for_delivery), admin (any non-final) | drivers cannot cancel; "problem with order" = call the administration |
+| `→ cancelled` | customer (`pending` only), staff (`pending`/`preparing`/`ready`), admin (also `out_for_delivery`) | drivers cannot cancel; "problem with order" = call the administration |
 
 `delivered` and `cancelled` are final. The driver cannot change order items.
 

@@ -471,6 +471,7 @@ export type Database = {
           order_number: number;
           out_for_delivery_at: string | null;
           preparing_at: string | null;
+          ready_at: string | null;
           status: Database['public']['Enums']['order_status'];
           subtotal_iqd: number;
           total_iqd: number;
@@ -498,6 +499,7 @@ export type Database = {
           order_number?: never;
           out_for_delivery_at?: string | null;
           preparing_at?: string | null;
+          ready_at?: string | null;
           status?: Database['public']['Enums']['order_status'];
           subtotal_iqd: number;
           total_iqd: number;
@@ -524,6 +526,7 @@ export type Database = {
           order_number?: never;
           out_for_delivery_at?: string | null;
           preparing_at?: string | null;
+          ready_at?: string | null;
           status?: Database['public']['Enums']['order_status'];
           subtotal_iqd?: number;
           total_iqd?: number;
@@ -959,6 +962,7 @@ export type Database = {
           order_number: number;
           out_for_delivery_at: string | null;
           preparing_at: string | null;
+          ready_at: string | null;
           status: Database['public']['Enums']['order_status'];
           subtotal_iqd: number;
           total_iqd: number;
@@ -1003,6 +1007,7 @@ export type Database = {
           order_number: number;
           out_for_delivery_at: string | null;
           preparing_at: string | null;
+          ready_at: string | null;
           status: Database['public']['Enums']['order_status'];
           subtotal_iqd: number;
           total_iqd: number;
@@ -1106,6 +1111,7 @@ export type Database = {
           order_number: number;
           out_for_delivery_at: string | null;
           preparing_at: string | null;
+          ready_at: string | null;
           status: Database['public']['Enums']['order_status'];
           subtotal_iqd: number;
           total_iqd: number;
@@ -1129,7 +1135,8 @@ export type Database = {
     };
     Enums: {
       movement_type: 'purchase' | 'sale' | 'waste' | 'adjust' | 'cancel_return';
-      order_status: 'pending' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled';
+      order_status:
+        'pending' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
       push_platform: 'ios' | 'android';
       push_provider: 'expo' | 'fcm';
       user_role: 'customer' | 'driver' | 'staff' | 'admin';
@@ -1248,7 +1255,7 @@ export const Constants = {
   public: {
     Enums: {
       movement_type: ['purchase', 'sale', 'waste', 'adjust', 'cancel_return'],
-      order_status: ['pending', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'],
+      order_status: ['pending', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'],
       push_platform: ['ios', 'android'],
       push_provider: ['expo', 'fcm'],
       user_role: ['customer', 'driver', 'staff', 'admin'],

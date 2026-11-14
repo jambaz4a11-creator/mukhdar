@@ -202,10 +202,10 @@ select results_eq($$ select i.qty, c.cost_snapshot_iqd from public.order_items i
   $$ values (2, 800::bigint), (3, 0::bigint) $$, 'cost snapshot per item (missing cost = 0)');
 select results_eq($$ select audience from public.notification_outbox
                      where data ->> 'order_id' = tests.id('o1')::text order by audience $$,
-  array['admins', 'drivers'], 'drivers and admins are notified');
-select is((select body from public.notification_outbox
-            where data ->> 'order_id' = tests.id('o1')::text and audience = 'drivers'),
-  'وحدة A1 - عمارة 12', 'driver push names the unit and the building (numbers repeat across units)');
+  array['admins'], 'a new order notifies admins/staff only (drivers are notified when it is ready)');
+select ok((select body from public.notification_outbox
+            where data ->> 'order_id' = tests.id('o1')::text and audience = 'admins') like 'وحدة A1 - عمارة 12 · المجموع %',
+  'admin push names the unit and the building (numbers repeat across units)');
 select is((select address_snapshot ->> 'subsection' || '/' || (address_snapshot ->> 'building')
              from public.orders where id = tests.id('o1')),
   'A1/12', 'address snapshot keeps unit and building');

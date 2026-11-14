@@ -26,7 +26,8 @@ describe('order statuses', () => {
   it('transitions mirror set_order_status', () => {
     expect(STATUS_TRANSITIONS).toEqual({
       pending: ['preparing', 'cancelled'],
-      preparing: ['out_for_delivery', 'cancelled'],
+      preparing: ['ready', 'cancelled'],
+      ready: ['out_for_delivery', 'cancelled'],
       out_for_delivery: ['delivered', 'cancelled'],
       delivered: [],
       cancelled: [],
@@ -41,8 +42,13 @@ describe('order statuses', () => {
     expect(ORDER_STATUSES.filter(canCustomerCancel)).toEqual(['pending']);
   });
 
+  it('ready sits between preparing and out_for_delivery', () => {
+    expect(ORDER_FLOW).toEqual(['pending', 'preparing', 'ready', 'out_for_delivery', 'delivered']);
+    expect(STATUS_LABELS.ready).toBe('جاهز، بانتظار السائق');
+  });
+
   it('timeline steps', () => {
-    expect(ORDER_FLOW.map(statusStep)).toEqual([0, 1, 2, 3]);
+    expect(ORDER_FLOW.map(statusStep)).toEqual([0, 1, 2, 3, 4]);
     expect(statusStep('cancelled')).toBe(-1);
   });
 });

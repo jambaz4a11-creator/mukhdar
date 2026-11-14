@@ -128,21 +128,23 @@ end $$`;
 const SHIFT_SQL = [
   `update public.orders o set created_at = t.created,
           preparing_at = case when o.preparing_at is not null then t.prep end,
+          ready_at = case when o.ready_at is not null then t.ready end,
           assigned_at = case when o.assigned_at is not null then t.assigned end,
           out_for_delivery_at = case when o.out_for_delivery_at is not null then t.ofd end,
           delivered_at = case when o.delivered_at is not null then t.delivered end,
           cancelled_at = case when o.cancelled_at is not null then t.cancelled end
-     from jsonb_to_recordset($1) as t(id uuid, created timestamptz, prep timestamptz, assigned timestamptz,
+     from jsonb_to_recordset($1) as t(id uuid, created timestamptz, prep timestamptz, ready timestamptz, assigned timestamptz,
                                       ofd timestamptz, delivered timestamptz, cancelled timestamptz, rated timestamptz)
     where o.id = t.id`,
   `update public.order_status_history h set created_at = case
           when h.note in ('driver_accepted', 'driver_assigned') then t.assigned
           when h.to_status = 'pending' then t.created
           when h.to_status = 'preparing' then t.prep
+          when h.to_status = 'ready' then t.ready
           when h.to_status = 'out_for_delivery' then t.ofd
           when h.to_status = 'delivered' then t.delivered
           else t.cancelled end
-     from jsonb_to_recordset($1) as t(id uuid, created timestamptz, prep timestamptz, assigned timestamptz,
+     from jsonb_to_recordset($1) as t(id uuid, created timestamptz, prep timestamptz, ready timestamptz, assigned timestamptz,
                                       ofd timestamptz, delivered timestamptz, cancelled timestamptz)
     where h.order_id = t.id`,
   `update public.inventory_movements m
@@ -157,10 +159,12 @@ const SHIFT_SQL = [
           created_at = coalesce(case
             when n.data ->> 'type' = 'assigned' then t.assigned
             when n.data ->> 'status' = 'preparing' then t.prep
+            when n.data ->> 'status' = 'ready' or n.data ->> 'type' = 'ready'
+                 or (n.audience = 'drivers' and n.data ->> 'type' = 'new_order') then t.ready
             when n.data ->> 'status' = 'out_for_delivery' then t.ofd
             when n.data ->> 'status' = 'delivered' then t.delivered
             when n.data ->> 'status' = 'cancelled' then t.cancelled end, t.created)
-     from jsonb_to_recordset($1) as t(id uuid, created timestamptz, prep timestamptz, assigned timestamptz,
+     from jsonb_to_recordset($1) as t(id uuid, created timestamptz, prep timestamptz, ready timestamptz, assigned timestamptz,
                                       ofd timestamptz, delivered timestamptz, cancelled timestamptz)
     where n.data ->> 'order_id' = t.id::text`,
 ];
@@ -332,20 +336,33 @@ async function seedDemo() {
           ? steps.push({ actor: driver.id, action: 'accept' })
           : steps.push({ actor: staff.id, action: 'assign', arg: driver.id });
 
+      // السائق يقبل طلباً 'ready' فقط؛ الموظف يعيّن من preparing أو ready
+      const toReady = () => {
+        steps.push({ actor: staff.id, action: 'status', arg: 'preparing' });
+        steps.push({ actor: staff.id, action: 'status', arg: 'ready' });
+      };
+
       if (isToday) {
-        // طلبات اليوم نشطة فقط: قيد الانتظار / التحضير / بالطريق
+        // طلبات اليوم نشطة فقط: قيد الانتظار / التحضير / جاهز / بالطريق
         t.created = minutes(new Date(), -randInt(20, 150));
         t.prep = minutes(t.created, 5);
-        t.assigned = minutes(t.prep, 3);
+        t.ready = minutes(t.prep, 5);
+        t.assigned = minutes(t.ready, 3);
         t.ofd = minutes(t.assigned, 5);
         const state = rand();
-        if (state < 0.4) {
-          if (chance(0.5)) takeDriver();
+        if (state < 0.3) {
+          // pending: لا سائق قبل التحضير
+        } else if (state < 0.5) {
+          steps.push({ actor: staff.id, action: 'status', arg: 'preparing' });
+          if (chance(0.3)) {
+            t.assigned = minutes(t.prep, 3);
+            steps.push({ actor: staff.id, action: 'assign', arg: driver.id });
+          }
         } else if (state < 0.7) {
-          steps.push({ actor: staff.id, action: 'status', arg: 'preparing' });
-          if (chance(0.5)) takeDriver();
+          toReady(); // أغلبها بانتظار سائق (تظهر بـ available_orders)
+          if (chance(0.3)) takeDriver();
         } else {
-          steps.push({ actor: staff.id, action: 'status', arg: 'preparing' });
+          toReady();
           takeDriver();
           steps.push({ actor: driver.id, action: 'status', arg: 'out_for_delivery' });
         }
@@ -353,8 +370,9 @@ async function seedDemo() {
         // 08:00..21:00 بتوقيت بغداد، والتسليم بنفس اليوم
         t.created = minutes(day, randInt(8 * 60, 21 * 60));
         t.prep = minutes(t.created, randInt(3, 15));
-        t.assigned = minutes(t.prep, randInt(1, 10));
-        t.ofd = minutes(t.assigned, randInt(5, 20));
+        t.ready = minutes(t.prep, randInt(5, 15));
+        t.assigned = minutes(t.ready, randInt(1, 10));
+        t.ofd = minutes(t.assigned, randInt(2, 10));
         t.delivered = minutes(t.ofd, randInt(10, 40));
         if (chance(0.12)) {
           if (chance(0.4)) {
@@ -365,13 +383,22 @@ async function seedDemo() {
               arg: 'cancelled',
               reason: 'غيّرت رأيي',
             });
-          } else {
+          } else if (chance(0.7)) {
             t.cancelled = minutes(t.prep, randInt(2, 15));
             steps.push({ actor: staff.id, action: 'status', arg: 'preparing' });
             steps.push({ actor: staff.id, action: 'status', arg: 'cancelled', reason: 'نفاد صنف' });
+          } else {
+            t.cancelled = minutes(t.ready, randInt(5, 20));
+            toReady();
+            steps.push({
+              actor: staff.id,
+              action: 'status',
+              arg: 'cancelled',
+              reason: 'لا يوجد سائق متاح',
+            });
           }
         } else {
-          steps.push({ actor: staff.id, action: 'status', arg: 'preparing' });
+          toReady();
           takeDriver();
           steps.push({ actor: driver.id, action: 'status', arg: 'out_for_delivery' });
           steps.push({ actor: driver.id, action: 'status', arg: 'delivered' });

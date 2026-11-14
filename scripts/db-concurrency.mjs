@@ -144,6 +144,7 @@ try {
 
   const customers = await createUsers('customer', CUSTOMERS, 1);
   const drivers = await createUsers('driver', DRIVERS, 1001);
+  const [adminId] = await createUsers('admin', 1, 2001);
   const { rows: addrRows } = await q(
     `insert into public.addresses (customer_id, building_id, apartment)
      select c, $2::int, '1' from unnest($1::uuid[]) c returning customer_id, id`,
@@ -177,8 +178,15 @@ try {
   check(stockRows[0].qty === 0, 'stock ends at 0 (never negative)');
   check(orderRows.length === STOCK, `${STOCK} orders exist in the database`);
 
-  // 2) نفس الطلب يقبله 8 سائقين بنفس اللحظة
+  // 2) نفس الطلب يقبله 8 سائقين بنفس اللحظة (السائق يقبل طلباً 'ready' فقط؛ التجهيز عبر الدالة كأدمن)
   const contested = ids.orders[0];
+  await q('begin');
+  await q(`select set_config('request.jwt.claims', $1, true)`, [
+    JSON.stringify({ sub: adminId, role: 'authenticated' }),
+  ]);
+  await q(`select public.set_order_status($1, 'preparing')`, [contested]);
+  await q(`select public.set_order_status($1, 'ready')`, [contested]);
+  await q('commit');
   const acceptResults = await race(drivers, (c) =>
     c.query(`select public.accept_order($1)`, [contested]),
   );

@@ -47,10 +47,13 @@ select tests.remember('p', tests.new_product(3000, 10, true, 1750));
 select tests.remember('o1', tests.place(tests.id('cust'), jsonb_build_array(tests.item(tests.id('p'), 2))));
 select tests.remember('o2', tests.place(tests.id('cust'), jsonb_build_array(tests.item(tests.id('p'), 1))));
 select tests.set_uid(tests.id('admin'));
-select public.assign_driver(tests.id('o1'), tests.new_user('driver'));
 select public.set_order_status(tests.id('o1'), 'preparing');
+select public.assign_driver(tests.id('o1'), tests.new_user('driver'));
+select public.set_order_status(tests.id('o1'), 'ready');
 select public.set_order_status(tests.id('o1'), 'out_for_delivery');
 select public.set_order_status(tests.id('o1'), 'delivered');
+select public.set_order_status(tests.id('o2'), 'preparing');
+select public.set_order_status(tests.id('o2'), 'ready');
 select public.set_order_status(tests.id('o2'), 'cancelled');
 
 select is_empty($$ select * from tests.stats_mismatches() $$, 'still matches after a delivery and a cancellation');

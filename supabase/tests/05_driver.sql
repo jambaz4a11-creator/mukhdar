@@ -1,19 +1,21 @@
--- 05: دوال السائق (available_orders, accept_order, assign_driver) و RLS السائق
-select plan(44);
+-- 05: دوال السائق (available_orders, accept_order, assign_driver)، حركة السائق بالحالات، و RLS السائق
+select plan(55);
 
 -- طلبات موجودة مسبقاً (مثل seed:demo) لا تزاحم طلبات الاختبار ضمن حد available_orders.
 -- تُعيَّن لسائق مؤقت داخل المعاملة، وكل شيء يُلغى بنهايتها.
 with d as (select tests.new_user('driver') as id)
 update public.orders o set driver_id = d.id from d
- where o.driver_id is null and o.status in ('pending', 'preparing');
+ where o.driver_id is null and o.status = 'ready';
 
 select tests.remember('staff', tests.new_user('staff'));
 select tests.remember('d1', tests.new_user('driver'));
 select tests.remember('d2', tests.new_user('driver'));
 select tests.remember('cust', tests.new_user('customer'));
+select tests.remember('o_ready1', tests.order_in('ready', tests.id('cust')));
+select tests.remember('o_ready2', tests.order_in('ready', tests.id('cust')));
 select tests.remember('o_pending', tests.order_in('pending', tests.id('cust')));
 select tests.remember('o_preparing', tests.order_in('preparing', tests.id('cust')));
-select tests.remember('o_mine', tests.order_in('pending', tests.id('cust'), tests.id('d1')));
+select tests.remember('o_mine', tests.order_in('ready', tests.id('cust'), tests.id('d1')));
 select tests.remember('o_cancelled', tests.order_in('cancelled', tests.id('cust')));
 select tests.remember('o_delivered', tests.order_in('delivered', tests.id('cust')));
 
@@ -23,15 +25,18 @@ select ok(pg_get_function_result('public.available_orders(int)'::regprocedure) !
 -- ---------------------------------------------------------------- available_orders
 select tests.as_user(tests.id('d1'));
 select is((select count(*)::int from public.available_orders(50)
-            where id in (tests.id('o_pending'), tests.id('o_preparing'))), 2,
-  'unassigned pending and preparing orders are available');
+            where id in (tests.id('o_ready1'), tests.id('o_ready2'))), 2,
+  'unassigned ready orders are available');
+select is((select count(*)::int from public.available_orders(50)
+            where id in (tests.id('o_pending'), tests.id('o_preparing'))), 0,
+  'pending and preparing orders are not available yet');
 select is((select count(*)::int from public.available_orders(50)
             where id in (tests.id('o_mine'), tests.id('o_cancelled'), tests.id('o_delivered'))), 0,
   'assigned, cancelled and delivered orders are not available');
 select is((select count(*)::int from public.available_orders(1)), 1, 'p_limit is respected');
-select is_empty($$ select 1 from public.orders where id = tests.id('o_pending') $$,
+select is_empty($$ select 1 from public.orders where id = tests.id('o_ready1') $$,
   'driver cannot read an unassigned order (phone hidden) via RLS');
-select is_empty($$ select 1 from public.order_items where order_id = tests.id('o_pending') $$,
+select is_empty($$ select 1 from public.order_items where order_id = tests.id('o_ready1') $$,
   'driver cannot read items of an unassigned order');
 select is((select customer_phone is not null from public.orders where id = tests.id('o_mine')), true,
   'driver reads the assigned order including customer phone');
@@ -43,31 +48,50 @@ select throws_ok($$ select * from public.available_orders() $$, 'NOT_ALLOWED', '
 
 -- ---------------------------------------------------------------- accept_order
 select tests.as_user(tests.id('d1'));
-select lives_ok(format($$ select public.accept_order(%L) $$, tests.id('o_pending')), 'first driver accepts');
-select is((select driver_id from public.orders where id = tests.id('o_pending')), tests.id('d1'),
+select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_pending')),
+  'ORDER_NOT_AVAILABLE', 'a pending order cannot be accepted');
+select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_preparing')),
+  'ORDER_NOT_AVAILABLE', 'a preparing order cannot be accepted');
+select lives_ok(format($$ select public.accept_order(%L) $$, tests.id('o_ready1')), 'first driver accepts a ready order');
+select is((select driver_id from public.orders where id = tests.id('o_ready1')), tests.id('d1'),
   'after accepting, driver reads the order');
 select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_cancelled')),
   'ORDER_NOT_AVAILABLE', 'cancelled order cannot be accepted');
 
 select tests.as_user(tests.id('d2'));
-select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_pending')),
+select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_ready1')),
   'ORDER_NOT_AVAILABLE', 'second driver gets ORDER_NOT_AVAILABLE');
-select is((select count(*)::int from public.available_orders(50) where id = tests.id('o_pending')), 0,
+select is((select count(*)::int from public.available_orders(50) where id = tests.id('o_ready1')), 0,
   'accepted order disappears from available_orders');
+select throws_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o_ready1')),
+  'NOT_ALLOWED', 'another driver cannot pick up an order accepted by someone else');
 
 select tests.as_user(tests.id('cust'));
-select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_preparing')),
+select throws_ok(format($$ select public.accept_order(%L) $$, tests.id('o_ready2')),
   'NOT_ALLOWED', 'customer cannot accept orders');
 
 select tests.as_postgres();
 select isnt_empty($$ select 1 from public.order_status_history
-                     where order_id = tests.id('o_pending') and changed_by = tests.id('d1') and note = 'driver_accepted' $$,
+                     where order_id = tests.id('o_ready1') and changed_by = tests.id('d1') and note = 'driver_accepted' $$,
   'accept is recorded in history');
 
--- ---------------------------------------------------------------- assign_driver
+-- ---------------------------------------------------------------- السائق يحرّك طلبه: ready ← out_for_delivery ← delivered
+select tests.as_user(tests.id('d1'));
+select lives_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o_ready1')),
+  'assigned driver picks up: ready -> out_for_delivery');
+select lives_ok(format($$ select public.set_order_status(%L, 'delivered') $$, tests.id('o_ready1')),
+  'assigned driver delivers: out_for_delivery -> delivered');
+select tests.as_postgres();
+select is((select status::text from public.orders where id = tests.id('o_ready1')), 'delivered', 'order is delivered');
+
+-- ---------------------------------------------------------------- assign_driver (من preparing أو ready فقط)
 select tests.as_user(tests.id('staff'));
 select lives_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_preparing'), tests.id('d2')),
-  'staff assigns a driver');
+  'staff assigns a driver to a preparing order');
+select lives_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_ready2'), tests.id('d2')),
+  'staff assigns a driver to a ready order');
+select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_pending'), tests.id('d2')),
+  'ORDER_NOT_AVAILABLE', 'cannot assign a pending order');
 select tests.as_postgres();
 select is((select driver_id from public.orders where id = tests.id('o_preparing')), tests.id('d2'), 'driver set on the order');
 select isnt_empty($$ select 1 from public.notification_outbox where audience = 'user' and user_id = tests.id('d2')
@@ -92,6 +116,16 @@ select is_empty($$ select 1 from public.notification_outbox where true
                      and data ->> 'order_id' = tests.id('o_preparing')::text and data ->> 'type' = 'unassigned' $$,
   'first assignment sends no unassigned notice');
 
+-- مُعيَّن أثناء التحضير: السائق لا يستلمه قبل أن يصبح ready
+select tests.as_user(tests.id('d2'));
+select throws_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o_preparing')),
+  'INVALID_TRANSITION', 'assigned driver cannot pick up a preparing order');
+select tests.as_user(tests.id('staff'));
+select public.set_order_status(tests.id('o_preparing'), 'ready');
+select tests.as_user(tests.id('d2'));
+select lives_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o_preparing')),
+  'once ready, the pre-assigned driver picks it up');
+
 select tests.as_user(tests.id('d1'));
 select is_empty($$ select 1 from public.orders where id = tests.id('o_mine') $$,
   'previous driver loses access after reassignment');
@@ -104,8 +138,8 @@ select throws_ok(format($$ select public.assign_driver(%L, %L) $$, tests.id('o_m
 -- ---------------------------------------------------------------- سائق معطّل
 select tests.as_postgres();
 select tests.remember('d_off', tests.new_user('driver'));
-select tests.remember('o_off', tests.order_in('preparing', tests.id('cust'), tests.id('d_off')));
-select tests.remember('o_free', tests.order_in('pending', tests.id('cust')));
+select tests.remember('o_off', tests.order_in('ready', tests.id('cust'), tests.id('d_off')));
+select tests.remember('o_free', tests.order_in('ready', tests.id('cust')));
 select tests.as_user(tests.id('d_off'));
 select isnt_empty($$ select 1 from public.orders where id = tests.id('o_off') $$,
   'active driver reads the assigned order');

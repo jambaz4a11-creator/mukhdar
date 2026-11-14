@@ -147,7 +147,9 @@ begin
   return (r ->> 'order_id')::uuid;
 end $$;
 
--- طلب بحالة معينة. السائق p_driver يُعيَّن (يُنشأ سائق إن احتاجت الحالة ولم يُعطَ).
+-- طلب بحالة معينة، بالمسار الحقيقي (pending ← preparing ← ready ← out_for_delivery ← delivered).
+-- السائق p_driver يُعيَّن بعد preparing (assign_driver مسموح من preparing أو ready)، ويُنشأ سائق
+-- إن احتاجت الحالة ولم يُعطَ. 'cancelled' مع سائق: يُلغى من preparing بعد التعيين، وبدونه من pending.
 create function tests.order_in(
   p_status public.order_status, p_customer uuid default null, p_driver uuid default null)
 returns uuid language plpgsql as $$
@@ -157,24 +159,32 @@ declare
   v_driver uuid := p_driver;
   v_order  uuid;
 begin
+  if p_status = 'pending' and p_driver is not null then
+    raise exception 'order_in: a pending order cannot have a driver (assign_driver needs preparing/ready)';
+  end if;
   v_order := tests.place(v_cust, jsonb_build_array(tests.item(tests.new_product(1000, 10), 1)));
   if v_driver is null and p_status in ('out_for_delivery', 'delivered') then
     v_driver := tests.new_user('driver');
   end if;
 
   perform tests.set_uid(v_admin);
-  if v_driver is not null then
-    perform public.assign_driver(v_order, v_driver);
-  end if;
-  if p_status = 'cancelled' then
+  if p_status = 'cancelled' and v_driver is null then
     perform public.set_order_status(v_order, 'cancelled');
   elsif p_status <> 'pending' then
     perform public.set_order_status(v_order, 'preparing');
-    if p_status in ('out_for_delivery', 'delivered') then
-      perform public.set_order_status(v_order, 'out_for_delivery');
+    if v_driver is not null then
+      perform public.assign_driver(v_order, v_driver);
     end if;
-    if p_status = 'delivered' then
-      perform public.set_order_status(v_order, 'delivered');
+    if p_status = 'cancelled' then
+      perform public.set_order_status(v_order, 'cancelled');
+    elsif p_status in ('ready', 'out_for_delivery', 'delivered') then
+      perform public.set_order_status(v_order, 'ready');
+      if p_status in ('out_for_delivery', 'delivered') then
+        perform public.set_order_status(v_order, 'out_for_delivery');
+      end if;
+      if p_status = 'delivered' then
+        perform public.set_order_status(v_order, 'delivered');
+      end if;
     end if;
   end if;
   perform set_config('request.jwt.claims', '{}', true);
