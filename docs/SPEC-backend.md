@@ -97,6 +97,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`.
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
 - حذف الحساب (service_role فقط، تستدعيها Edge Function `delete-account`، T08): `begin_account_deletion(p_user_id) → boolean` (is_active السابق) تأخذ قفل `place_order` لنفس المستخدم، ترفض `ADMIN_ACCOUNT` (أدمن) و`ACTIVE_ORDER` (طلب غير منتهٍ كزبون أو كسائق معيَّن)، وتعطّل الحساب حتى يكتمل `auth.admin.deleteUser`؛ `abort_account_deletion(p_user_id, p_was_active)` ترجع الحالة إن فشل الحذف. `USER_NOT_FOUND` إن لم يوجد ملف شخصي. الدالة ترجع نفس الرموز بـ `{error}` مع HTTP 403/409/404.
+- حماية الحسابات (trigger `before insert/update of phone` على `auth.users`، migration `20261116000001`، ADR 0001): `PHONE_INVALID` لحساب بلا هاتف أو برقم ليس `9647XXXXXXXXX` (يصل للتطبيق كخطأ GoTrue عام "Database error"؛ التطبيق يتحقق من الرقم قبل الإرسال).
 
 كل رموز هذا القسم لها رسالة عربية بـ `packages/shared/src/errors.ts`، واختبار Jest يفشل إن نقص رمز أو اختلف هذا القسم عن الرموز التي يرفعها SQL.
 
@@ -113,19 +114,26 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 10. الكتابة المباشرة على `products` و`addresses` بأعمدة محددة فقط (لا `in_stock` ولا `id` ولا `created_at`، ولا نقل عنوان لزبون آخر). لا صلاحيات على الـ sequences لـ `anon`/`authenticated`.
 11. bucket الصور عام (العرض بالرابط العام)، لكن **قائمة الملفات** للأدمن فقط.
 
-## 7) المصادقة (الهاتف + OTP)
-- Supabase Auth بمزوّد SMS (Twilio أو Vonage أو MessageBird، يُحدد بعد الاختبار؛ انظر ARCHITECTURE §8).
-- صيغة الرقم E.164: `+9647XXXXXXXXX`. التطبيق يقبل `07XXXXXXXXX` ويحوّله.
-- عند أول دخول ينشئ trigger صفاً في `profiles` بدور `customer`.
-- السائقون والموظفون يسجلون بنفس الطريقة، ثم الأدمن يغيّر دورهم من اللوحة.
-- أول أدمن: يُعيَّن يدوياً بـ SQL من لوحة Supabase (موثق في `tasks/`).
-- حدود معدل OTP من إعدادات Supabase Auth (مثلاً رسالة كل 60 ثانية للرقم)، لحماية كلفة الرسائل.
+## 7) المصادقة (الهاتف + PIN، بدون رسائل)
+> قرار المالك 2026-11-14: لا SMS ولا OTP (كلفة الرسائل بالعراق). التفاصيل والأسباب: [ADR 0001](ADR/0001-phone-pin-auth.md).
+- Supabase Auth بمزوّد **Phone مع كلمة سر**: كلمة السر = رمز **PIN من 6 أرقام**. تأكيد الهاتف **معطّل**، فالتسجيل يرجع جلسة مباشرة. **لا تُرسل أي رسالة أبداً** (لا SMS ولا بريد).
+- **Send SMS Hook** (`private.hook_send_sms_reject`، migration `20261116000001`) يرفض كل إرسال: `signInWithOtp` وإعادة الإرسال وتغيير الرقم و`reauthenticate` تفشل (ولا يُنشأ حساب). الكلفة صفر حتى لو ضُبط مزوّد SMS بالخطأ.
+- صيغة الرقم E.164: `+9647XXXXXXXXX`. التطبيقات تقبل `07XXXXXXXXX` (وأرقاماً عربية) وتحوّله (`phonePinCredentials` بـ `packages/shared`). Supabase يخزنه `9647XXXXXXXXX`.
+- **كل حساب برقم صالح:** trigger على `auth.users` (`before insert`، و`before update of phone` عند تغيّر الرقم) يرفض حساباً بلا هاتف أو برقم ليس `9647XXXXXXXXX` (`PHONE_INVALID`). لا حسابات بالبريد. لذلك `profiles.phone` موجود دائماً و`PHONE_REQUIRED` لا يمنع زبوناً حقيقياً.
+- **رقم واحد = حساب واحد:** `auth.users.phone` فريد (GoTrue)، وفهرس فريد `profiles_phone_key` وقيد صيغة `profiles_phone_format`.
+- **الـ PIN:** 6 أرقام بالضبط، يُرفض السهل (تكرار، تسلسل، أنماط شائعة، أرقام من الهاتف): `validatePin` بـ `packages/shared` عند التسجيل وتغيير الرمز وإعادة ضبطه. الخادم لا يرى الرمز (bcrypt)؛ حده الأدنى `minimum_password_length = 6`. Leaked password protection **معطّل** (يرفض كل الرموز تقريباً).
+- عند التسجيل ينشئ trigger صفاً في `profiles` بدور `customer`. السائقون والموظفون يسجلون بنفس الطريقة، ثم الأدمن يغيّر دورهم من اللوحة.
+- أول أدمن: يُعيَّن يدوياً بـ SQL من لوحة Supabase (RUNBOOK §7).
+- **نسيان الـ PIN:** الزبون يراسل المتجر على واتساب من نفس الرقم؛ الأدمن يعيد الضبط عبر Edge Function `admin-reset-pin` (§8، تُبنى بـ T19).
+- **التخمين:** حدود Supabase لكل IP (تسجيل/دخول: 30 كل 5 دقائق افتراضياً). لا قفل لكل حساب على خطتنا (Password Verification Hook لـ Teams/Enterprise فقط). الخطر وخطة التخفيف بـ ADR 0001 (CAPTCHA بـ T23، الترقية لاحقاً).
+- إعدادات اللوحة المطلوبة لكل مشروع: RUNBOOK §6.
 
 ## 8) Edge Functions
 | الدالة | المُشغِّل | العمل |
 |---|---|---|
 | `push-dispatch` | trigger (`after insert for each statement`) على `notification_outbox` يطلب الدالة بـ `pg_net`، + `pg_cron` كل دقيقة إن بقي شيء غير مرسل. المصادقة بترويسة `x-dispatch-secret` (سر بـ Vault، `verify_jwt = false`) | تحجز حتى 200 صف، تجمع الرموز حسب الجمهور (`user` / كل السائقين النشطين / الأدمن والموظفون النشطون)، ترسل كل رمز عبر مزوّده: Expo Push API بدفعات ≤100 (`channelId: orders`، أولوية عالية)؛ `fcm` يُتخطى بملاحظة بـ `last_error`. تحدّث `sent_at` أو `attempts` و`last_error` (حد أقصى 5 محاولات)، وتحذف الرموز التي يرجع لها `DeviceNotRegistered` |
 | `delete-account` | يستدعيها التطبيق بـ JWT المستخدم (`POST`، مطلوب من Apple وGoogle؛ `verify_jwt = true` + `auth.getUser`) | `begin_account_deletion` (يرفض `ADMIN_ACCOUNT` ← 403، `ACTIVE_ORDER` ← 409 لطلب غير منتهٍ كزبون أو كسائق معيَّن؛ ويعطّل الحساب)، ثم `auth.admin.deleteUser`؛ إن فشل: `abort_account_deletion` و500. الحذف يمتد: `profiles` ← العناوين والرموز تُحذف، والطلبات والتقييمات والسجل تبقى بنسخها مع `customer_id`/`driver_id` = null |
+| `admin-reset-pin` (**مواصفة؛ تُبنى بـ T19**) | لوحة الأدمن بـ JWT الأدمن (`POST`، `verify_jwt = true` + `auth.getUser` + `profiles.role = 'admin'` ونشط) | إعادة ضبط PIN مستخدم نسيه (بعد رسالة واتساب من نفس الرقم). التفاصيل والأخطاء: SPEC-admin §2.6 |
 
 ## 9) كيف نضمن الأداء
 | الإجراء | التفصيل |
@@ -160,6 +168,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `push-dispatch` (`11_push_dispatch.sql`): المزوّد لكل رمز، الحجز والإنهاء، السر المشترك، trigger مرة لكل معاملة لا يُفشل المعاملة، التنظيف اليومي؛ ومنطق الإرسال بـ Deno (`push_dispatch_test.ts`، ومنه تقسيم مشاريع Expo).
 - حذف الحساب (`12_delete_account.sql`، `delete_account_test.ts`، وتكامل `pnpm it:delete-account` على dev).
 - نص العنوان بالإشعارات ("وحدة A1 - عمارة 12") بـ `03_place_order.sql` و`05_driver.sql`، ووحدات البيع الثابتة بـ `02_rls_catalog.sql`.
+- الدخول بالهاتف + PIN (`13_phone_pin_auth.sql`): الـ hook يرفض كل SMS وصلاحياته، رفض حساب بلا رقم أو برقم غير صالح، رقم واحد = حساب واحد، وصيغة `profiles.phone`.
 
 ## 11) النسخ الاحتياطي والمراقبة
 - Supabase Pro: نسخ يومي. تجربة استعادة واحدة على مشروع staging قبل الإطلاق.
@@ -185,10 +194,10 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 16. أدوات التطوير (T01): Node 24 LTS (`.nvmrc`)، pnpm 12 (`packageManager`)، TypeScript مثبّت على 6.0 لأن typescript-eslint وts-jest لا يدعمان TypeScript 7 بعد. `pnpm lint` يشمل ESLint وفحص Prettier. سكربت البناء مسموح لحزمة `supabase` فقط (`allowBuilds` بـ `pnpm-workspace.yaml`).
 17. المناطق (T02): مشروع التطوير `mukhdar-dev` بسنغافورة (`ap-southeast-1`) لأنه أُنشئ مسبقاً. مشروع الإنتاج **يُنشأ بفرانكفورت (`eu-central-1`)** لزمن استجابة أقل من العراق. التطوير بلا Docker، على المشروع السحابي مباشرة (`--remote`). التفاصيل بـ `docs/RUNBOOK.md`.
 18. اختبارات pgTAP (T03) تعمل عبر `scripts/db-test.mjs` لا `supabase test db` (يحتاج Docker محلياً). كل ملف داخل `BEGIN ... ROLLBACK` مع إنشاء pgtap والدوال المساعدة داخل المعاملة. CI يشغلها على `supabase start` محلي على runner GitHub، لا على السحابة.
-19. البيانات التجريبية (T05): سكربتات `seed:demo`/`seed:reset` تتصل بقاعدة التطوير مباشرة (كلمة سر القاعدة) بدل `service_role`، لأن الطلبات يجب أن تمر بـ `place_order`/`set_order_status` بهوية كل مستخدم (`auth.uid()`)، وهذا غير ممكن بمفتاح `service_role` عبر الـ API. مستخدمو العرض يُنشأون بـ `auth.users` + `auth.identities` (هاتف مؤكد). الطلبات تُنشأ "الآن" ثم تُرجَع طوابعها الزمنية ليومها، وتُنقل مساهمتها بـ `daily_stats` لنفس اليوم. `service_role` يُستخدم فقط لرفع صور المنتجات (اختياري، من `.env.local`). الحماية: قائمة مشاريع تطوير مسموحة + `MUKHDAR_ENV` + `DB_URL` محلي فقط.
+19. البيانات التجريبية (T05): سكربتات `seed:demo`/`seed:reset` تتصل بقاعدة التطوير مباشرة (كلمة سر القاعدة) بدل `service_role`، لأن الطلبات يجب أن تمر بـ `place_order`/`set_order_status` بهوية كل مستخدم (`auth.uid()`)، وهذا غير ممكن بمفتاح `service_role` عبر الـ API. مستخدمو العرض يُنشأون بـ `auth.users` + `auth.identities` (هاتف مؤكد) ويدخلون بالهاتف + `DEMO_PIN` (`scripts/lib/demo.mjs`، تطوير فقط، ADR 0001). الطلبات تُنشأ "الآن" ثم تُرجَع طوابعها الزمنية ليومها، وتُنقل مساهمتها بـ `daily_stats` لنفس اليوم. `service_role` يُستخدم فقط لرفع صور المنتجات (اختياري، من `.env.local`). الحماية: قائمة مشاريع تطوير مسموحة + `MUKHDAR_ENV` + `DB_URL` محلي فقط.
 20. هيكل عناوين بسماية (قرار المالك 2026-11-14): قطاعان `قطاع A` و`قطاع B`؛ الوحدات (`subsections`) بأسماء `A1..A9` و`B1..B8`؛ العمارات (`buildings.number`) `1..100` داخل كل وحدة. بالواجهة والإشعارات: subsection = "وحدة"، building = "عمارة". لأن رقم العمارة يتكرر بين الوحدات، نصوص الإشعارات تذكر الوحدة مع العمارة ("وحدة A3 - عمارة 12"، migration `20261114000001`).
 21. حد الطلبات المفتوحة للزبون **3** افتراضياً (`app_settings.max_active_orders`، 1..1000، يعدّله الأدمن). يحمي المخزون (يُحجز عند الطلب) ويمنع إغراق السائقين بالإشعارات. `replay` بنفس المفتاح يعمل حتى لو وصل الحد.
-22. الطلب يتطلب رقم هاتف بالملف الشخصي (`PHONE_REQUIRED`)، لأن السائق يتصل بالزبون. `profiles.phone` يتبع `auth.users.phone` عند الإنشاء والتغيير.
+22. الطلب يتطلب رقم هاتف بالملف الشخصي (`PHONE_REQUIRED`)، لأن السائق يتصل بالزبون. `profiles.phone` يتبع `auth.users.phone` عند الإنشاء والتغيير، ومنذ ADR 0001 كل حساب له رقم صالح إلزامياً (`PHONE_INVALID`)، فالرمز يبقى حماية فقط.
 23. عنوان افتراضي واحد لكل زبون (فهرس فريد جزئي). لتغييره: إلغاء القديم ثم تعيين الجديد (أو بعكس الترتيب بتعديلين متتاليين).
 24. سبب الإلغاء وملاحظة السجل يُقصّان لـ 300 حرف (بدون خطأ).
 25. الحد الأدنى للطلب من مضاعفات 250 (مثل الأجرة).
@@ -215,3 +224,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 46. **حذف الحساب والقبول (N1):** `accept_order` يقفل ملف السائق (`for share`) فيتسلسل مع `begin_account_deletion`: إن بدأ الحذف أولاً يُرفض القبول (`NOT_ALLOWED`)، وإن سبق القبول يُرفض الحذف (`ACTIVE_ORDER`). migration `20261115000005_deletion_safety.sql`.
 47. **انقطاع أثناء الحذف (N2):** `is_active` الأصلي يُحفظ بـ `private.account_deletions` عند أول محاولة؛ إعادة المحاولة ترجعه والإلغاء يستعيده ثم يحذف السجل، والحذف الناجح يحذفه مع الملف. **افتراض:** إن عطّل الأدمن الحساب بين انقطاع وإعادة محاولة فاشلة، يُستعاد الحساب نشطاً (نادر جداً؛ يُعطَّل يدوياً من جديد).
 48. **عرض العنوان (N6):** `formatAddress` ("قطاع A · وحدة A3 · عمارة 12 · شقة 5") و`formatAddressShort` ("وحدة A3 - عمارة 12"، نفس نص الإشعارات) بـ `packages/shared` لكل التطبيقات.
+49. **الدخول بالهاتف + PIN (قرار المالك 2026-11-14، ADR 0001):** Phone provider بكلمة سر، تأكيد الهاتف معطّل، Send SMS Hook يرفض كل إرسال، لا Test OTPs. migration `20261116000001_phone_pin_auth.sql`. اختبار `13_phone_pin_auth.sql`.
+50. **ملكية الرقم غير مُتحقق منها** (بلا رسائل): أي شخص يستطيع تسجيل رقم غير مسجل بعد. التخفيف: صاحب الرقم يراسل المتجر على واتساب من رقمه ← الأدمن يعيد ضبط الـ PIN أو يعطّل الحساب. التحقق عبر واتساب لاحقاً واختياري (T04).
+51. **لا قفل لكل حساب بعد محاولات فاشلة** (غير ممكن بأمان على Free/Pro). الحماية الحالية: حد Supabase لكل IP + رفض الرموز السهلة. لا نخفّض حد الـ IP كثيراً بسبب CGNAT بشبكات العراق. الخطة: CAPTCHA (T23)، أو Password Verification Hook بخطة Teams، أو دخول عبر Edge Function (ADR 0001 خيار ج).
+52. تغيير رقم الهاتف من التطبيق غير ممكن (OTP التغيير مرفوض)؛ الحساب الجديد برقم جديد، أو تغيير بالأدمن إن احتجنا لاحقاً.

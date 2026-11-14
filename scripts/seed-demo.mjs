@@ -8,12 +8,19 @@
 //   pnpm seed:demo -- --images-only -> الصور فقط (يحتاج SUPABASE_SERVICE_ROLE_KEY بـ .env.local)
 //
 // ينشئ: أدمن، موظف، 3 سائقين، 20 زبوناً بعناوين، و500 طلب موزعة على 30 يوماً.
+// الدخول: رقم المستخدم + DEMO_PIN (scripts/lib/demo.mjs، للتطوير فقط؛ RUNBOOK §6).
 // الطلبات وتحويلاتها تمر حصراً عبر place_order / set_order_status / accept_order /
 // assign_driver / rate_order (لا إدخال مباشر)، لذلك daily_stats محسوبة بنفس منطق الإنتاج.
 // بعدها تُرجَع الطوابع الزمنية لليوم المقصود، وتُنقل مساهمة اليوم من daily_stats لذلك اليوم.
 // الافتراض: المنتجات والعناوين من supabase/seed.sql موجودة.
 import { assertSafeTarget, connect, describe, resolveTarget } from './lib/db.mjs';
-import { DEMO_PHONE_PREFIX, LOAD_PHONE_PREFIX, STATS_MISMATCH_SQL, phone } from './lib/demo.mjs';
+import {
+  DEMO_PHONE_PREFIX,
+  DEMO_PIN,
+  LOAD_PHONE_PREFIX,
+  STATS_MISMATCH_SQL,
+  phone,
+} from './lib/demo.mjs';
 import { uploadProductImages } from './lib/images.mjs';
 
 const args = process.argv.slice(2);
@@ -77,16 +84,20 @@ const COMMENTS = [
 ];
 
 // ---------------------------------------------------------------- SQL
+// كل مستخدمي العرض يدخلون بالهاتف + DEMO_PIN (ADR 0001). bcrypt مرة واحدة للكل (تطوير فقط):
+// 1000 hash منفصل لـ --scale=load يأخذ دقيقة بلا فائدة. GoTrue يقبل صيغة $2a$ من pgcrypto.
 const CREATE_USERS_SQL = `
-with u as (
-  insert into auth.users (instance_id, id, aud, role, phone, phone_confirmed_at, raw_app_meta_data,
-                          raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token,
-                          email_change_token_new, email_change, phone_change, phone_change_token,
+with pw as (
+  select extensions.crypt($2::text, extensions.gen_salt('bf', 10)) as hash
+), u as (
+  insert into auth.users (instance_id, id, aud, role, phone, phone_confirmed_at, encrypted_password,
+                          raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token,
+                          recovery_token, email_change_token_new, email_change, phone_change, phone_change_token,
                           email_change_token_current, reauthentication_token, is_sso_user, is_anonymous)
   select '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', x.phone,
-         now(), '{"provider":"phone","providers":["phone"]}', '{}', now(), now(), '', '', '', '', '', '', '', '',
-         false, false
-    from unnest($1::text[]) as x(phone)
+         now(), pw.hash, '{"provider":"phone","providers":["phone"]}', '{}', now(), now(), '', '', '', '', '', '',
+         '', '', false, false
+    from unnest($1::text[]) as x(phone) cross join pw
   returning id, phone
 ), i as (
   insert into auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
@@ -236,7 +247,7 @@ async function seedAll() {
 
 // ---------------------------------------------------------------- الأجزاء
 async function createUsers(specs) {
-  const { rows } = await q(CREATE_USERS_SQL, [specs.map((s) => s.phone)]);
+  const { rows } = await q(CREATE_USERS_SQL, [specs.map((s) => s.phone), DEMO_PIN]);
   await q(
     `update public.profiles p set role = x.role::public.user_role, full_name = x.name
        from unnest($1::text[], $2::text[], $3::text[]) as x(phone, role, name) where p.phone = x.phone`,
@@ -288,6 +299,10 @@ async function seedDemo() {
   await q('commit');
   console.log(
     `users: 1 admin, 1 staff, ${drivers.length} drivers, ${customers.length} customers (with addresses)`,
+  );
+  console.log(
+    `sign in (dev only): admin 0${people[0].phone.slice(3)}, staff 0${people[1].phone.slice(3)}, ` +
+      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with PIN ${DEMO_PIN}`,
   );
 
   const { rows: products } = await q('select id from public.products where is_active');

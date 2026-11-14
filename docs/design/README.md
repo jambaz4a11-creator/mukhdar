@@ -64,8 +64,8 @@ Font: **IBM Plex Sans Arabic** in four weights. It covers both Arabic and Latin 
 | Orders | list with status badges |
 | Rate | 1-5 stars (`star` color) and optional comment |
 | Account | name, phone, addresses, privacy policy, sign out, delete account |
-| Login | phone number (07XXXXXXXXX) |
-| OTP | 6-digit code |
+| Login | phone number (07XXXXXXXXX) + 6-digit PIN; sign-in / new-account modes, "forgot PIN?" opens WhatsApp |
+| ~~OTP~~ | not built: no SMS/OTP (ADR 0001, 2026-11-14) |
 | Name | full name on first sign-in |
 | Address | sector A/B → unit (A1..A9 / B1..B8) → building number 1-100 → apartment, optional note |
 

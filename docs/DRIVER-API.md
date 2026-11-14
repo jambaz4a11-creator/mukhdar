@@ -32,15 +32,34 @@ own session; RLS and the functions enforce what a driver may see and do.
 
 ## 2) Authentication and role
 
-1. **Phone + OTP** via Supabase Auth (same as the customer app):
+1. **Phone number + 6-digit PIN** via Supabase Auth, same as the customer app (changed 2026-11-14:
+   **no SMS/OTP at all**, nothing is ever sent). The PIN is the account password:
    ```ts
-   await supabase.auth.signInWithOtp({ phone: '+9647XXXXXXXXX' });            // E.164
-   await supabase.auth.verifyOtp({ phone: '+9647XXXXXXXXX', token: '123456', type: 'sms' });
+   // sign up (new account): PIN must pass the rules below
+   await supabase.auth.signUp({ phone: '+9647XXXXXXXXX', password: '482915' });            // E.164
+   // sign in
+   await supabase.auth.signInWithPassword({ phone: '+9647XXXXXXXXX', password: '482915' });
    ```
-   Accept `07XXXXXXXXX` in the UI and convert to `+9647XXXXXXXXX`. The SMS provider for production is
-   not chosen yet. **Phone sign-in is not enabled on the development project yet:** it will be enabled,
-   with test phone numbers that have fixed OTPs, together with the SMS provider task (T04), before the
-   customer-app sign-in task (T10). We will send you the test numbers then.
+   - Accept `07XXXXXXXXX` in the UI and convert to `+9647XXXXXXXXX`. Convert Arabic-Indic digits
+     (`٠-٩`, `۰-۹`) to `0-9` in **both** the phone and the PIN before sending, or the same PIN typed on an
+     Arabic keyboard will not match. Phone confirmation is off, so `signUp` returns a session directly.
+   - PIN rules for sign-up and PIN change (the server cannot check them, the app must): exactly 6
+     digits; reject all-same (`000000`), ascending/descending runs (`123456`, `987654`), repeats with
+     period 2 or 3 (`121212`, `123123`), common PINs (`112233`, `159753`, `147258`...), and the first or
+     last 6 digits of the user's own phone. Reference implementation: `validatePin` / `normalizePin` /
+     `phonePinCredentials` in `packages/shared/src/pin.ts` of this repo (we can share the file).
+   - Errors: `invalid_credentials` (wrong phone or PIN, same message for both), `user_already_exists`
+     / `phone_exists` (number already registered: switch to sign in), HTTP 429 (Supabase per-IP rate
+     limit: "too many attempts, wait"). `signInWithOtp` / `verifyOtp` are **rejected by the server**
+     (an Auth hook refuses every SMS); do not use them.
+   - **Forgot PIN:** the driver messages the shop on WhatsApp from the registered number; an admin
+     resets the PIN from the admin panel. Offer a "Forgot PIN?" link that opens WhatsApp.
+   - Every account must have a valid Iraqi mobile number (one account per number); this is enforced by
+     the database.
+   - **Development project:** phone + PIN sign-in is enabled once the project owner applies the Auth
+     settings (RUNBOOK §6). Demo driver accounts then sign in with `07000000011`, `07000000012`,
+     `07000000013` and the shared dev-only PIN we send you (also in RUNBOOK §6). Never use it in
+     production.
 2. On first sign-in a trigger creates `profiles` with `role = 'customer'`. **A new account is not a
    driver.** The admin activates it from the admin panel (`set_user_role(user, 'driver', true)`).
 3. After sign-in (and on every app start / resume), read your own profile:

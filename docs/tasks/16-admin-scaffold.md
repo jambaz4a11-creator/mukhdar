@@ -4,7 +4,7 @@
 
 ## الخطوات
 - `apps/admin`: Next.js (App Router، TypeScript)، Tailwind مع RTL، خط عربي.
-- `@supabase/ssr` بـ cookies. دخول هاتف + OTP.
+- `@supabase/ssr` بـ cookies. دخول هاتف + PIN (`signInWithPassword(phonePinCredentials(...))`، بلا تسجيل حساب من اللوحة، ADR 0001).
 - `middleware.ts`: حماية كل المسارات عدا `/login` والصفحات العامة (`/privacy`، `/terms`، `/delete-account`).
 - تخطيط بقائمة جانبية حسب الدور.
 - النشر على Vercel (مشروع preview مرتبط بمشروع Supabase للتطوير).

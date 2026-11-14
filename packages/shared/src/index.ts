@@ -6,6 +6,7 @@ export * from './money';
 export * from './quantity';
 export * from './address';
 export * from './phone';
+export * from './pin';
 export * from './status';
 export * from './errors';
 export * from './supabase';

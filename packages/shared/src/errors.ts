@@ -6,6 +6,8 @@ export const ERROR_MESSAGES = {
   // عامة
   NOT_AUTHENTICATED: 'انتهت الجلسة، سجّل الدخول من جديد',
   NOT_ALLOWED: 'ليست لديك صلاحية لهذا الإجراء',
+  // الحسابات (trigger على auth.users، ADR 0001): كل حساب برقم موبايل عراقي
+  PHONE_INVALID: 'رقم الهاتف غير صحيح، اكتب رقم موبايل عراقي يبدأ بـ 07',
 
   // place_order
   NOT_CUSTOMER: 'هذا الحساب لا يستطيع إرسال طلبات',

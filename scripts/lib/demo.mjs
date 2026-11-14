@@ -7,6 +7,10 @@ export const DEMO_PHONE_PREFIX = '9647000';
 export const LOAD_PHONE_PREFIX = '9647001';
 export const DEMO_PHONE_LIKE = [`${DEMO_PHONE_PREFIX}%`, `${LOAD_PHONE_PREFIX}%`];
 
+// رمز PIN لكل مستخدمي العرض والحمل (تطوير فقط، ADR 0001). ليس سهل التخمين حسب validatePin،
+// لكنه منشور بالـ repo: لا يُستخدم أبداً بمشروع الإنتاج (seed:demo يرفض غير التطوير أصلاً).
+export const DEMO_PIN = '482915';
+
 export const phone = (prefix, n) => `${prefix}${String(n).padStart(6, '0')}`;
 
 // يرجع الأيام التي لا يطابق فيها daily_stats الطلبات الفعلية (المسلّمة والملغاة) بتوقيت بغداد.

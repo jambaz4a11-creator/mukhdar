@@ -9,7 +9,8 @@
 - [ ] قائمة الدوال القابلة للتنفيذ من `anon`/`authenticated` تطابق SPEC-backend §5 فقط.
 - [ ] `service_role` غير موجود بأي حزمة تطبيق أو كود متصفح (بحث بالمستودع وبحزم البناء).
 - [ ] اختبار يدوي بـ REST مباشرة (curl بتوكن زبون): قراءة `product_costs`، `stock`، طلبات غيره، تعديل `role`، إدخال طلب مباشر: كلها مرفوضة.
-- [ ] حدود معدل OTP مفعّلة؛ CAPTCHA لـ Auth إن ظهر إساءة.
+- [ ] الدخول بالهاتف + PIN (ADR 0001): الـ SMS hook يرفض فعلاً على الإنتاج؛ حد الدخول لكل IP مضبوط؛ مراجعة Auth logs لمحاولات تخمين؛ قرار CAPTCHA (Turnstile/hCaptcha) لـ signup/signin؛ قرار قفل لكل حساب (Password Verification Hook بخطة Teams أو دخول عبر Edge Function).
+- [ ] `admin-reset-pin`: أدمن فقط، لا لحسابات الأدمن، الحد، سجل التدقيق، الرمز لا يُسجَّل.
 - [ ] Storage: لا رفع إلا للأدمن، وحد الحجم والأنواع مفعّل.
 - [ ] الأسرار بمتغيرات بيئة Vercel/EAS/Supabase فقط.
 

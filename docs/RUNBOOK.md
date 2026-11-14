@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية)، `20261116000001_phone_pin_auth.sql` (الدخول بالهاتف + PIN: Send SMS hook يرفض، كل حساب برقم صالح، رقم فريد؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع).
 
 ## 4) توليد أنواع TypeScript
 
@@ -72,11 +72,11 @@ pnpm exec supabase db advisors --remote
 ```
 (أو من اللوحة: Advisors ← Security Advisor).
 
-**آخر فحص (2026-11-14، للقراءة فقط، بعد دوال T07/T08 و`pg_net`/`pg_cron` وكل migrations حتى `20261115000005`): 11 تحذيراً، نفس المقصودة أدناه بلا جديد.** دوال `private.*` و`begin/abort_account_deletion` و`claim/finish_push_notifications` لا تظهر (غير قابلة للتنفيذ من `authenticated`).
+**آخر فحص (2026-11-14، للقراءة فقط، بعد كل migrations حتى `20261116000001`): 11 تحذيراً، نفس المقصودة أدناه بلا جديد.** دوال `private.*` و`begin/abort_account_deletion` و`claim/finish_push_notifications` لا تظهر (غير قابلة للتنفيذ من `authenticated`).
 
 نتيجة بعد مراجعة T01–T05 (2026-11-11): **10 تحذيرات مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC العشر (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `list_drivers`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
 
-بالإضافة: `auth_leaked_password_protection` (إعداد Auth، لا يخص الدخول بالهاتف؛ يُفعَّل من اللوحة إن رغب صاحب المشروع).
+بالإضافة: `auth_leaked_password_protection` (إعداد Auth). **مقصود ويبقى معطّلاً**: الـ PIN من 6 أرقام، وكل الأرقام تقريباً بقوائم التسريب، فتفعيله يرفض كل الرموز (ADR 0001).
 
 أي تحذير جديد غير هذه = شيء يحتاج إصلاح. (اختبار `01_schema.sql` يفحص نفس القواعد تلقائياً.)
 
@@ -85,37 +85,53 @@ pnpm exec supabase db advisors --remote
 - دوال الأدوار security definer انتقلت لمخطط `private` (غير مكشوف بالـ API)، والأسماء بـ `public` صارت security invoker.
 - السياسات تستخدم `(select auth.uid())` و `(select private.is_admin())`، وسياسات الأدمن `for all` انقسمت لـ insert/update/delete.
 
-## 6) Auth: الدخول برقم الهاتف (خطوات يدوية من اللوحة)
+## 6) Auth: الدخول برقم الهاتف + PIN (خطوات يدوية من اللوحة)
 
-> لم تُنفَّذ بـ T02 لأنها تغيير بإعدادات الخدمة السحابية ولم تُطلب موافقة عليه بعد. تُنفَّذ من صاحب المشروع.
+> قرار صاحب المشروع (2026-11-14): **لا SMS ولا OTP**. الدخول برقم الهاتف + رمز PIN من 6 أرقام (كلمة سر Supabase)، ولا تُرسل أي رسالة. الأسباب والمخاطر: [ADR 0001](ADR/0001-phone-pin-auth.md).
+> هذه تغييرات بإعدادات الخدمة السحابية: **يضبطها صاحب المشروع من اللوحة** (لا تُغيَّر من الكود). الـ migration `20261116000001_phone_pin_auth.sql` (دالة الـ hook وحماية الرقم) **مطبقة على mukhdar-dev (2026-11-14)**.
 >
-> **الحالة على mukhdar-dev (2026-11-14):** الدخول بالهاتف **معطّل** ولا توجد Test OTPs (`phone_provider_disabled`). قرار صاحب المشروع: يُفعَّل مع مهمة مزوّد SMS (T04)، قبل T10. حتى ذلك الحين لا أحد يدخل بالهاتف على dev (ولا مطوّر تطبيق السائق)؛ اختبار التكامل `it:delete-account` يدخل بالبريد لمستخدم مؤقت.
+> **الحالة على mukhdar-dev (2026-11-14):** الإعدادات أدناه **لم تُضبط بعد** (Phone معطّل: `phone_provider_disabled`)، فلا أحد يدخل بالهاتف حتى تُضبط. اختبار `it:delete-account` يدخل بالبريد لمستخدم مؤقت (Email مفعّل على التطوير فقط).
 
-1. Dashboard ← Authentication ← Sign In / Providers ← **Phone**: فعّله.
-   (قد تطلب اللوحة مزود SMS. اختيار المزود الفعلي من مهمة T04.)
-2. نفس الصفحة ← **Test OTPs** (أرقام اختبار برمز ثابت، بدون إرسال رسائل)، مثلاً:
-   ```
-   9647000000901=123456
-   9647000000902=123456
-   ```
-   استخدم البادئة `9647000` (لا تتبع أي شركة اتصالات عراقية) ولا تستخدم أرقاماً تبدو حقيقية مثل `0770…`/`0780…`.
-   أرقام الاختبار للتطوير فقط، وتُحذف من مشروع الإنتاج (عدا حساب مراجعي Apple، انظر CLAUDE.md).
+لكل مشروع (التطوير والإنتاج)، بالترتيب:
+1. Authentication ← **Hooks** ← **Send SMS hook** ← Add hook: النوع **Postgres**، المخطط `private`، الدالة **`hook_send_sms_reject`** ← Enabled.
+   (يرفض كل رسالة: لا كلفة ولا OTP حتى لو ضُبط مزوّد SMS بالخطأ.)
+2. Authentication ← Sign In / Providers ← **Phone**: **Enabled**، و**Enable phone confirmations: OFF**.
+   إن رفضت اللوحة الحفظ بلا مزوّد SMS رغم تفعيل الـ hook: اختر Twilio واكتب قيماً وهمية (مثل `ACxxxxxxxx`)؛ لا تُستخدم أبداً لأن الـ hook يسبق المزوّد ويرفض.
+3. نفس الصفحة ← **Allow new users to sign up: ON**.
+4. Authentication ← Passwords (أو Policies): **Minimum password length = 6**، **Password requirements = No required characters**، **Leaked password protection = OFF** (كل الأرقام من 6 خانات تقريباً بقوائم التسريب، فتفعيله يرفض كل الرموز).
+5. Authentication ← **Rate Limits** ← "sign-ups and sign-ins": **30 كل 5 دقائق لكل IP** (الافتراضي). **لا تخفّضه**: شبكات العراق تشارك IP واحداً بين زبائن كثيرين (CGNAT).
+6. **الإنتاج فقط:** Sign In / Providers ← **Email: Disabled** (لا حسابات بالبريد ولا رسائل). بالتطوير يبقى مفعّلاً لاختبار `it:delete-account`.
+7. لا Test OTPs بأي مشروع (احذفها إن وُجدت): كانت رموزاً ثابتة يدخل بها أي أحد.
 
-   > **تحذير:** رقم Test OTP يدخل به **أي شخص** يعرف الرمز الثابت. لا تعطِ رقم اختبار دور `admin` أو `staff` أو `driver` بأي مشروع غير التطوير. حساب مراجعي Apple بالإنتاج يبقى `customer` فقط.
+**التحقق بعد الضبط (التطوير):** `pnpm seed:reset -- --remote && pnpm seed:demo -- --remote` (بموافقة)، ثم الدخول من التطبيق بأدمن العرض `07000000001` والرمز `DEMO_PIN` (أدناه)؛ ومحاولة `signInWithOtp` يجب أن تفشل.
 
-## 7) إنشاء أول أدمن
+**رمز العرض (التطوير فقط):** كل مستخدمي `seed:demo` (عرض وحمل) يدخلون بنفس الـ PIN: **`482915`** (`DEMO_PIN` بـ `scripts/lib/demo.mjs`). منشور بالـ repo، فلا يُستخدم بالإنتاج أبداً (`seed:demo` يرفض غير التطوير). مستخدمو العرض الحاليون على mukhdar-dev أُنشئوا قبل هذا التغيير **بلا رمز**: يحتاجون `seed:reset` ثم `seed:demo`.
 
-1. **التطوير:** سجّل الدخول برقم اختبار (من التطبيق لاحقاً، أو من Authentication ← Users ← Add user ← phone).
-   **الإنتاج:** برقم هاتف حقيقي لصاحب المشروع (OTP حقيقي)، **أبداً** برقم Test OTP.
+**الإساءة والتخمين:** لا قفل لكل حساب على خطتنا. راقب Authentication ← Logs (محاولات `invalid_credentials` متكررة لنفس الرقم أو كثرة 429). إن ظهرت إساءة: عطّل الحساب المستهدف مؤقتاً من اللوحة إن احتجت، وراجع خطة ADR 0001 (CAPTCHA، T23).
+
+**حساب مراجعي Apple (الإنتاج):** رقم ثابت + PIN يُكتب بملاحظات المراجعة، بدور `customer` فقط.
+
+## 7) إنشاء أول أدمن، ونسيان رمز أدمن
+
+1. سجّل حساباً بالهاتف + PIN من تطبيق الزبون (بعد T10)، أو بالتطوير استخدم أدمن العرض `9647000000001` (`seed:demo`).
+   **الإنتاج:** برقم هاتف حقيقي لصاحب المشروع وبرمز غير سهل لا يعرفه غيره.
    الـ trigger `on_auth_user_created` ينشئ له `profiles` بدور `customer`.
-2. من SQL Editor (مثال التطوير):
+2. من SQL Editor:
    ```sql
-   update public.profiles set role = 'admin' where phone = '9647000000901';
+   update public.profiles set role = 'admin' where phone = '9647XXXXXXXXX';
    ```
-   ملاحظة: Supabase يخزن `auth.users.phone` **بدون `+`** عادةً، والـ trigger ينسخه كما هو. تأكد بـ:
+   Supabase يخزن `auth.users.phone` **بدون `+`** (`9647XXXXXXXXX`)، والـ trigger ينسخه كما هو. تأكد بـ:
    ```sql
    select id, phone, role from public.profiles;
    ```
+3. **أدمن نسي رمزه** (إعادة الضبط من اللوحة لا تشمل حسابات الأدمن، SPEC-admin §2.6): صاحب المشروع من SQL Editor، برمز جديد غير سهل:
+   ```sql
+   update auth.users set encrypted_password = extensions.crypt('<PIN جديد>', extensions.gen_salt('bf'))
+    where phone = '9647XXXXXXXXX';
+   delete from auth.sessions where user_id = (select id from auth.users where phone = '9647XXXXXXXXX');
+   ```
+   (لا تحفظ الرمز بأي ملف. السطر الثاني يسجّل خروج الحساب من كل الأجهزة.)
+4. نسيان رمز زبون أو موظف أو سائق: من لوحة الأدمن، "إعادة ضبط رمز الدخول" (`admin-reset-pin`، T19). قبل T19: نفس SQL الخطوة 3.
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
@@ -148,7 +164,7 @@ pnpm db:test:remote --prelude=supabase/migrations/<new>.sql   # migration غير
 الـ actions مثبّتة بـ commit SHA، ولكل وظيفة `timeout-minutes`، ودفعة جديدة تلغي التشغيل القديم لنفس الفرع.
 
 ### Supabase المحلي (`supabase/config.toml`)
-مثل الإنتاج المقصود: الدخول **بالهاتف فقط** (email معطّل)، مع Test OTP محلية `9647000000901..903` = `123456` (بدون إرسال رسائل). هذا للمكدس المحلي فقط؛ إعدادات Auth السحابية تُدار من اللوحة (§6).
+مثل الإنتاج المقصود: الدخول **بالهاتف + PIN فقط** (email معطّل، تأكيد الهاتف معطّل، `[auth.hook.send_sms]` يرفض كل رسالة، بلا Test OTPs). هذا للمكدس المحلي فقط؛ إعدادات Auth السحابية تُدار من اللوحة (§6).
 
 ### كتابة اختبار جديد
 - `tests.new_user(role)`، `tests.new_product(price, stock, active, cost)`، `tests.new_address(customer)`، `tests.place(customer, items)`، `tests.order_in(status, customer, driver)` للتجهيز (بدور postgres).
@@ -190,7 +206,7 @@ pnpm seed:demo -- --remote --images-only    # صور المنتجات فقط
 pnpm seed:reset -- --remote                 # يمسح بيانات العرض فقط
 ```
 - المستخدمون: أدمن `9647000000001`، موظف `9647000000002`، سائقون `9647000000011..13`، زبائن `9647000000101..120`، الحمل `9647001000001..`. البادئة 7000/7001 ليست لأي شركة عراقية.
-  للدخول بها من التطبيق لاحقاً: أضفها كـ Test OTPs (§6). **غير مضبوطة على mukhdar-dev بعد** (الدخول بالهاتف معطّل حتى T04).
+  الدخول: الرقم (مثلاً `07000000001`) + رمز العرض `DEMO_PIN` = `482915` (§6؛ تطوير فقط). يعمل على mukhdar-dev بعد ضبط إعدادات §6.
 - 500 طلب على 30 يوماً (أغلبها مسلّم، 12% ملغى، 55% من المسلّم مقيّم، وطلبات اليوم نشطة). كل الطلبات وتحويلاتها **عبر دوال RPC**، ثم تُرجَع طوابعها الزمنية لأيامها ويُنقل أثرها بـ `daily_stats` لنفس اليوم.
 - إشعارات العرض تُعلَّم كمرسلة (لا يرسلها push-dispatch).
 - السكربت يرفض العمل إذا كانت بيانات العرض موجودة: شغّل `seed:reset` أولاً.
@@ -278,7 +294,7 @@ pnpm exec supabase functions deploy delete-account --remote=<ref> --use-api --ye
 ```bash
 pnpm it:delete-account
 ```
-ينشئ مستخدماً مؤقتاً (هاتف `9647005xxxxxx` + بريد `t08-…@example.com`، كلمة سر عشوائية) عبر Auth Admin API، يجرّب الرفض والحذف عبر الدالة المنشورة، ويحذف كل ما أنشأه حتى عند الفشل. يحتاج `SUPABASE_DB_PASSWORD` و`SUPABASE_SERVICE_ROLE_KEY` بـ `.env.local`. ليس بـ CI (يحتاج الدالة المنشورة ومفتاح الخدمة). دخول الهاتف معطّل بمشروع التطوير، لذلك يدخل المستخدم المؤقت بالبريد.
+ينشئ مستخدماً مؤقتاً (هاتف `9647005xxxxxx` + بريد `t08-…@example.com`، كلمة سر عشوائية) عبر Auth Admin API، يجرّب الرفض والحذف عبر الدالة المنشورة، ويحذف كل ما أنشأه حتى عند الفشل. يحتاج `SUPABASE_DB_PASSWORD` و`SUPABASE_SERVICE_ROLE_KEY` بـ `.env.local`. ليس بـ CI (يحتاج الدالة المنشورة ومفتاح الخدمة). يدخل المستخدم المؤقت بالبريد (Email مفعّل على التطوير فقط؛ معطّل بالإنتاج، §6)، لأن الاختبار يخص الحذف لا طريقة الدخول.
 
 ### الحالة على mukhdar-dev (2026-11-12)
 الـ migration مطبّق والدالة منشورة. اختبار التكامل: 15/15، بلا بقايا.

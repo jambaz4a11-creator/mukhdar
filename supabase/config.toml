@@ -272,14 +272,13 @@ template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 max_frequency = "5s"
 
-# Use pre-defined map of phone number to OTP for testing.
-# Keys are the phone number with country code and without the + prefix.
-# المخضر: أرقام اختبار محلية بالبادئة 9647000 (لا تتبع أي شركة اتصالات). لا ترسل رسائل.
-# لا تعطِ رقم اختبار دور admin/staff/driver خارج التطوير (RUNBOOK §6).
-[auth.sms.test_otp]
-9647000000901 = "123456"
-9647000000902 = "123456"
-9647000000903 = "123456"
+# المخضر (ADR 0001): الدخول بالهاتف + PIN من 6 أرقام (كلمة سر)، بلا OTP ولا Test OTPs ولا رسائل.
+# تأكيد الهاتف معطّل أعلاه، وكل إرسال SMS يرفضه الـ hook أدناه.
+
+# المخضر: Send SMS Hook يرفض كل إرسال (migration 20261116000001). نفس الإعداد مطلوب على السحابة من اللوحة.
+[auth.hook.send_sms]
+enabled = true
+uri = "pg-functions://postgres/private/hook_send_sms_reject"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
