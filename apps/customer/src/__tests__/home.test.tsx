@@ -70,8 +70,9 @@ describe('home catalog', () => {
     expect(screen.queryByTestId('store-closed-banner')).toBeNull();
 
     await fireEvent.press(screen.getByText('فواكه'));
-    await waitFor(() => expect(screen.queryByText('طماطة')).toBeNull());
-    expect(screen.getByText('موز')).toBeTruthy();
+    // قائمة القسم الجديد تُحمَّل بعد الضغط: ننتظر ظهورها (موز) لا اختفاء القديمة فقط
+    expect(await screen.findByText('موز')).toBeTruthy();
+    expect(screen.queryByText('طماطة')).toBeNull();
     const last = fake.calls.filter((c) => c.table === 'products').at(-1) as Call;
     expect(last.ops).toContainEqual(['eq', ['category_id', 2]]);
   });
