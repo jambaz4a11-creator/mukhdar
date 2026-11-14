@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات).
 
 ## 4) توليد أنواع TypeScript
 
@@ -221,7 +221,7 @@ SUPABASE_SERVICE_ROLE_KEY=...   # Dashboard ← Project Settings ← API Keys �
 
 ## 11) الإشعارات: Edge Function `push-dispatch` (T07)
 
-**المسار:** دالة تكتب بـ `notification_outbox` ← trigger (لكل جملة insert) يستدعي `private.kick_push_dispatch()` ← `pg_net` يرسل `POST` (بعد commit) لرابط الدالة مع ترويسة `x-dispatch-secret` ← الدالة تتحقق من السر (`push_dispatch_authorized`)، تحجز الصفوف (`claim_push_notifications`)، ترسل عبر Expo، وتسجل النتيجة (`finish_push_notifications`). احتياط: `pg_cron` job باسم `push-dispatch` كل دقيقة (يطلب الدالة فقط إن بقي شيء غير مرسل).
+**المسار:** دالة تكتب بـ `notification_outbox` ← trigger (مرة واحدة لكل معاملة؛ فشله لا يُفشل المعاملة) يستدعي `private.push_kick_post()` ← `pg_net` يرسل `POST` (بعد commit) لرابط الدالة مع ترويسة `x-dispatch-secret` ← الدالة تتحقق من السر (`push_dispatch_authorized`)، تحجز الصفوف (`claim_push_notifications`)، ترسل عبر Expo، وتسجل النتيجة (`finish_push_notifications`). احتياط: `pg_cron` job باسم `push-dispatch` كل دقيقة (يطلب الدالة فقط إن بقي شيء غير مرسل)، و`push-history-purge` يومياً 00:30 UTC (يحذف سجل cron أقدم من 7 أيام والإشعارات المنتهية أقدم من 30 يوماً). دفعة تخلط رموز مشروعَي Expo (الزبون والسائق) تُقسَّم حسب المشروع تلقائياً.
 
 ### النشر (لكل بيئة، بموافقة صاحب المشروع)
 ```bash
@@ -240,6 +240,8 @@ select vault.create_secret('https://<ref>.supabase.co/functions/v1/push-dispatch
 
 ### الحالة على mukhdar-dev (2026-11-12)
 الـ migration مطبّق، الدالة منشورة (`verify_jwt = false`)، `push_dispatch_url` مضبوط، `EXPO_ACCESS_TOKEN` غير مضبوط (غير مطلوب). فحص طرفي: صف بالصندوق لمستخدم برمز Expo وهمي + رمز fcm ← عولج خلال ≈ 4 ثوانٍ عبر Expo الحقيقي (`DeviceNotRegistered` ← حُذف الرمز؛ fcm ← "skipped (provider not implemented)")، ثم حُذفت بيانات الفحص. **فحص جهاز حقيقي خلال 10 ثوانٍ مؤجل لـ T14.**
+
+2026-11-14 (بموافقة صاحب المشروع): `20261115000003_push_reliability.sql` مطبّق والدالة أُعيد نشرها (تقسيم مشاريع Expo). فحص طرفي: صف `admins` بلا رموز ← عولج خلال ≈ 4 ثوانٍ (`no recipients`) ثم حُذف.
 
 ### المراقبة
 ```sql

@@ -9,7 +9,12 @@ import {
   type RowResult,
   type Store,
 } from './dispatch.ts';
-import { createExpoSender, EXPO_PUSH_URL } from './expo.ts';
+import {
+  createExpoSender,
+  EXPO_PUSH_URL,
+  MIXED_PROJECTS_CODE,
+  parseExperienceDetails,
+} from './expo.ts';
 import { createHandler } from './handler.ts';
 
 // ---------------------------------------------------------------- helpers
@@ -154,6 +159,107 @@ Deno.test(
     assert.deepEqual(out3, [{ status: 'error', error: 'expo: fetch failed' }]);
   },
 );
+
+// ---------------------------------------------------------------- مشاريع Expo مختلطة (C1)
+/** Expo مزيف بمشروعين: رمز فيه "cust" ← @mukhdar/customer، وغيره ← @dev/driver. */
+const projectOfToken = (to: string) => (to.includes('cust') ? '@mukhdar/customer' : '@dev/driver');
+function mixedExpo(details: (tokens: string[]) => unknown = groupByProject) {
+  return fakeFetch((call) => {
+    const tokens = call.body.map((m) => m.to);
+    if (new Set(tokens.map(projectOfToken)).size > 1) {
+      return Response.json(
+        {
+          errors: [
+            {
+              code: MIXED_PROJECTS_CODE,
+              message:
+                'All push notification messages in the same request must be for the same project',
+              details: details(tokens),
+            },
+          ],
+        },
+        { status: 400 },
+      );
+    }
+    return tickets(call, () => ({ status: 'ok' }));
+  });
+}
+function groupByProject(tokens: string[]) {
+  const out: Record<string, string[]> = {};
+  for (const t of tokens) (out[projectOfToken(t)] ??= []).push(t);
+  return out;
+}
+const msg = (n: string) => ({ to: expo(n).token, title: 't', body: 'b', data: {} });
+
+Deno.test('expo: mixed projects → split by project from details, results keep order', async () => {
+  const { fn, calls } = mixedExpo();
+  const send = createExpoSender({ fetch: fn });
+  const out = await send(['cust1', 'drv1', 'cust2', 'drv2', 'cust3'].map(msg));
+  assert.ok(out.every((o) => o.status === 'ok'));
+  assert.equal(out.length, 5);
+  assert.deepEqual(
+    calls.map((c) => c.body.map((m) => m.to.replace(/ExponentPushToken\[|\]/g, ''))),
+    [
+      ['cust1', 'drv1', 'cust2', 'drv2', 'cust3'], // رُفض
+      ['cust1', 'cust2', 'cust3'],
+      ['drv1', 'drv2'],
+    ],
+  );
+
+  // نفس الـ sender (نفس الاستدعاء): الربط محفوظ ← تجميع مسبق بلا رفض
+  calls.length = 0;
+  const out2 = await send(['drv1', 'cust1', 'drv2'].map(msg));
+  assert.ok(out2.every((o) => o.status === 'ok'));
+  assert.equal(calls.length, 2);
+});
+
+Deno.test('expo: unreadable details → each unmapped message is sent on its own', async () => {
+  const { fn, calls } = mixedExpo(() => 'not a mapping');
+  const out = await createExpoSender({ fetch: fn })(['cust1', 'drv1', 'cust2'].map(msg));
+  assert.ok(out.every((o) => o.status === 'ok'));
+  assert.deepEqual(
+    calls.map((c) => c.body.length),
+    [3, 1, 1, 1],
+  );
+});
+
+Deno.test(
+  'expo: a part rejected again after the split fails (retried later), no loop',
+  async () => {
+    // details يضع كل الرموز تحت مشروع واحد (خطأ) ← الجزء يُرفض مجدداً
+    const { fn, calls } = mixedExpo((tokens) => ({ '@x/one': tokens }));
+    const out = await createExpoSender({ fetch: fn })(['cust1', 'drv1'].map(msg));
+    assert.deepEqual(out, [
+      { status: 'error', error: `expo: ${MIXED_PROJECTS_CODE}` },
+      { status: 'error', error: `expo: ${MIXED_PROJECTS_CODE}` },
+    ]);
+    assert.equal(calls.length, 2);
+  },
+);
+
+Deno.test('expo: parseExperienceDetails keeps only string token lists', () => {
+  const m = parseExperienceDetails({ '@a/x': ['t1', 't2', 3], '@b/y': 'nope', '@c/z': ['t3'] });
+  assert.deepEqual(
+    [...m],
+    [
+      ['t1', '@a/x'],
+      ['t2', '@a/x'],
+      ['t3', '@c/z'],
+    ],
+  );
+  assert.equal(parseExperienceDetails(null).size, 0);
+  assert.equal(parseExperienceDetails(['t1']).size, 0);
+});
+
+Deno.test('dispatch: rows for the customer app and the driver app are all delivered', async () => {
+  const { fn } = mixedExpo();
+  const store = new FakeStore([
+    [row(1, [expo('cust-a')]), row(2, [expo('drv-a'), expo('drv-b')]), row(3, [expo('cust-b')])],
+  ]);
+  const s = await dispatchOnce(store, { expo: createExpoSender({ fetch: fn }) });
+  assert.equal(s.sent, 3);
+  assert.equal(s.failed, 0);
+});
 
 // ---------------------------------------------------------------- dispatch
 Deno.test(

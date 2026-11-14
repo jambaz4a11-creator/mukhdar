@@ -1,5 +1,5 @@
 -- 11: push-dispatch (T07): المزوّد لكل رمز، حجز الصندوق، إنهاء الإرسال، السر المشترك، والمُشغِّل
-select plan(50);
+select plan(58);
 
 -- الصندوق يبدأ فارغاً من منظور الاختبار (يُلغى مع المعاملة)
 update public.notification_outbox set sent_at = now() where sent_at is null;
@@ -14,7 +14,8 @@ select ok(has_function_privilege('service_role', 'public.push_dispatch_authorize
 select is(
   (select count(*)::int from unnest(array['anon', 'authenticated']) r(role),
           unnest(array['public.claim_push_notifications(int)', 'public.finish_push_notifications(jsonb, text[])',
-                       'public.push_dispatch_authorized(text)', 'private.kick_push_dispatch(boolean)']) f(fn)
+                       'public.push_dispatch_authorized(text)', 'private.kick_push_dispatch(boolean)',
+                       'private.push_kick_post(boolean)', 'private.purge_push_history()']) f(fn)
     where has_function_privilege(r.role, f.fn, 'execute')),
   0, 'anon/authenticated cannot execute any push-dispatch function');
 select ok(not (select prosecdef from pg_proc where oid = 'public.claim_push_notifications(int)'::regprocedure)
@@ -190,6 +191,8 @@ begin
 end $$;
 
 update public.notification_outbox set sent_at = now() where sent_at is null;
+-- إدخالات سابقة بهذه المعاملة ربما شغّلت الـ trigger (الرابط مضبوط على dev)؛ نبدأ بعلامة نظيفة
+select set_config('mukhdar.push_kicked', '', true);
 select private.kick_push_dispatch(true);
 select is((select count(*)::int from net.http_request_queue where url = current_setting('t.url')), 0,
   'cron kick does nothing when nothing is pending');
@@ -199,6 +202,9 @@ select is((select count(*)::int from net.http_request_queue where url = current_
   'one insert statement (3 rows) → one HTTP kick');
 select is((select headers ->> 'x-dispatch-secret' from net.http_request_queue where url = current_setting('t.url')),
   current_setting('t.secret'), 'the kick carries the shared secret header');
+insert into public.notification_outbox (audience, title, body) values ('admins', 'T-kick-2nd', 'b');
+select is((select count(*)::int from net.http_request_queue where url = current_setting('t.url')), 1,
+  'a second insert statement in the same transaction does not kick again (one kick per transaction)');
 select private.kick_push_dispatch(true);
 select is((select count(*)::int from net.http_request_queue where url = current_setting('t.url')), 2,
   'cron kick fires while rows are pending');
@@ -208,5 +214,32 @@ insert into public.notification_outbox (audience, title, body) values ('drivers'
 select private.kick_push_dispatch(false);
 select is((select count(*)::int from net.http_request_queue where url = '' or url = current_setting('t.url')), 2,
   'no URL configured (local/CI) → no HTTP requests');
+
+-- ---------------------------------------------------------------- فشل التشغيل لا يُفشل المعاملة (S1)
+-- نحاكي عطلاً (Vault/pg_net) باستبدال دالة الإرسال داخل المعاملة (يُلغى مع ROLLBACK)
+create or replace function private.push_kick_post(p_only_if_pending boolean) returns boolean
+language plpgsql as $$ begin raise exception 'simulated pg_net failure'; end $$;
+select set_config('mukhdar.push_kicked', '', true);
+select lives_ok($$ insert into public.notification_outbox (audience, title, body) values ('admins', 'T-kick-fail', 'b') $$,
+  'outbox insert succeeds even when the kick fails');
+select is((select count(*)::int from public.notification_outbox where title = 'T-kick-fail'), 1,
+  'the notification row is kept for the cron retry');
+select lives_ok($$ select tests.place(tests.id('cust'), jsonb_build_array(tests.item(tests.new_product(1000, 10), 1))) $$,
+  'place_order succeeds even when the kick fails');
+select lives_ok($$ select private.kick_push_dispatch(true) $$, 'cron kick does not raise when the kick fails');
+
+-- ---------------------------------------------------------------- التنظيف اليومي (N3)
+select is((select count(*)::int from cron.job where jobname = 'push-history-purge'
+            and command = 'select private.purge_push_history()'), 1, 'daily purge job is scheduled');
+insert into public.notification_outbox (audience, title, body, created_at, sent_at, attempts) values
+  ('admins', 'T-purge-old-sent',    'b', now() - interval '31 days', now() - interval '31 days', 1),
+  ('admins', 'T-purge-old-failed',  'b', now() - interval '31 days', null, 5),
+  ('admins', 'T-purge-old-pending', 'b', now() - interval '31 days', null, 1),
+  ('admins', 'T-purge-new-sent',    'b', now() - interval '29 days', now() - interval '29 days', 1);
+select private.purge_push_history();
+select is((select count(*)::int from public.notification_outbox where title in ('T-purge-old-sent', 'T-purge-old-failed')), 0,
+  'finished notifications older than 30 days are purged');
+select is((select array_agg(title order by title) from public.notification_outbox where title like 'T-purge-%'),
+  array['T-purge-new-sent', 'T-purge-old-pending'], 'recent and still-retryable notifications are kept');
 
 select * from finish();
