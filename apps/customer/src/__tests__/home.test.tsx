@@ -1,7 +1,7 @@
 // الرئيسية (T11): الأقسام والشبكة، شريط "المتجر مغلق"، البحث بعد debounce مع نتيجة فارغة، شريط السلة.
 import { formatIQD } from '@mukhdar/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import HomeScreen from '../app/(tabs)/index';
 import { useCart } from '../features/cart/store';
 import { ar } from '../i18n/ar';
