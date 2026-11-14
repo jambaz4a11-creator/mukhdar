@@ -18,7 +18,7 @@
 | 08 | [Edge Function: delete-account](08-edge-delete-account.md) | 03 | ✅ (صفحة الويب ← T16) |
 | 09 | [هيكل تطبيق الزبون](09-customer-scaffold.md) | 06 | ✅ (فحص Expo Go وSentry يدوي) |
 | 10 | [دخول الزبون](10-customer-auth.md) | 04، 09 | ⬜ |
-| 11 | [الكتالوج](11-customer-catalog.md) | 05، 09 | ⬜ |
+| 11 | [الكتالوج](11-customer-catalog.md) | 05، 09 | ✅ (فحص التمرير وبدون شبكة يدوي) |
 | 12 | [العناوين](12-customer-addresses.md) | 10 | ⬜ |
 | 13 | [السلة وتأكيد الطلب](13-customer-cart-checkout.md) | 11، 12 | ⬜ |
 | 14 | [تتبع الطلبات والتقييم والإشعارات](14-customer-orders.md) | 07، 13 | ⬜ |
