@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية).
 
 ## 4) توليد أنواع TypeScript
 
@@ -72,7 +72,7 @@ pnpm exec supabase db advisors --remote
 ```
 (أو من اللوحة: Advisors ← Security Advisor).
 
-> **قديمة:** النتيجة أدناه قبل دوال T07/T08 وإضافتي `pg_net`/`pg_cron`؛ إعادة الفحص (للقراءة فقط) مع تحديث العدد بالمراجعة القادمة (N7).
+**آخر فحص (2026-11-14، للقراءة فقط، بعد دوال T07/T08 و`pg_net`/`pg_cron` وكل migrations حتى `20261115000005`): 11 تحذيراً، نفس المقصودة أدناه بلا جديد.** دوال `private.*` و`begin/abort_account_deletion` و`claim/finish_push_notifications` لا تظهر (غير قابلة للتنفيذ من `authenticated`).
 
 نتيجة بعد مراجعة T01–T05 (2026-11-11): **10 تحذيرات مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC العشر (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `list_drivers`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
 

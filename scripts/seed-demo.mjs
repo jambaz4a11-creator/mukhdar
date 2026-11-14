@@ -327,7 +327,7 @@ async function seedDemo() {
       const chosen = new Set();
       const lines = randInt(1, 5);
       while (chosen.size < lines) chosen.add(pick(products).id);
-      for (const id of chosen) items.push({ product_id: id, qty: randInt(1, 3) });
+      for (const id of chosen) items.push({ product_id: id, qty: randInt(1, 6) });
 
       const steps = [];
       const t = {};

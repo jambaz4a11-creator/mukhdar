@@ -1,5 +1,5 @@
 -- 12: حذف الحساب (T08): begin/abort_account_deletion، وما يبقى بعد حذف المستخدم من auth.users
-select plan(32);
+select plan(39);
 
 select tests.remember('cust', tests.new_user('customer'));
 select tests.remember('busy', tests.new_user('customer'));
@@ -62,6 +62,21 @@ select lives_ok(format($$ select public.abort_account_deletion(%L, true) $$, tes
 select tests.as_postgres();
 select is((select is_active from public.profiles where id = tests.id('cust')), true, 'abort restores is_active');
 
+-- انقطاع بين begin و deleteUser ثم إعادة المحاولة (N2): الحالة الأصلية محفوظة
+select tests.as_postgres();
+select tests.remember('crash', tests.new_user('customer'));
+select tests.as_service();
+select is(public.begin_account_deletion(tests.id('crash')), true, 'first attempt: was active');
+select is(public.begin_account_deletion(tests.id('crash')), true,
+  'retry after a crash still returns the original state (not the deactivated one)');
+select lives_ok(format($$ select public.abort_account_deletion(%L, false) $$, tests.id('crash')),
+  'abort with a stale p_was_active');
+select tests.as_postgres();
+select is((select is_active from public.profiles where id = tests.id('crash')), true,
+  'abort restores the stored original state');
+select is_empty(format($$ select 1 from private.account_deletions where user_id = %L $$, tests.id('crash')),
+  'abort clears the stored state');
+
 select tests.as_service();
 select is(public.begin_account_deletion(tests.id('off')), false, 'already-deactivated user can still delete');
 select lives_ok(format($$ select public.abort_account_deletion(%L, false) $$, tests.id('off')), 'abort (was inactive)');
@@ -80,6 +95,10 @@ select is(public.begin_account_deletion(tests.id('cust')), true, 'begin for the 
 delete from auth.users where id in (tests.id('cust'), tests.id('drv'));
 
 select is_empty(format($$ select 1 from public.profiles where id = %L $$, tests.id('cust')), 'profile is deleted');
+select is_empty(format($$ select 1 from private.account_deletions where user_id = %L $$, tests.id('cust')),
+  'stored deletion state goes with the profile');
+select ok(pg_get_functiondef('public.accept_order(uuid)'::regprocedure) ~ 'from public\.profiles where id = v_uid and is_active for share',
+  'accept_order locks the driver profile (serialised with begin_account_deletion, N1)');
 select is_empty(format($$ select 1 from public.addresses where customer_id = %L $$, tests.id('cust')),
   'addresses are deleted');
 select is_empty($$ select 1 from public.push_tokens where token = 'ExponentPushToken[t12-cust]' $$,
