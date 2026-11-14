@@ -217,6 +217,8 @@ SUPABASE_SERVICE_ROLE_KEY=...   # Dashboard ← Project Settings ← API Keys �
 ### الحالة على mukhdar-dev (2026-11-14)
 أُعيد البناء بعد قرارَي المالك (وحدة نص كيلو، قطاعان A/B): `seed.sql` الجديد (قطاعان، 17 وحدة، 1700 عمارة، 60 منتجاً منها 33 بنص كيلو) و`seed:demo`: 25 مستخدماً، 500 طلب، `daily_stats` متطابق، صور المنتجات 60/60 (تُعرض بالرابط العام).
 
+2026-11-14 (بموافقة صاحب المشروع): `seed:reset` ثم `seed:demo` بمسار `ready`: 500 طلب (427 مسلّم، 53 ملغى، وطلبات اليوم: 7 `pending` بلا سائق، 4 `preparing`، 3 `ready` بانتظار سائق، 6 `out_for_delivery`)، `daily_stats` متطابق، لا إشعارات معلّقة.
+
 ### مخاطرة معروفة: الكتابة المباشرة بجداول Auth
 `seed:demo` ينشئ المستخدمين بإدراج مباشر في `auth.users` و`auth.identities` (هاتف مؤكد، أعمدة الرموز نصوص فارغة)، لأن الطلبات يجب أن تمر بـ `place_order` بهوية كل مستخدم (SPEC-backend افتراض 19). هذه جداول داخلية لـ Supabase Auth وقد يتغير شكلها مع تحديثات Supabase بدون إعلان:
 - **العَرَض:** فشل `seed:demo` بخطأ عمود/قيد بـ `auth.*`، أو مستخدمو عرض لا يستطيعون الدخول.
@@ -245,7 +247,7 @@ select vault.create_secret('https://<ref>.supabase.co/functions/v1/push-dispatch
 ### الحالة على mukhdar-dev (2026-11-12)
 الـ migration مطبّق، الدالة منشورة (`verify_jwt = false`)، `push_dispatch_url` مضبوط، `EXPO_ACCESS_TOKEN` غير مضبوط (غير مطلوب). فحص طرفي: صف بالصندوق لمستخدم برمز Expo وهمي + رمز fcm ← عولج خلال ≈ 4 ثوانٍ عبر Expo الحقيقي (`DeviceNotRegistered` ← حُذف الرمز؛ fcm ← "skipped (provider not implemented)")، ثم حُذفت بيانات الفحص. **فحص جهاز حقيقي خلال 10 ثوانٍ مؤجل لـ T14.**
 
-2026-11-14 (بموافقة صاحب المشروع): `20261115000003_push_reliability.sql` مطبّق والدالة أُعيد نشرها (تقسيم مشاريع Expo). فحص طرفي: صف `admins` بلا رموز ← عولج خلال ≈ 4 ثوانٍ (`no recipients`) ثم حُذف.
+2026-11-14 (بموافقة صاحب المشروع): `20261115000003_push_reliability.sql` مطبّق والدالة أُعيد نشرها (تقسيم مشاريع Expo)، ثم أُعيد نشرها مع `delete-account` بـ supabase-js المثبّت 2.119.0 (فحص طرفي ✓، `it:delete-account` ✓). فحص طرفي: صف `admins` بلا رموز ← عولج خلال ≈ 4 ثوانٍ (`no recipients`) ثم حُذف.
 
 ### المراقبة
 ```sql
