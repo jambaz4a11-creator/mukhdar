@@ -157,6 +157,9 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - الإلغاء يرجع المخزون، والتسليم يحدّث `daily_stats` بالأرقام الصحيحة.
 - الزبون لا يرى `product_costs`/`stock`/طلبات غيره؛ السائق لا يرى هاتف زبون طلب غير معيَّن له؛ `anon` يقرأ الكتالوج فقط.
 - الزبون لا يقدر يغيّر `role` أو يُدخل طلباً مباشرة.
+- `push-dispatch` (`11_push_dispatch.sql`): المزوّد لكل رمز، الحجز والإنهاء، السر المشترك، trigger مرة لكل معاملة لا يُفشل المعاملة، التنظيف اليومي؛ ومنطق الإرسال بـ Deno (`push_dispatch_test.ts`، ومنه تقسيم مشاريع Expo).
+- حذف الحساب (`12_delete_account.sql`، `delete_account_test.ts`، وتكامل `pnpm it:delete-account` على dev).
+- نص العنوان بالإشعارات ("وحدة A1 - عمارة 12") بـ `03_place_order.sql` و`05_driver.sql`، ووحدات البيع الثابتة بـ `02_rls_catalog.sql`.
 
 ## 11) النسخ الاحتياطي والمراقبة
 - Supabase Pro: نسخ يومي. تجربة استعادة واحدة على مشروع staging قبل الإطلاق.

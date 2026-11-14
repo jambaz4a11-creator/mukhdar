@@ -38,7 +38,9 @@ own session; RLS and the functions enforce what a driver may see and do.
    await supabase.auth.verifyOtp({ phone: '+9647XXXXXXXXX', token: '123456', type: 'sms' });
    ```
    Accept `07XXXXXXXXX` in the UI and convert to `+9647XXXXXXXXX`. The SMS provider for production is
-   not chosen yet; in development, test phone numbers with fixed OTPs are configured in the dashboard.
+   not chosen yet. **Phone sign-in is not enabled on the development project yet:** it will be enabled,
+   with test phone numbers that have fixed OTPs, together with the SMS provider task (T04), before the
+   customer-app sign-in task (T10). We will send you the test numbers then.
 2. On first sign-in a trigger creates `profiles` with `role = 'customer'`. **A new account is not a
    driver.** The admin activates it from the admin panel (`set_user_role(user, 'driver', true)`).
 3. After sign-in (and on every app start / resume), read your own profile:

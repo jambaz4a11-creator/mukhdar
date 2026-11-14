@@ -72,6 +72,8 @@ pnpm exec supabase db advisors --remote
 ```
 (أو من اللوحة: Advisors ← Security Advisor).
 
+> **قديمة:** النتيجة أدناه قبل دوال T07/T08 وإضافتي `pg_net`/`pg_cron`؛ إعادة الفحص (للقراءة فقط) مع تحديث العدد بالمراجعة القادمة (N7).
+
 نتيجة بعد مراجعة T01–T05 (2026-11-11): **10 تحذيرات مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC العشر (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `list_drivers`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
 
 بالإضافة: `auth_leaked_password_protection` (إعداد Auth، لا يخص الدخول بالهاتف؛ يُفعَّل من اللوحة إن رغب صاحب المشروع).
@@ -86,6 +88,8 @@ pnpm exec supabase db advisors --remote
 ## 6) Auth: الدخول برقم الهاتف (خطوات يدوية من اللوحة)
 
 > لم تُنفَّذ بـ T02 لأنها تغيير بإعدادات الخدمة السحابية ولم تُطلب موافقة عليه بعد. تُنفَّذ من صاحب المشروع.
+>
+> **الحالة على mukhdar-dev (2026-11-14):** الدخول بالهاتف **معطّل** ولا توجد Test OTPs (`phone_provider_disabled`). قرار صاحب المشروع: يُفعَّل مع مهمة مزوّد SMS (T04)، قبل T10. حتى ذلك الحين لا أحد يدخل بالهاتف على dev (ولا مطوّر تطبيق السائق)؛ اختبار التكامل `it:delete-account` يدخل بالبريد لمستخدم مؤقت.
 
 1. Dashboard ← Authentication ← Sign In / Providers ← **Phone**: فعّله.
    (قد تطلب اللوحة مزود SMS. اختيار المزود الفعلي من مهمة T04.)
@@ -186,7 +190,7 @@ pnpm seed:demo -- --remote --images-only    # صور المنتجات فقط
 pnpm seed:reset -- --remote                 # يمسح بيانات العرض فقط
 ```
 - المستخدمون: أدمن `9647000000001`، موظف `9647000000002`، سائقون `9647000000011..13`، زبائن `9647000000101..120`، الحمل `9647001000001..`. البادئة 7000/7001 ليست لأي شركة عراقية.
-  للدخول بها من التطبيق لاحقاً: أضفها كـ Test OTPs (§6).
+  للدخول بها من التطبيق لاحقاً: أضفها كـ Test OTPs (§6). **غير مضبوطة على mukhdar-dev بعد** (الدخول بالهاتف معطّل حتى T04).
 - 500 طلب على 30 يوماً (أغلبها مسلّم، 12% ملغى، 55% من المسلّم مقيّم، وطلبات اليوم نشطة). كل الطلبات وتحويلاتها **عبر دوال RPC**، ثم تُرجَع طوابعها الزمنية لأيامها ويُنقل أثرها بـ `daily_stats` لنفس اليوم.
 - إشعارات العرض تُعلَّم كمرسلة (لا يرسلها push-dispatch).
 - السكربت يرفض العمل إذا كانت بيانات العرض موجودة: شغّل `seed:reset` أولاً.
@@ -257,6 +261,7 @@ select status, return_message, start_time from cron.job_run_details
 سجلات الدالة: Dashboard ← Edge Functions ← push-dispatch ← Logs (`push-dispatch done {...}`).
 - صف بـ `attempts = 5` لن يُعاد. لإعادته يدوياً: `update public.notification_outbox set attempts = 0, claimed_at = null where id = ...`.
 - `401` بـ `net._http_response`: السر بـ Vault تغيّر أو الرابط يشير لمشروع آخر.
+- **تكرار ممكن (N4):** إن قبل Expo الرسائل ثم فشل `finish_push_notifications` (انقطاع، مهلة الدالة)، يبقى الصف محجوزاً ويُعاد إرساله بعد 5 دقائق، فيصل الإشعار مرتين. نادر ومقبول بالمرحلة الأولى؛ الحل لاحقاً حفظ معرّفات تذاكر Expo. الإيصالات (receipts) مؤجلة (SPEC-backend افتراض 28)، وتُراجع قبل الإطلاق.
 
 ## 12) حذف الحساب: Edge Function `delete-account` (T08)
 
@@ -275,6 +280,9 @@ pnpm it:delete-account
 
 ### الحالة على mukhdar-dev (2026-11-12)
 الـ migration مطبّق والدالة منشورة. اختبار التكامل: 15/15، بلا بقايا.
+
+### مستخدم يملك ملفات بـ Storage (N9)
+`auth.admin.deleteUser` يرفض حذف مستخدم يملك كائنات بـ Storage (`storage.objects.owner`). اليوم يرفع الأدمن فقط صور المنتجات، والأدمن لا يُحذف من التطبيق أصلاً، فلا أثر الآن. إن صار غير الأدمن يرفع ملفات لاحقاً (أو احتجت حذف أدمن رفع صوراً): انقل ملكية كائناته أولاً (`update storage.objects set owner = null where owner = '<id>'` من SQL Editor) ثم احذفه. حذف الكائنات نفسها عبر Storage API لا بـ SQL.
 
 ### حذف حساب أدمن (يدوياً)
 الدالة ترفض حساب `admin`. لحذفه: أنزل دوره أولاً من أدمن آخر (`set_user_role`)، ثم يحذف حسابه من التطبيق، أو احذفه من Dashboard ← Authentication ← Users.

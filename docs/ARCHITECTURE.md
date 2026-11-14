@@ -93,7 +93,7 @@ mukhdar/
 - `orders` (customer_id، address_id، status، subtotal، delivery_fee، total، driver_id، created_at...)
 - `order_items` (order_id، product_id، name_snapshot، price_snapshot، qty)
 - `ratings` (order_id، stars، comment)
-- `push_tokens` (user_id، token، platform)
+- `push_tokens` (user_id، token، platform، provider: expo|fcm)
 - `daily_stats`
 - جاهز للتوسع: حقل `city_id` و`vendor_id` (nullable الآن) حتى تضيف ماركت ومطاعم لاحقاً بدون هدم.
 
