@@ -55,7 +55,7 @@ pnpm exec supabase db push --remote --yes       # يطبّق
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية)، `20261116000001_phone_pin_auth.sql` (الدخول بالهاتف + PIN: Send SMS hook يرفض، كل حساب برقم صالح، رقم فريد؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية)، `20261116000001_phone_pin_auth.sql` (الدخول بالهاتف + PIN: Send SMS hook يرفض، كل حساب برقم صالح، رقم فريد؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261117000001_signup_rate_limit.sql` (حدود معدل دالة `signup`؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع).
 
 ## 4) توليد أنواع TypeScript
 
@@ -90,14 +90,14 @@ pnpm exec supabase db advisors --remote
 > قرار صاحب المشروع (2026-11-14): **لا SMS ولا OTP**. الدخول برقم الهاتف + رمز PIN من 6 أرقام (كلمة سر Supabase)، ولا تُرسل أي رسالة. الأسباب والمخاطر: [ADR 0001](ADR/0001-phone-pin-auth.md).
 > هذه تغييرات بإعدادات الخدمة السحابية: **يضبطها صاحب المشروع من اللوحة** (لا تُغيَّر من الكود). الـ migration `20261116000001_phone_pin_auth.sql` (دالة الـ hook وحماية الرقم) **مطبقة على mukhdar-dev (2026-11-14)**.
 >
-> **الحالة على mukhdar-dev (2026-11-14):** الإعدادات أدناه **لم تُضبط بعد** (Phone معطّل: `phone_provider_disabled`)، فلا أحد يدخل بالهاتف حتى تُضبط. اختبار `it:delete-account` يدخل بالبريد لمستخدم مؤقت (Email مفعّل على التطوير فقط).
+> **الحالة على mukhdar-dev (2026-11-15):** Phone + PIN يعمل (الدخول بالرمز فُحص بـ `pnpm it:signup`). خطوة 3 (Allow new users to sign up: **OFF**) نُفّذت 2026-11-15 وفُحصت (§14). اختبار `it:delete-account` يدخل بالبريد لمستخدم مؤقت (Email مفعّل على التطوير فقط).
 
 لكل مشروع (التطوير والإنتاج)، بالترتيب:
 1. Authentication ← **Hooks** ← **Send SMS hook** ← Add hook: النوع **Postgres**، المخطط `private`، الدالة **`hook_send_sms_reject`** ← Enabled.
    (يرفض كل رسالة: لا كلفة ولا OTP حتى لو ضُبط مزوّد SMS بالخطأ.)
 2. Authentication ← Sign In / Providers ← **Phone**: **Enabled**، و**Enable phone confirmations: OFF**.
    إن رفضت اللوحة الحفظ بلا مزوّد SMS رغم تفعيل الـ hook: اختر Twilio واكتب قيماً وهمية (مثل `ACxxxxxxxx`)؛ لا تُستخدم أبداً لأن الـ hook يسبق المزوّد ويرفض.
-3. نفس الصفحة ← **Allow new users to sign up: ON**.
+3. نفس الصفحة ← **Allow new users to sign up: OFF** (قرار المالك 2026-11-15). **الترتيب مهم:** بعد نشر Edge Function `signup` ونجاح `pnpm it:signup` (§14)؛ وبعده `pnpm it:signup -- --signup-disabled`. الحسابات الجديدة من الدالة فقط (Admin API لا يتأثر بالإعداد).
 4. Authentication ← Passwords (أو Policies): **Minimum password length = 6**، **Password requirements = No required characters**، **Leaked password protection = OFF** (كل الأرقام من 6 خانات تقريباً بقوائم التسريب، فتفعيله يرفض كل الرموز).
 5. Authentication ← **Rate Limits** ← "sign-ups and sign-ins": **30 كل 5 دقائق لكل IP** (الافتراضي). **لا تخفّضه**: شبكات العراق تشارك IP واحداً بين زبائن كثيرين (CGNAT).
 6. **الإنتاج فقط:** Sign In / Providers ← **Email: Disabled** (لا حسابات بالبريد ولا رسائل). بالتطوير يبقى مفعّلاً لاختبار `it:delete-account`.
@@ -135,7 +135,7 @@ pnpm exec supabase db advisors --remote
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملفات: `supabase/tests/NN_*.sql` (12 ملفاً، 407 فحوص)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+الملفات: `supabase/tests/NN_*.sql` (14 ملفاً، 503 فحوص)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
 
 - كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
 - لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
@@ -319,3 +319,37 @@ EXPO_PUBLIC_SENTRY_DSN=                                   # فارغ = Sentry م
 - الرئيسية تعرض "حالة المتجر" من `app_settings` (اختبار الاتصال). رسالة "إعداد الاتصال ناقص" = `.env` غير موجود أو ناقص.
 - `expo export` محلياً يحتاج ذاكرة أكبر لـ Node على هذا الجهاز: `NODE_OPTIONS=--max-old-space-size=6144`.
 - الاختبارات: `pnpm --filter @mukhdar/customer test` (jest-expo + RNTL)، وهي ضمن `pnpm test` و CI.
+
+## 14) التسجيل: Edge Function `signup` (ADR 0001، تحديث 2026-11-15)
+
+التسجيل العام بـ GoTrue **مطفأ**؛ الحساب الجديد يُنشأ فقط من هذه الدالة (`auth.admin.createUser`). تفحص الرقم والـ PIN بالخادم (نفس `packages/shared`)، وحدود المعدل: **20/ساعة لكل IP، 5/ساعة لكل رقم** (`private.signup_rate_limits`). لا تُرجع جلسة: التطبيق يدخل بعدها بـ `signInWithPassword`. لا أسرار إضافية.
+
+### النشر (لكل بيئة، بموافقة صاحب المشروع)، بالترتيب
+```bash
+pnpm exec supabase db push --remote --yes          # migration 20261117000001
+pnpm exec supabase functions deploy signup --remote=<ref> --use-api --no-verify-jwt --yes
+pnpm it:signup                                     # التطوير فقط: يجب أن تنجح كل الفحوص
+```
+ثم من اللوحة: Authentication ← Sign In / Providers ← **Allow new users to sign up: OFF** (§6 خطوة 3)، ثم:
+```bash
+pnpm it:signup -- --signup-disabled                # signUp العام وOTP لرقم جديد مرفوضان ولا ينشئان حساباً
+```
+- النشر يرفع `packages/shared/src/pin.ts` و`phone.ts` مع الدالة (`import_map = supabase/functions/deno.json` بـ `config.toml`). تغيير قواعد الـ PIN = إعادة نشر `signup`.
+- **الإنتاج:** نفس الترتيب **قبل** إصدار أي نسخة من التطبيقات (T24)؛ لا يوجد `it:signup` على الإنتاج (يرفض غير التطوير)، فافحص يدوياً: حساب تجريبي من التطبيق، ثم احذفه.
+
+### اختبار التكامل (`pnpm it:signup`، مشروع التطوير فقط)
+يستدعي الدالة المنشورة بالمفتاح المنشور (مثل التطبيق): إنشاء حساب ← دخول بالرمز، رمز خاطئ، رقم مسجل (409)، رمز سهل ورمز من الرقم (400)، رقم غير صالح، ترويسات IP مزوّرة (لا تُستعمل)، 6 محاولات لرقم واحد ← 429. أرقام بالبادئة `9647006`، ويحذف كل حساب أنشأه وصفوف الحدود التي بدأت أثناءه حتى عند الفشل. يحتاج `.env.local` (`SUPABASE_DB_PASSWORD`، `SUPABASE_SERVICE_ROLE_KEY`) و`apps/customer/.env`. ليس بـ CI. **كل تشغيل يستهلك ~12 من حد الـ IP (20/ساعة)**؛ الصفوف تُحذف بنهايته.
+
+### المراقبة
+```sql
+-- أكثر المفاتيح محاولات بالساعة الحالية (مجزأة؛ لا يظهر IP ولا رقم)
+select bucket, hits, window_start from private.signup_rate_limits
+ where window_start > now() - interval '1 hour' order by hits desc limit 20;
+```
+سجلات الدالة: Dashboard ← Edge Functions ← signup ← Logs (`signup done`، أو رسالة الخطأ فقط؛ الـ PIN لا يُسجَّل أبداً).
+- **زبون حقيقي محجوب بالخطأ** (CGNAT): ينتهي الحجب تلقائياً بعد ساعة. لفكّه فوراً لرقم معيّن:
+  `delete from private.signup_rate_limits where bucket = 'phone' and key_hash = encode(sha256(convert_to('9647XXXXXXXXX', 'UTF8')), 'hex');`
+- كثرة 429 من IP واحد لزبائن حقيقيين ← قرار برفع حد الـ IP (migration جديدة)، لا بإلغاء الحد.
+
+### الحالة على mukhdar-dev (2026-11-15)
+الـ migration مطبّق والدالة منشورة (`verify_jwt = false`). `pnpm it:signup`: 14/14، بلا بقايا؛ فُحص أن مفتاح الـ IP هو IP العميل الحقيقي (لا IP مشترك ولا ترويسة مزوّرة). **Allow new users to sign up: OFF** (أطفأه صاحب المشروع 2026-11-15). `pnpm it:signup -- --signup-disabled`: 6/6 (`signUp` العام وOTP لرقم جديد ← 422 `signup_disabled` بلا حساب؛ الدالة تنشئ حساباً ويدخل به).

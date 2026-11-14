@@ -7,8 +7,8 @@
 ## الخطوات
 - شاشة `auth/sign-in` بوضعين: "دخول" (رقم + PIN) و"حساب جديد" (رقم + PIN + تأكيد PIN)، ثم `auth/name`. حسب التصميم (شاشة Login)؛ شاشة OTP بالتصميم **لا تُبنى**.
 - الأدوات المشتركة من `@mukhdar/shared`: `normalizeIraqiPhone`، `validatePin` + `PIN_MESSAGES` (التسجيل فقط)، `phonePinCredentials` (الأرقام العربية ← لاتينية، إلزامي قبل كل إرسال).
-- `supabase.auth.signUp(phonePinCredentials(phone, pin))` (يرجع جلسة مباشرة) و`supabase.auth.signInWithPassword(...)`.
-- ترجمة أخطاء Auth بخريطة واحدة (بـ `packages/shared`): `invalid_credentials` ← "الرقم أو الرمز غير صحيح"؛ `user_already_exists`/`phone_exists` ← "هذا الرقم مسجّل، سجّل الدخول"؛ 429/`over_request_rate_limit` ← "محاولات كثيرة، انتظر قليلاً"؛ `weak_password` ← رسالة طول الرمز؛ غير ذلك رسالة عامة (لا نص خام).
+- التسجيل: `supabase.functions.invoke('signup', { body: { phone, pin } })` (التسجيل العام مطفأ، قرار المالك 2026-11-15، ADR 0001) ثم `supabase.auth.signInWithPassword(...)`؛ الدخول: `signInWithPassword` فقط. لا `auth.signUp`.
+- ترجمة أخطاء Auth بخريطة واحدة (بـ `packages/shared`): `invalid_credentials` ← "الرقم أو الرمز غير صحيح"؛ `PHONE_TAKEN` (دالة `signup`) ← "هذا الرقم مسجّل، سجّل الدخول"؛ `RATE_LIMITED`/`PIN_INVALID`/`PHONE_INVALID` من الدالة؛ 429/`over_request_rate_limit` ← "محاولات كثيرة، انتظر قليلاً"؛ `weak_password` ← رسالة طول الرمز؛ غير ذلك رسالة عامة (لا نص خام).
 - "نسيت الرمز؟" ← واتساب المتجر (`wa.me` برسالة جاهزة فيها الرقم؛ رقم المتجر من `EXPO_PUBLIC_SHOP_WHATSAPP`).
 - الجلسة محفوظة بـ `expo-secure-store` (عبر adapter)، وتجديد تلقائي.
 - حارس: الشاشات المحمية تحوّل للدخول ثم ترجع لنفس المكان (مثلاً checkout).

@@ -1,6 +1,7 @@
 // رموز أخطاء الخلفية ← رسائل عربية. الخلفية ترجع الرمز بـ error.message (SPEC-backend §5)،
-// و error.details يحمل معلومة إضافية (مثل product_id). أي رمز جديد بقاعدة البيانات يُضاف هنا
-// وبـ SPEC-backend، واختبار errors.test.ts يفشل إن نقص أحدهما.
+// و error.details يحمل معلومة إضافية (مثل product_id). Edge Functions ترجع {"error": CODE}
+// (SPEC-backend §8). أي رمز جديد بقاعدة البيانات أو بدالة يُضاف هنا وبـ SPEC-backend، واختبار
+// errors.test.ts يفشل إن نقص أحدهما.
 
 export const ERROR_MESSAGES = {
   // عامة
@@ -40,6 +41,12 @@ export const ERROR_MESSAGES = {
   // حذف الحساب (Edge Function delete-account)
   ACTIVE_ORDER: 'لا يمكن حذف الحساب أثناء وجود طلب جارٍ',
   ADMIN_ACCOUNT: 'حساب المدير لا يُحذف من التطبيق، تواصل مع الإدارة',
+
+  // التسجيل (Edge Function signup، ADR 0001): رموز عامة فقط
+  PIN_INVALID: 'الرمز غير مقبول: 6 أرقام بلا تكرار أو تسلسل، وليس من رقم هاتفك',
+  PHONE_TAKEN: 'هذا الرقم مسجّل، سجّل الدخول',
+  RATE_LIMITED: 'محاولات كثيرة، انتظر قليلاً وحاول مرة ثانية',
+  SIGNUP_FAILED: 'تعذّر إنشاء الحساب، حاول مرة ثانية',
 
   // الأدمن
   INVALID_MOVEMENT: 'حركة المخزون غير صحيحة',

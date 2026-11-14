@@ -175,7 +175,8 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project. Existing users can still sign in.
-enable_signup = true
+# المخضر: التسجيل العام مطفأ (ADR 0001)؛ الحسابات الجديدة عبر Edge Function signup (Admin API) فقط.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -412,6 +413,14 @@ entrypoint = "./functions/push-dispatch/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/delete-account/index.ts"
+
+# التسجيل (ADR 0001، تحديث 2026-11-15): قبل الدخول، فلا JWT (المفتاح المنشور ليس JWT). الحماية حدود
+# المعدل بقاعدة البيانات (signup_rate_hit). import_map يربط قواعد الرقم والـ PIN من packages/shared.
+[functions.signup]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/signup/index.ts"
 
 [analytics]
 enabled = true

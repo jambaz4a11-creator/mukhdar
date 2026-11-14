@@ -1,5 +1,8 @@
 {
   "nodeModulesDir": "none",
   "compilerOptions": { "strict": true, "types": [] },
+  "imports": {
+    "../../packages/shared/src/phone": "../../packages/shared/src/phone.ts"
+  },
   "lock": { "path": "./deno.lock", "frozen": true }
 }

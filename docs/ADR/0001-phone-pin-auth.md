@@ -1,8 +1,8 @@
 # ADR 0001: الدخول برقم الهاتف + PIN من 6 أرقام، بدون SMS
 
-- **الحالة:** مقبول (2026-11-14). يحل محل خطة "OTP عبر SMS" (T04 القديمة).
+- **الحالة:** مقبول (2026-11-14). يحل محل خطة "OTP عبر SMS" (T04 القديمة). **تحديث 2026-11-15:** التسجيل العام مطفأ، والتسجيل عبر Edge Function `signup` (القسم الأخير).
 - **القرار من:** صاحب المشروع (لا SMS/OTP: كلفة الرسائل بالعراق عالية). التفاصيل التقنية بهذا الملف.
-- **التنفيذ:** migration `20261116000001_phone_pin_auth.sql`، `packages/shared/src/pin.ts`، `supabase/config.toml`، اختبار `supabase/tests/13_phone_pin_auth.sql`. الشاشات بـ T10 (الزبون)، T16 (الأدمن)، وتطبيق السائق الخارجي (DRIVER-API §1).
+- **التنفيذ:** migration `20261116000001_phone_pin_auth.sql`، و`20261117000001_signup_rate_limit.sql` + Edge Function `supabase/functions/signup` (تحديث 2026-11-15)، `packages/shared/src/pin.ts`، `supabase/config.toml`، اختبار `supabase/tests/13_phone_pin_auth.sql`. الشاشات بـ T10 (الزبون)، T16 (الأدمن)، وتطبيق السائق الخارجي (DRIVER-API §1).
 
 ## السياق
 - كل المستخدمين (زبائن، موظفون، سائقون، أدمن) يسجّلون ويدخلون برقم الهاتف + رمز PIN من 6 أرقام.
@@ -59,7 +59,7 @@
 - **التخفيف:** صاحب الرقم الحقيقي يراسل المتجر على واتساب من رقمه ← الأدمن يعيد ضبط الـ PIN للحساب (فيأخذه صاحبه) أو يعطّله. حد الطلبات المفتوحة (3) والدفع عند التسليم يحدّان الضرر. التحقق عبر واتساب لاحقاً، اختياري (T04).
 - **تصحيح 2026-11-15 (فُحص على mukhdar-dev):** رفض الـ SMS **لا يلغي إنشاء الحساب**. `signInWithOtp({ phone })` لرقم جديد يستدعي داخل GoTrue `Signup` عادياً بكلمة سر عشوائية (64 حرفاً لا يعرفها أحد)، يلتزم الحساب (هاتف مؤكد، `profiles` بدور customer)، ثم يفشل الإرسال بالـ hook (HTTP 403). صاحب الرقم الحقيقي يحصل بعدها على `user_already_exists` عند التسجيل.
   - **لا يمكن تمييزه بقاعدة البيانات ولا بـ before-user-created hook:** صف `auth.users` و`auth.identities` مطابقان تماماً لتسجيل هاتف + PIN (`encrypted_password` bcrypt بطول 60 بالحالتين، نفس `raw_app_meta_data` و`raw_user_meta_data`)؛ وحمولة الـ hook (`metadata` + `user`) لا تحمل كلمة السر ولا الـ hash (`json:"-"`) ولا مسار الطلب. فـ trigger `before insert` أو الـ hook لا يستطيعان رفضه دون رفض التسجيل الحقيقي.
-  - **الخطر نفسه موجود أصلاً عبر `signUp`** (أي شخص يحجز رقماً غير مسجل بـ PIN يعرفه)، والتخفيف نفسه: واتساب ← الأدمن يعيد ضبط الـ PIN فيأخذ صاحبه الحساب. الحل الجذري الوحيد: إيقاف التسجيل العام (Allow new users to sign up: OFF، فيرفض GoTrue إنشاء حساب عبر OTP أيضاً) والتسجيل عبر Edge Function (`auth.admin.createUser` بالخادم). **قرار معلّق لصاحب المشروع.**
+  - **الخطر نفسه موجود أصلاً عبر `signUp`** (أي شخص يحجز رقماً غير مسجل بـ PIN يعرفه)، والتخفيف نفسه: واتساب ← الأدمن يعيد ضبط الـ PIN فيأخذ صاحبه الحساب. الحل الجذري الوحيد: إيقاف التسجيل العام (Allow new users to sign up: OFF، فيرفض GoTrue إنشاء حساب عبر OTP أيضاً) والتسجيل عبر Edge Function (`auth.admin.createUser` بالخادم). **قرره صاحب المشروع 2026-11-15** (القسم الأخير).
 
 ### 3) أخرى
 - تغيير الرقم من التطبيق غير ممكن (الـ hook يرفض OTP التغيير). تغيير الرقم = الأدمن (لاحقاً) أو حساب جديد.
@@ -71,13 +71,30 @@
 تُضبط يدوياً من صاحب المشروع (RUNBOOK §6). بالترتيب:
 1. Authentication ← **Hooks** ← Send SMS hook: **Enabled**، النوع **Postgres**، الدالة `private.hook_send_sms_reject`.
 2. Authentication ← Sign In / Providers ← **Phone**: **Enabled**؛ **Enable phone confirmations: OFF**. إن طلبت اللوحة مزوّد SMS رغم تفعيل الـ hook: اختر Twilio بقيم وهمية؛ لا تُستخدم أبداً لأن الـ hook يسبق المزوّد ويرفض.
-3. Authentication ← Sign In / Providers ← **Allow new users to sign up: ON**.
+3. Authentication ← Sign In / Providers ← **Allow new users to sign up: OFF** (تحديث 2026-11-15)، **بعد** نشر Edge Function `signup` والتحقق منها (RUNBOOK §14). الحسابات الجديدة من الدالة فقط.
 4. Authentication ← Policies/Passwords: **Minimum password length = 6**، **Password requirements = No required characters**، **Leaked password protection: OFF**.
 5. Authentication ← Rate Limits ← sign-ups and sign-ins: **30 / 5 دقائق** (الافتراضي؛ لا تخفّضه بسبب CGNAT).
 6. **الإنتاج فقط:** Email provider **Disabled**. (بالتطوير يبقى مفعّلاً لاختبار `it:delete-account`.)
 
 ## التحقق بعد ضبط اللوحة
-- `signUp({ phone: '+9647…', password: '<PIN>' })` يرجع جلسة، و`profiles.phone` = `9647…`.
+- `functions.invoke('signup', { body: { phone, pin } })` يرجع 201، ثم `signInWithPassword` يرجع جلسة، و`profiles.phone` = `9647…` (`pnpm it:signup`).
+- `signUp` العام و`signInWithOtp` لرقم جديد يُرفضان **ولا ينشئان حساباً** (`pnpm it:signup -- --signup-disabled`).
 - `signInWithPassword` بالرمز الصحيح ينجح، وبالخاطئ `invalid_credentials`.
-- `signInWithOtp({ phone })` يفشل (403 من الـ hook). **لرقم جديد يبقى حساب بلا PIN معروف** ما دام التسجيل العام مفعّلاً (العواقب 2).
+- `signInWithOtp({ phone })` لرقم مسجل يفشل (403 من الـ hook).
 - مستخدمو العرض (`seed:demo`) يدخلون بـ `DEMO_PIN` (RUNBOOK §6).
+
+## تحديث 2026-11-15: التسجيل عبر الخادم (Edge Function `signup`)
+**القرار من صاحب المشروع:** يُطفأ التسجيل العام بـ GoTrue (Allow new users to sign up: OFF)، والحساب الجديد يُنشأ فقط من Edge Function `signup`. يسد ثغرة "OTP لرقم جديد يحجز الرقم" (العواقب 2): مع التسجيل العام مطفأ يرفض GoTrue إنشاء أي حساب من `signUp` أو `signInWithOtp`، والدخول (`signInWithPassword`) يبقى للحسابات الموجودة. Admin API لا يتأثر بالإعداد.
+
+**الدالة** (`supabase/functions/signup`، `verify_jwt = false` لأنها قبل الدخول):
+- `POST {phone, pin}`. الرقم يُحوَّل لـ `9647XXXXXXXXX` (`normalizeIraqiPhone`)، والـ PIN يُفحص **بالخادم** بنفس `validatePin` (نفس ملفات `packages/shared/src/pin.ts` و`phone.ts`، تُربط بالدالة عبر `import_map` = `supabase/functions/deno.json`؛ لا نسخة ثانية). فصار الخادم يرفض الرموز السهلة عند التسجيل (لا عند تغيير الرمز لاحقاً: `updateUser` يبقى بالتطبيق، العواقب 3).
+- تنشئ الحساب بـ `auth.admin.createUser({ phone, password: pin, phone_confirm: true })`، وترجع `201 {created: true}`. **لا ترجع جلسة:** التطبيق يدخل بعدها بـ `signInWithPassword` من جهازه، حتى يبقى حد GoTrue (30/5 دقائق) على IP الزبون لا على IP الدالة المشترك بين الجميع (خيار ج).
+- **حدود معدل خاصة** (migration `20261117000001`، جدول `private.signup_rate_limits`، دالة `signup_rate_hit` لـ service_role فقط): نافذة ثابتة ساعة: **20 لكل IP** (مرتفع بسبب CGNAT) و**5 لكل رقم**. كل محاولة تُحسب قبل أي فحص (حتى المرفوضة)، والمفاتيح مجزأة sha256. الـ IP من `cf-connecting-ip` (تضعه Cloudflare)، وإلا أول عنصر بـ `x-forwarded-for`؛ فُحص على mukhdar-dev: الترويسات المزوّرة من العميل لا تُستعمل، والمفتاح هو IP العميل الحقيقي.
+- **رموز عامة فقط** (`packages/shared/src/errors.ts`، SPEC-backend §8): `PHONE_INVALID`، `PIN_INVALID`، `PHONE_TAKEN` (409)، `RATE_LIMITED` (429)، `SIGNUP_FAILED`. فشل حد المعدل أو Auth ← 500 `SIGNUP_FAILED` (يغلق ولا يمرر).
+- **الـ PIN لا يُسجَّل أبداً** (ولا جسم الطلب)؛ السجل: رسائل الأخطاء فقط.
+
+**ما بقي كما هو:** كشف أن الرقم مسجل (`PHONE_TAKEN`، مقبول كما بالعواقب 1)؛ حجز رقم غير مسجل بـ PIN يعرفه المسجّل (العواقب 2، نفس التخفيف عبر واتساب والأدمن)؛ لا قفل لكل حساب على الدخول.
+
+**حسابات السائقين والموظفين:** نفس الدالة (تطبيق السائق يستدعيها؛ الموظف يسجّل من تطبيق الزبون)، ثم الأدمن يغيّر الدور (`set_user_role`). DRIVER-API §2.
+
+**ترتيب التفعيل لكل مشروع:** migration ← نشر الدالة ← `pnpm it:signup` ← إطفاء التسجيل العام ← `pnpm it:signup -- --signup-disabled`. RUNBOOK §14.

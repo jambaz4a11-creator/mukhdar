@@ -25,6 +25,18 @@ function specCodes(): string[] {
   return [...new Set(codes)].sort();
 }
 
+/** رموز Edge Functions بقسم §8 بـ SPEC-backend (جسم الرد {"error": CODE}). */
+function edgeCodes(): string[] {
+  const spec = fs.readFileSync(path.join(repo, 'docs', 'SPEC-backend.md'), 'utf8');
+  const start = spec.indexOf('## 8)');
+  const end = spec.indexOf('## 9)');
+  if (start < 0 || end < start) throw new Error('SPEC-backend §8 not found');
+  const codes = [...spec.slice(start, end).matchAll(/`([A-Z]+(?:_[A-Z]+)+)`/g)].map(
+    (m) => m[1] as string,
+  );
+  return [...new Set(codes)].sort();
+}
+
 /** كل رمز ترفعه قاعدة البيانات: raise exception 'CODE' بملفات migrations. */
 function sqlCodes(): string[] {
   const dir = path.join(repo, 'supabase', 'migrations');
@@ -60,8 +72,19 @@ describe('error codes', () => {
     expect(ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES]).toMatch(/[؀-ۿ]/);
   });
 
+  it.each(edgeCodes())('%s (Edge Function, §8) has an Arabic message in errors.ts', (code) => {
+    expect(ERROR_MESSAGES).toHaveProperty(code);
+    expect(ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES]).toMatch(/[؀-ۿ]/);
+  });
+
+  it('documents the signup function codes in §8', () => {
+    expect(edgeCodes()).toEqual(
+      expect.arrayContaining(['PIN_INVALID', 'PHONE_TAKEN', 'RATE_LIMITED', 'SIGNUP_FAILED']),
+    );
+  });
+
   it('errors.ts has no codes the backend does not document', () => {
-    expect([...ERROR_CODES].sort()).toEqual(specCodes());
+    expect([...ERROR_CODES].sort()).toEqual([...new Set([...specCodes(), ...edgeCodes()])].sort());
   });
 });
 
