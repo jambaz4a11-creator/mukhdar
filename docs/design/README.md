@@ -71,3 +71,37 @@ Font: **IBM Plex Sans Arabic** in four weights. It covers both Arabic and Latin 
 
 Product images are **placeholders** until real photos exist (a neutral tile on `primarySoft`
 with the product's first letter or a generic produce icon).
+
+# Design system: admin panel (لوحة الأدمن)
+
+Source: the approved admin design (https://claude.ai/artifact/4EwW1uVwkn6sDzTSuGEsK5).
+Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and the display rules.
+
+## Shared tokens
+- Same font (**IBM Plex Sans Arabic**), colors (`primary` `#1F6B3A`, `background`, `star`...),
+  radii and Latin digits as the customer app above. Status badges use `STATUS_COLORS` and
+  `STATUS_LABELS` from `packages/shared`.
+- RTL, with the **sidebar on the right**. Sidebar order: الرئيسية، الطلبات، المنتجات والمخزون،
+  هدر اليوم، التقييمات، التقارير والأرباح، الإعدادات والموظفون. Staff see only the pages they may open.
+
+## Screens
+| Screen | Notes |
+|---|---|
+| Home (الرئيسية) | today cards with change vs yesterday, open orders by status, low-stock count, today's orders table (SPEC-admin §2.0) |
+| Orders (Main) | status tabs with counts, table, side panel with details, print (§2.1) |
+| Products & stock | categories section (image cards: image, name, product count, edit; "+ قسم جديد"), products table with price and cost **per kilo**, stock in kilos, "(قليل)" under the threshold, "نفد" at 0, "غير محدد" for a missing cost (§2.2, §2.3) |
+| Daily Waste (هدر اليوم) | date, one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
+| Ratings (التقييمات) | average, count, star distribution, filtered list (§2.8) |
+| Reports (التقارير والأرباح) | range picker, cards, daily chart, waste and top products in kilos, CSV (§2.5) |
+| Settings & staff | fee, minimum order, store open/closed, staff and drivers, PIN reset (§2.6, §2.7) |
+
+## Display rules
+- **Kilos inside the admin panel:** quantities and prices of half-kilo products are shown and
+  entered per kilo (0.5 steps; price per kilo a multiple of 500). Bunch/piece products keep their
+  unit. Conversion only through `packages/shared/src/adminUnits.ts` (SPEC-admin §2.9). The
+  customer app keeps showing price per half kilo.
+- Numbers are never truncated: cards grow or wrap, `tabular-nums`, no `overflow: hidden` or
+  `text-overflow` on figures.
+- Wide container up to 1600px on large screens; card grids use `auto-fit`.
+- Category and product images are resized in the browser to WebP before upload; missing images
+  show a neutral tile with the first letter.
