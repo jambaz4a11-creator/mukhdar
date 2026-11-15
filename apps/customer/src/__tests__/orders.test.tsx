@@ -22,7 +22,10 @@ import OrderScreen from '../app/order/[id]';
 import RateScreen from '../app/order/[id]/rate';
 import { useAuth } from '../features/auth/store';
 import { useCart } from '../features/cart/store';
+import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
 import {
+  askAfterFirstOrder,
+  PUSH_ASKED_KEY,
   registerPushToken,
   unregisterPushToken,
   PUSH_TOKEN_KEY,
@@ -33,6 +36,7 @@ import {
   nextOrdersCursor,
   type OrderDetail,
   type OrderListItem,
+  orderKeys,
   ORDERS_PAGE_SIZE,
   planReorder,
 } from '../features/orders/api';
@@ -173,6 +177,8 @@ interface Options {
   detail?: OrderDetail | null;
   list?: OrderListItem[];
   products?: ReturnType<typeof makeProduct>[];
+  /** تحميل الطلب يفشل (شبكة/خادم) */
+  detailError?: boolean;
   rpc?: (fn: string, args: unknown) => Result;
 }
 
@@ -181,6 +187,7 @@ function setup(opts: Options = {}) {
   const fake = createFakeSupabase((call: Call): Result => {
     if (call.table === 'orders') {
       if (opArgs(call, 'maybeSingle')) {
+        if (opts.detailError) return { data: null, error: { message: 'network down' } };
         return { data: detail ? rawDetail(detail) : null, error: null };
       }
       const rows = (opts.list ?? []).map(({ items, rating, ...o }) => ({
@@ -242,8 +249,10 @@ function setup(opts: Options = {}) {
   };
 }
 
+let renderedClient: ReturnType<typeof createTestQueryClient>;
 async function renderUi(ui: ReactElement) {
   const client = createTestQueryClient();
+  renderedClient = client;
   return await render(
     <SafeAreaProvider
       initialMetrics={{
@@ -566,6 +575,57 @@ describe('order screen', () => {
     expect(env.channels).toHaveLength(0);
   });
 
+  it('load failure: message plus retry, and the view supports pull-to-refresh (review NH3)', async () => {
+    const env = setup({ detailError: true });
+    await renderUi(<OrderScreen />);
+    expect(await screen.findByText(ar.order.loadFailed)).toBeTruthy();
+    const refresh = screen.getByTestId('order-error').props.refreshControl as {
+      props: { onRefresh: () => void };
+    };
+    const fetches = () => env.calls.filter((c) => opArgs(c, 'maybeSingle')).length;
+    const before = fetches();
+    await act(async () => refresh.props.onRefresh());
+    await waitFor(() => expect(fetches()).toBe(before + 1));
+  });
+
+  it('timeline steps are single accessible elements with name, time and state (review NH5)', async () => {
+    setup({
+      detail: order({
+        status: 'preparing',
+        created_at: '2026-11-15T07:20:00Z',
+        preparing_at: '2026-11-15T07:31:00Z',
+      }),
+    });
+    await renderUi(<OrderScreen />);
+    const done = await screen.findByTestId('step-pending-done');
+    expect(done.props.accessible).toBe(true);
+    expect(done.props.accessibilityLabel).toBe(
+      `${ar.order.steps.pending}، ${formatTime('2026-11-15T07:20:00Z')}، ${ar.order.stepState.done}`,
+    );
+    expect(screen.getByTestId('step-preparing-current').props.accessibilityLabel).toBe(
+      `${ar.order.steps.preparing}، 10:31 ص، ${ar.order.stepState.current}`,
+    );
+    expect(screen.getByTestId('step-ready-todo').props.accessibilityLabel).toBe(
+      `${ar.order.steps.ready}، ${ar.order.stepState.todo}`,
+    );
+  });
+
+  it('realtime: every (re)connect refetches the order to catch missed updates (NH11)', async () => {
+    const env = setup();
+    await renderUi(<OrderScreen />);
+    await screen.findByTestId('order-cancel');
+    await waitFor(() => expect(env.channels).toHaveLength(1));
+    const ch = env.channels[0] as FakeChannel;
+    const fetches = () => env.calls.filter((c) => opArgs(c, 'maybeSingle')).length;
+    const initial = fetches();
+    await act(async () => ch.onStatus?.('SUBSCRIBED'));
+    await waitFor(() => expect(fetches()).toBe(initial + 1));
+    await act(async () => ch.onStatus?.('CHANNEL_ERROR')); // انقطاع: لا جلب
+    expect(fetches()).toBe(initial + 1);
+    await act(async () => ch.onStatus?.('SUBSCRIBED')); // رجع الاتصال
+    await waitFor(() => expect(fetches()).toBe(initial + 2));
+  });
+
   it('unknown order shows not found', async () => {
     setup({ detail: null });
     await renderUi(<OrderScreen />);
@@ -664,6 +724,25 @@ describe('my orders', () => {
     expect(alertSpy.mock.calls[0]?.[1]).toBe(ar.orders.reorderNone);
   });
 
+  it('scrolling to the end loads the next page with the keyset cursor (NH11)', async () => {
+    const page = Array.from({ length: ORDERS_PAGE_SIZE }, (_, i) =>
+      listItem({
+        id: `o${String(i).padStart(2, '0')}`,
+        order_number: 2000 - i,
+        created_at: `2026-11-14T10:${String(59 - i).padStart(2, '0')}:00Z`,
+      }),
+    );
+    const env = setup({ list: page });
+    await renderUi(<OrdersScreen />);
+    await screen.findByText(ar.order.title(2000));
+    const lists = () => env.calls.filter((c) => c.table === 'orders');
+    expect(lists()).toHaveLength(1);
+    await fireEvent(screen.getByTestId('orders-list'), 'endReached');
+    await waitFor(() => expect(lists()).toHaveLength(2));
+    const last = page[page.length - 1] as OrderListItem;
+    expect(String(opArgs(lists()[1] as Call, 'or')?.[0])).toContain(`id.lt.${last.id}`);
+  });
+
   it('empty list', async () => {
     setup({ list: [] });
     await renderUi(<OrdersScreen />);
@@ -726,6 +805,19 @@ describe('rate screen', () => {
     await fireEvent.press(screen.getByTestId('rate-submit'));
     expect(await screen.findByText(ERROR_MESSAGES.ORDER_NOT_RATEABLE)).toBeTruthy();
     expect(screen.getByTestId('rate-submit')).toBeTruthy();
+  });
+
+  it('order failed to load: says so with a retry instead of a dead form (review NH4)', async () => {
+    const env = setup({ detailError: true });
+    await renderUi(<RateScreen />);
+    expect(await screen.findByText(ar.rate.loadFailed)).toBeTruthy();
+    expect(screen.queryByTestId('rate-submit')).toBeNull();
+    expect(screen.getByTestId('rate-done')).toBeTruthy(); // إغلاق فقط
+    const fetches = () => env.calls.filter((c) => opArgs(c, 'maybeSingle')).length;
+    const before = fetches();
+    await fireEvent.press(screen.getByTestId('rate-retry'));
+    await waitFor(() => expect(fetches()).toBe(before + 1));
+    expect(env.rpcCalls).toHaveLength(0);
   });
 
   it('an already rated or undelivered order cannot be rated', async () => {
@@ -802,5 +894,120 @@ describe('push token', () => {
     const env = setup();
     await unregisterPushToken(mockClient as never);
     expect(env.calls).toHaveLength(0);
+  });
+});
+
+// ------------------------------------------------------------------ NotificationsBridge وطلب الإذن (NH11)
+describe('notifications bridge', () => {
+  const Device = jest.requireMock<{ isDevice: boolean }>('expo-device');
+  const devBuild = () => {
+    Device.isDevice = true;
+    mockConstants.executionEnvironment = 'bare';
+    mockConstants.expoConfig.extra = { eas: { projectId: 'proj-1' } };
+  };
+  const response = (actionIdentifier: string, data: unknown) =>
+    ({ actionIdentifier, notification: { request: { content: { data } } } }) as never;
+
+  afterEach(() => {
+    Device.isDevice = false;
+    mockConstants.executionEnvironment = 'storeClient';
+    mockConstants.expoConfig.extra = {};
+    jest.mocked(Notifications.useLastNotificationResponse).mockReturnValue(undefined as never);
+    jest
+      .mocked(Notifications.getPermissionsAsync)
+      .mockResolvedValue({ status: 'undetermined' } as never);
+  });
+
+  it('a tap opens the order (or rating when delivered) and is cleared; other actions are ignored', async () => {
+    setup();
+    jest.mocked(Notifications.useLastNotificationResponse).mockReturnValue(
+      response(Notifications.DEFAULT_ACTION_IDENTIFIER, {
+        order_id: ORDER_ID,
+        status: 'delivered',
+      }),
+    );
+    const r = await renderUi(<NotificationsBridge />);
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/order/[id]/rate',
+      params: { id: ORDER_ID },
+    });
+    expect(Notifications.clearLastNotificationResponse).toHaveBeenCalled();
+    await r.unmount();
+
+    mockRouter.push.mockClear();
+    jest
+      .mocked(Notifications.useLastNotificationResponse)
+      .mockReturnValue(response('dismiss', { order_id: ORDER_ID, status: 'ready' }));
+    await renderUi(<NotificationsBridge />);
+    expect(mockRouter.push).not.toHaveBeenCalled();
+  });
+
+  it('signed in on a dev build with permission: registers, re-registers on token change, cleans up on unmount', async () => {
+    devBuild();
+    jest
+      .mocked(Notifications.getPermissionsAsync)
+      .mockResolvedValue({ status: 'granted' } as never);
+    jest.mocked(Notifications.requestPermissionsAsync).mockClear(); // اختبار سابق طلب الإذن
+    const remove = jest.fn();
+    jest.mocked(Notifications.addPushTokenListener).mockReturnValueOnce({ remove } as never);
+    const env = setup();
+    const r = await renderUi(<NotificationsBridge />);
+    const registrations = () => env.rpcCalls.filter((c) => c.fn === 'register_push_token');
+    await waitFor(() => expect(registrations()).toHaveLength(1));
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled(); // بلا نافذة إذن
+    const onToken = jest.mocked(Notifications.addPushTokenListener).mock.calls.at(-1)?.[0];
+    await act(async () => onToken?.({ data: 'new', type: 'ios' } as never));
+    await waitFor(() => expect(registrations()).toHaveLength(2));
+    await r.unmount();
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it('Expo Go: no token listener at all (it throws on Android Expo Go, review NH10)', async () => {
+    jest.mocked(Notifications.addPushTokenListener).mockClear();
+    const env = setup();
+    await renderUi(<NotificationsBridge />);
+    expect(Notifications.addPushTokenListener).not.toHaveBeenCalled();
+    expect(env.rpcCalls).toHaveLength(0);
+  });
+
+  it('a received order notification refreshes the cached orders; others are ignored (review NH9)', async () => {
+    setup();
+    const remove = jest.fn();
+    jest
+      .mocked(Notifications.addNotificationReceivedListener)
+      .mockReturnValueOnce({ remove } as never);
+    const r = await renderUi(<NotificationsBridge />);
+    renderedClient.setQueryData(orderKeys.detail(ORDER_ID), order());
+    renderedClient.setQueryData(orderKeys.list('u1'), { pages: [[]], pageParams: [null] });
+    const onReceived = jest
+      .mocked(Notifications.addNotificationReceivedListener)
+      .mock.calls.at(-1)?.[0];
+    const notification = (data: unknown) => ({ request: { content: { data } } }) as never;
+    const invalidated = (key: readonly unknown[]) =>
+      renderedClient.getQueryState(key)?.isInvalidated;
+
+    await act(async () => onReceived?.(notification({ promo: true })));
+    expect(invalidated(orderKeys.detail(ORDER_ID))).toBe(false);
+    await act(async () => onReceived?.(notification({ order_id: ORDER_ID, status: 'ready' })));
+    expect(invalidated(orderKeys.detail(ORDER_ID))).toBe(true);
+    expect(invalidated(orderKeys.list('u1'))).toBe(true);
+    await r.unmount();
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it('askAfterFirstOrder explains and asks only once per device', async () => {
+    devBuild();
+    const env = setup();
+    await askAfterFirstOrder(mockClient as never);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      ar.notifications.askTitle,
+      ar.notifications.askBody,
+      expect.any(Array),
+    );
+    expect(await AsyncStorage.getItem(PUSH_ASKED_KEY)).toBe('1');
+    await askAfterFirstOrder(mockClient as never); // الطلب الثاني
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(env.rpcCalls).toHaveLength(0);
   });
 });

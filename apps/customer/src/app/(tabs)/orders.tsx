@@ -64,6 +64,7 @@ export default function OrdersScreen() {
         </View>
       ) : (
         <FlatList
+          testID="orders-list"
           style={styles.flex}
           data={list}
           keyExtractor={(o) => o.id}

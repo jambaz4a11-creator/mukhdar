@@ -92,7 +92,19 @@ export default function OrderScreen() {
       ) : isOfflineEmpty(order) ? (
         <OfflineState />
       ) : (
-        <View style={styles.center}>
+        // مراجعة NH3: النص يقول "اسحب للتحديث"، فالحالة قابلة للسحب
+        <ScrollView
+          contentContainerStyle={styles.center}
+          refreshControl={
+            <RefreshControl
+              refreshing={order.isRefetching}
+              onRefresh={() => void order.refetch()}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          testID="order-error"
+        >
           <AppText muted style={styles.centerText}>
             {order.isError ? ar.order.loadFailed : ar.order.notFound}
           </AppText>
@@ -107,7 +119,7 @@ export default function OrderScreen() {
               </AppText>
             </Pressable>
           ) : null}
-        </View>
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -293,10 +305,20 @@ const STEP_TIME: Record<(typeof ORDER_FLOW)[number], keyof OrderDetail> = {
 
 type StepState = 'done' | 'current' | 'todo' | 'cancelled';
 
+type Step = { key: string; label: string; time: string | null; state: StepState };
+
+function stepA11yLabel(s: Step): string {
+  const parts = [s.label];
+  if (s.time && s.state !== 'todo') parts.push(formatTime(s.time));
+  const state = ar.order.stepState[s.state];
+  if (state) parts.push(state);
+  return parts.join('، ');
+}
+
 function Timeline({ order }: { order: OrderDetail }) {
   const cancelled = order.status === 'cancelled';
   const current = statusStep(order.status);
-  const steps: { key: string; label: string; time: string | null; state: StepState }[] = [];
+  const steps: Step[] = [];
 
   for (const [i, step] of ORDER_FLOW.entries()) {
     const time = order[STEP_TIME[step]] as string | null;
@@ -325,9 +347,12 @@ function Timeline({ order }: { order: OrderDetail }) {
   return (
     <View style={styles.card} accessibilityLabel={ar.order.stepsA11y} testID="order-timeline">
       {steps.map((s, i) => (
+        // مراجعة NH5: كل مرحلة عنصر واحد لقارئ الشاشة ("قيد التحضير، 10:31 ص، مكتملة")
         <View
           key={s.key}
           style={styles.step}
+          accessible
+          accessibilityLabel={stepA11yLabel(s)}
           accessibilityState={{ selected: s.state === 'current' }}
           testID={`step-${s.key}-${s.state}`}
         >
@@ -411,7 +436,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loading: { marginTop: spacing.screen * 2 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.screen },
+  center: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.screen },
   centerText: { textAlign: 'center' },
   link: { minHeight: sizes.touchTarget, justifyContent: 'center' },
   main: { paddingHorizontal: spacing.screen, paddingBottom: spacing.screen, gap: spacing.lg },

@@ -1,16 +1,20 @@
 // يُركَّب داخل الجذر بعد جاهزية التنقل (T14): يسجّل رمز الجهاز عند كل دخول وعند تغيّر الرمز، ويوجّه الضغط على
-// الإشعار (حتى لو فتح التطبيق من الإغلاق) إلى الطلب أو التقييم. لا يعرض شيئاً.
+// الإشعار (حتى لو فتح التطبيق من الإغلاق) إلى الطلب أو التقييم، ويحدّث الطلبات عند وصول إشعار طلب والتطبيق
+// مفتوح (مراجعة NH9). لا يعرض شيئاً.
+import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
 import { useAuth } from '../auth/store';
+import { orderKeys } from '../orders/api';
 import { canUseRemotePush, registerPushToken } from './push';
 import { routeForNotification } from './routing';
 
 export function NotificationsBridge() {
   const userId = useAuth((s) => s.session?.user.id);
   const response = Notifications.useLastNotificationResponse();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const client = getSupabase();
@@ -22,6 +26,16 @@ export function NotificationsBridge() {
     });
     return () => sub.remove();
   }, [userId]);
+
+  // إشعار تغيّر حالة طلب والتطبيق بالواجهة: "طلباتي" وشاشة الطلب تتحدثان فوراً (لا انتظار Realtime أو التركيز)
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      if (routeForNotification(notification.request.content.data)) {
+        void queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      }
+    });
+    return () => sub.remove();
+  }, [queryClient]);
 
   useEffect(() => {
     if (!response || response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;

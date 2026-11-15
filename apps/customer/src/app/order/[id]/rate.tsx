@@ -78,6 +78,8 @@ export default function RateScreen() {
         ? ar.rate.notDelivered
         : null
     : null;
+  // مراجعة NH4: فشل التحميل (أو طلب غير موجود) يُعرض بدل نموذج بزر معطّل للأبد
+  const unavailable = !data && !order.isPending;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -113,6 +115,24 @@ export default function RateScreen() {
             <ActivityIndicator color={colors.primary} />
           ) : isOfflineEmpty(order) ? (
             <OfflineState />
+          ) : unavailable ? (
+            <View style={styles.unavailable} testID="rate-unavailable">
+              <AppText muted style={styles.center}>
+                {order.isError ? ar.rate.loadFailed : ar.order.notFound}
+              </AppText>
+              {order.isError ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void order.refetch()}
+                  style={styles.retry}
+                  testID="rate-retry"
+                >
+                  <AppText weight="semibold" color={colors.primary}>
+                    {ar.order.retry}
+                  </AppText>
+                </Pressable>
+              ) : null}
+            </View>
           ) : done ? (
             <AppText weight="semibold" color={colors.primary} testID="rate-thanks">
               {ar.rate.thanks}
@@ -185,7 +205,7 @@ export default function RateScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          {done || blocked ? (
+          {done || blocked || unavailable ? (
             <PrimaryButton title={ar.orders.ok} onPress={close} testID="rate-done" />
           ) : (
             <>
@@ -210,6 +230,8 @@ export default function RateScreen() {
 }
 
 const styles = StyleSheet.create({
+  unavailable: { alignItems: 'center', gap: spacing.sm },
+  retry: { minHeight: sizes.touchTarget, justifyContent: 'center' },
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'flex-end', padding: spacing.lg },

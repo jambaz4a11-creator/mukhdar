@@ -68,6 +68,8 @@ function functionError(code: string) {
 
 interface Options {
   fullName?: string | null;
+  /** يؤخر رد الاسم حتى يُحَل (حالة التحميل) */
+  profileGate?: Promise<void>;
   invoke?: () => { data: unknown; error: unknown };
   signIn?: () => { data: unknown; error: unknown };
   updateUser?: () => { data: unknown; error: unknown };
@@ -76,10 +78,12 @@ interface Options {
 function setup(opts: Options = {}) {
   const fake = createFakeSupabase((call: Call): Result => {
     if (call.table === 'profiles' && opArgs(call, 'maybeSingle')) {
-      return {
+      const result = {
         data: { full_name: opts.fullName === undefined ? 'أحمد' : opts.fullName },
         error: null,
       };
+      // resolve يقبل Promise فعلياً (يُسلسل بـ then)
+      return (opts.profileGate ? opts.profileGate.then(() => result) : result) as Result;
     }
     if (call.table === 'addresses') return { data: [], error: null };
     return { data: null, error: null };
@@ -110,6 +114,7 @@ function setup(opts: Options = {}) {
 
 async function renderUi(ui: ReactElement) {
   const client = createTestQueryClient();
+  renderedClient = client;
   return await render(
     <SafeAreaProvider
       initialMetrics={{
@@ -122,6 +127,7 @@ async function renderUi(ui: ReactElement) {
   );
 }
 
+let renderedClient: ReturnType<typeof createTestQueryClient>;
 let alertSpy: jest.SpyInstance;
 let openSpy: jest.SpyInstance;
 
@@ -202,6 +208,39 @@ describe('account screen', () => {
     ]);
   });
 
+  it('while the name loads: no "بدون اسم" flash (review NH2)', async () => {
+    let release: () => void = () => undefined;
+    setup({ fullName: null, profileGate: new Promise<void>((r) => (release = r)) });
+    await renderUi(<AccountScreen />);
+    expect(screen.getByTestId('account-name')).toHaveTextContent('…');
+    expect(screen.queryByText(ar.account.noName)).toBeNull();
+    await act(async () => release());
+    expect(await screen.findByText(ar.account.noName)).toBeTruthy();
+  });
+
+  it('sign-out: deletes this device push token first, then local signOut, clears the query cache, keeps the cart (review NH1, NH11)', async () => {
+    const { auth, calls } = setup();
+    useCart.setState({ items: { t: 2 }, flags: {} });
+    await AsyncStorage.setItem('mukhdar.pushToken', 'ExponentPushToken[x]');
+    await renderUi(<AccountScreen />);
+    await screen.findByText('أحمد');
+    renderedClient.setQueryData(['orders', 'u1'], { pages: [[{ id: 'o1' }]], pageParams: [null] });
+    let tokenDeletedBeforeSignOut = false;
+    auth.signOut.mockImplementationOnce(() => {
+      tokenDeletedBeforeSignOut = calls.some(
+        (c) => c.table === 'push_tokens' && c.ops.some(([n]) => n === 'delete'),
+      );
+      useAuth.setState({ session: null, ready: true });
+      return Promise.resolve({ error: null });
+    });
+    await fireEvent.press(screen.getByTestId('sign-out'));
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    expect(tokenDeletedBeforeSignOut).toBe(true);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(renderedClient.getQueryData(['orders', 'u1'])).toBeUndefined();
+    expect(useCart.getState().items).toEqual({ t: 2 });
+  });
+
   it('navigation rows: edit name, change PIN, orders', async () => {
     setup({ fullName: null });
     await renderUi(<AccountScreen />);
@@ -264,11 +303,14 @@ describe('delete account', () => {
       ['mukhdar.queryCache', '{}'],
     ]);
     await renderUi(<AccountScreen />);
+    renderedClient.setQueryData(['orders', 'u1'], { pages: [[{ id: 'o1' }]], pageParams: [null] });
     await fireEvent.press(await screen.findByTestId('delete-account'));
     pressAlertButton(ar.account.deleteContinue);
     await act(async () => pressAlertButton(ar.account.deleteFinalConfirm));
 
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    // NH11: كاش الاستعلامات فُرّغ (لا طلبات الحساب المحذوف بالذاكرة)
+    expect(renderedClient.getQueryData(['orders', 'u1'])).toBeUndefined();
     expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(useAuth.getState().session).toBeNull();
     expect(useCart.getState().items).toEqual({});

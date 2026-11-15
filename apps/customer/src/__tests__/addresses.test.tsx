@@ -464,10 +464,14 @@ describe('delivery address header', () => {
 });
 
 describe('persisted cache', () => {
-  it('never writes the customer addresses to the device cache; the lists are kept', () => {
+  it('never writes personal data (addresses, orders, profile) to the device cache; the lists are kept', () => {
     const q = (queryKey: readonly unknown[]) =>
       ({ queryKey, state: { status: 'success' } }) as unknown as Query;
     expect(shouldPersistQuery(q(['addresses', 'u1']))).toBe(false);
+    // NH11: الطلبات (القوائم والتفاصيل) والاسم أيضاً
+    expect(shouldPersistQuery(q(['orders', 'u1']))).toBe(false);
+    expect(shouldPersistQuery(q(['orders', 'detail', 'o1']))).toBe(false);
+    expect(shouldPersistQuery(q(['profile', 'u1']))).toBe(false);
     expect(shouldPersistQuery(q(['address', 'buildings', 13]))).toBe(true);
     expect(shouldPersistQuery(q(['products', 'list', null]))).toBe(true);
   });

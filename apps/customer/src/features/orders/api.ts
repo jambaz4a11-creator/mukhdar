@@ -63,6 +63,8 @@ const LIST_SELECT =
   'order_items(product_id, name_snapshot, qty), ratings(stars)';
 
 export const orderKeys = {
+  /** كل استعلامات الطلبات (القوائم والتفاصيل) */
+  all: ['orders'] as const,
   /** كل قوائم الطلبات للمستخدم (لا تُحفظ على الجهاز: shouldPersistQuery). */
   list: (userId: string | undefined) => ['orders', userId ?? 'anon'] as const,
   detail: (id: string) => ['orders', 'detail', id] as const,

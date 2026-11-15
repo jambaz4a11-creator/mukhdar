@@ -63,6 +63,8 @@ export default function AccountScreen() {
   if (!session) return null;
 
   const name = fullName.data ?? null;
+  // مراجعة NH2: "بدون اسم" فقط بعد التحميل، لا وميض أثناءه
+  const nameLoading = fullName.isPending && fullName.fetchStatus !== 'idle';
   const phone = displayPhone(session.user.phone);
   const wa = whatsappUrl(config.shopWhatsapp);
   const tel = telUrl(config.shopPhone);
@@ -79,6 +81,8 @@ export default function AccountScreen() {
     } catch (e) {
       captureError(e);
     }
+    // مراجعة NH1: لا تبقى بيانات الحساب (الطلبات، العناوين، الاسم) بالذاكرة لمن يدخل بعده. السلة تبقى.
+    queryClient.clear();
     router.replace('/');
   }
 
@@ -193,12 +197,18 @@ export default function AccountScreen() {
         <View style={[styles.card, styles.profile]}>
           <View style={styles.avatar}>
             <AppText weight="bold" size="heading" color={colors.primary}>
-              {name ? name.charAt(0) : '؟'}
+              {name ? name.charAt(0) : nameLoading ? '' : '؟'}
             </AppText>
           </View>
           <View style={styles.flex}>
-            <AppText weight="bold" size="title" testID="account-name">
-              {name ?? ar.account.noName}
+            <AppText
+              weight="bold"
+              size="title"
+              muted={nameLoading}
+              accessibilityLabel={nameLoading ? ar.home.loading : undefined}
+              testID="account-name"
+            >
+              {name ?? (nameLoading ? '…' : ar.account.noName)}
             </AppText>
             <AppText muted style={styles.phone} testID="account-phone">
               {phone}

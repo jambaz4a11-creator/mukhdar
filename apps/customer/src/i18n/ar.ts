@@ -181,6 +181,7 @@ export const ar = {
       delivered: 'تم التوصيل',
     },
     cancelledStep: 'أُلغي الطلب',
+    stepState: { done: 'مكتملة', current: 'المرحلة الحالية', todo: 'لم تبدأ بعد', cancelled: '' },
     cancelReason: (reason: string) => `السبب: ${reason}`,
     items: 'المنتجات',
     deliveryFee: 'أجرة التوصيل',
@@ -230,6 +231,7 @@ export const ar = {
     already: 'قيّمت هذا الطلب مسبقاً. شكراً لك!',
     notDelivered: 'التقييم متاح بعد توصيل الطلب.',
     failed: 'تعذّر إرسال التقييم، حاول مرة ثانية.',
+    loadFailed: 'تعذّر تحميل الطلب، حاول مرة ثانية.',
   },
   notifications: {
     channel: 'حالة الطلبات',
