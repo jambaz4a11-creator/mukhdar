@@ -27,11 +27,20 @@ import { askAfterFirstOrder } from '../notifications/push';
 export const PLACE_ORDER_TIMEOUT_MS = 20_000;
 export const ORDER_NOTE_MAX = 300;
 
+/**
+ * عمر المفتاح: بعده يُولَّد مفتاح جديد حتى لو لم تتغير السلة. بدونه، محاولة وصلت للخادم وانقطع ردها ثم رجع
+ * الزبون بنفس السلة بعد أيام ← place_order يعيد الطلب القديم (replayed) كأنه نجاح ولا يُنشأ طلب جديد.
+ * إعادة المحاولة الحقيقية بعد انقطاع تحدث خلال دقائق.
+ */
+export const ORDER_KEY_TTL_MS = 30 * 60 * 1000;
+
 interface AttemptState {
   key: string | null;
   signature: string | null;
-  /** المفتاح الحالي للسلة؛ مفتاح جديد إن تغيّرت السلة أو لم يوجد. */
-  keyFor: (signature: string) => string;
+  /** وقت توليد المفتاح (ms) */
+  createdAt: number | null;
+  /** المفتاح الحالي للسلة؛ مفتاح جديد إن تغيّرت السلة أو لم يوجد أو انتهى عمره. */
+  keyFor: (signature: string, now?: number) => string;
   reset: () => void;
 }
 
@@ -40,20 +49,24 @@ export const useOrderAttempt = create<AttemptState>()(
     (set, get) => ({
       key: null,
       signature: null,
-      keyFor: (signature) => {
-        const { key, signature: current } = get();
-        if (key && current === signature) return key;
+      createdAt: null,
+      keyFor: (signature, now = Date.now()) => {
+        const { key, signature: current, createdAt } = get();
+        const fresh = createdAt !== null && now - createdAt < ORDER_KEY_TTL_MS;
+        if (key && current === signature && fresh) return key;
         const next = Crypto.randomUUID();
-        set({ key: next, signature });
+        set({ key: next, signature, createdAt: now });
         return next;
       },
-      reset: () => set({ key: null, signature: null }),
+      reset: () => set({ key: null, signature: null, createdAt: null }),
     }),
     {
       name: 'mukhdar.orderAttempt',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ key: s.key, signature: s.signature }),
+      partialize: (s) => ({ key: s.key, signature: s.signature, createdAt: s.createdAt }),
+      // نسخة 1 بلا createdAt: المفتاح القديم يُعد منتهياً (يُولَّد جديد)
+      migrate: () => ({ key: null, signature: null, createdAt: null }),
     },
   ),
 );

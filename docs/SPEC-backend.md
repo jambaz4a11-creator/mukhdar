@@ -92,6 +92,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 
 ### دوال أخرى
 - `set_default_address(p_address_id)` (الزبون، migration `20261118000001`): يجعل عنوانه افتراضياً ويلغي القديم بمعاملة واحدة (قفل استشاري لكل زبون). **security invoker** (تعمل تحت RLS الزبون، فليست من دوال SECURITY DEFINER العشر). أخطاء: `NOT_AUTHENTICATED`, `ADDRESS_NOT_FOUND` (ليس عنوانه أو غير موجود).
+- `revoke_user_sessions(p_user_id)` (**service_role فقط**، migration `20261119000001`، مراجعة T09-T15): يحذف كل `auth.sessions` و`auth.refresh_tokens` للمستخدم ويرجع عدد الجلسات. تستدعيه `admin-reset-pin` (T19) بعد ضبط الرمز، لأن تغيير كلمة السر لا يبطل الجلسات (فُحص؛ ADR 0001). الـ access token الصادر قبلها يبقى حتى انتهائه.
 - `rate_order(p_order_id, p_stars, p_comment?)`: `INVALID_STARS`, `ORDER_NOT_RATEABLE`, `ALREADY_RATED`.
 - `register_push_token(p_token, p_platform, p_provider = 'expo')`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي (مع مزوّده). رمز فارغ أو أطول من 255 حرفاً أو بلا منصة/مزوّد، أو رمز `expo` ليس بصيغة `ExponentPushToken[...]`/`ExpoPushToken[...]`: `INVALID_TOKEN`.
 - دوال `push-dispatch` (service_role فقط، T07): `claim_push_notifications(p_limit = 200)` تحجز صفوفاً غير مرسلة (`for update skip locked` + `claimed_at`) وترجع لكل صف مستلميه (رمز + مزوّد)؛ `finish_push_notifications(p_results, p_dead_tokens)` تسجل النتيجة وتحذف الرموز الميتة؛ `push_dispatch_authorized(p_secret)` تتحقق من السر المشترك.

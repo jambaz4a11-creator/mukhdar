@@ -1,7 +1,7 @@
 // حسابي (T15، SPEC-customer §2.9، تصميم Account): الاسم والهاتف وتعديل الاسم، عناويني (T12)، طلباتي، تواصل
 // معنا (واتساب/اتصال، مخفية حتى تُضبط)، تغيير رمز الدخول، الخصوصية والشروط (روابط https من البيئة، مخفية حتى
 // تُضبط)، تسجيل الخروج، وحذف الحساب (Apple): الزر بهذه الشاشة مباشرة ← تأكيدان ← delete-account.
-// تسجيل الخروج يحذف رمز إشعارات الجهاز (T14) ثم يمسح الجلسة، والسلة تبقى. الحذف يفرّغ كل البيانات المحلية.
+// تسجيل الخروج (هذا الجهاز فقط) يحذف رمز إشعارات الجهاز (T14) ثم يمسح الجلسة، والسلة تبقى. الحذف يفرّغ كل البيانات المحلية.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
@@ -74,7 +74,8 @@ export default function AccountScreen() {
     try {
       // رمز الإشعارات أولاً (يحتاج الجلسة، RLS)، ثم إنهاء الجلسة
       if (client) await unregisterPushToken(client);
-      await client?.auth.signOut();
+      // هذا الجهاز فقط: الافتراضي (global) يُخرج المستخدم من كل أجهزته
+      await client?.auth.signOut({ scope: 'local' });
     } catch (e) {
       captureError(e);
     }

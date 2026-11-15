@@ -13,6 +13,7 @@ import {
 } from '@mukhdar/shared';
 import type { QueryClient } from '@tanstack/react-query';
 import { ar } from '../../i18n/ar';
+import { captureError } from '../../lib/sentry';
 import { useSelectedAddress } from '../addresses/selected';
 import { useCart } from '../cart/store';
 import { useOrderAttempt } from '../checkout/usePlaceOrder';
@@ -76,7 +77,9 @@ export type ChangePinResult =
 
 /**
  * ADR 0001: الرمز الحالي يُتحقق منه بـ signInWithPassword بنفس الرقم، ثم الجديد (مرتين) ← validatePin ←
- * updateUser بأرقام لاتينية. يرجع الخطأ مع الحقل المعني لعرضه.
+ * updateUser بأرقام لاتينية ← إبطال الجلسات الأخرى. يرجع الخطأ مع الحقل المعني لعرضه.
+ * الدخول أولاً شرط: جلسة جديدة فلا يطلب Supabase إعادة تحقق (عبر SMS المرفوض) لتغيير كلمة السر.
+ * تغيير كلمة السر لا يبطل الجلسات الأخرى بنفسه (فُحص على mukhdar-dev)، فيُطلب signOut({ scope: 'others' }).
  */
 export async function changePin(
   client: MukhdarClient,
@@ -117,6 +120,10 @@ export async function changePin(
       }
       return { ok: false, field: 'next', message: authError(error).message };
     }
+    // من يغيّر رمزه لأنه يشك بجلسة مسروقة: تُبطل كل الجلسات الأخرى (تبقى جلسة هذا الجهاز).
+    // فشلها لا يُلغي تغيير الرمز (تمّ فعلاً)، فيُسجَّل فقط.
+    const { error: revokeError } = await client.auth.signOut({ scope: 'others' });
+    if (revokeError) captureError(revokeError);
     return { ok: true };
   } catch (e) {
     return { ok: false, field: 'next', message: authError(e).message };

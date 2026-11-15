@@ -375,7 +375,8 @@ describe('sign out', () => {
     await act(async () => {
       await fireEvent.press(screen.getByTestId('sign-out'));
     });
-    expect(auth.signOut).toHaveBeenCalled();
+    // review S2: هذا الجهاز فقط، لا كل أجهزة المستخدم
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(useAuth.getState().session).toBeNull();
     expect(useCart.getState().items).toEqual({ t: 2 });
     expect(mockReplace).toHaveBeenCalledWith('/');

@@ -92,8 +92,9 @@ function setup(opts: Options = {}) {
     updateUser: jest.fn(() =>
       Promise.resolve(opts.updateUser?.() ?? { data: { user: SESSION.user }, error: null }),
     ),
-    signOut: jest.fn(() => {
-      useAuth.setState({ session: null, ready: true });
+    signOut: jest.fn((opts?: { scope?: string }) => {
+      // scope 'others' يبطل الأجهزة الأخرى فقط: جلسة هذا الجهاز تبقى
+      if (opts?.scope !== 'others') useAuth.setState({ session: null, ready: true });
       return Promise.resolve({ error: null });
     }),
   };
@@ -254,7 +255,7 @@ describe('delete account', () => {
   it('success clears local data, signs out and goes home', async () => {
     const { auth } = setup();
     useCart.setState({ items: { t: 2 }, flags: {} });
-    useOrderAttempt.setState({ key: 'k1', signature: 't:2' });
+    useOrderAttempt.setState({ key: 'k1', signature: 't:2', createdAt: Date.now() });
     useSelectedAddress.setState({ selectedId: 'a1' });
     await AsyncStorage.multiSet([
       ['mukhdar.pushToken', 'ExponentPushToken[x]'],
@@ -307,6 +308,7 @@ describe('change PIN', () => {
     await renderUi(<ChangePinScreen />);
     await fill('111111', '482915');
     expect(await screen.findByText(ar.account.pinWrongCurrent)).toBeTruthy();
+    expect(auth.signOut).not.toHaveBeenCalled();
     expect(auth.signInWithPassword).toHaveBeenCalledWith({
       phone: '+9647701234567',
       password: '111111',
@@ -341,6 +343,10 @@ describe('change PIN', () => {
       password: '482915',
     });
     expect(auth.updateUser).toHaveBeenCalledWith({ password: '739164' });
+    // review S1: الجلسات الأخرى تُبطل بعد التغيير، وجلسة هذا الجهاز تبقى
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'others' });
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(useAuth.getState().session).not.toBeNull();
     expect(screen.getByTestId('pin-current').props.value).toBe('');
   });
 

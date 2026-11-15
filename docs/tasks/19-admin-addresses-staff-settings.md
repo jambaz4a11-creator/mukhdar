@@ -7,7 +7,7 @@
 - الموظفون: قائمة غير الزبائن، بحث بالهاتف (لأي حساب)، تغيير الدور والتفعيل (`set_user_role`).
 - **إعادة ضبط رمز الدخول (نسيت الـ PIN)** حسب المواصفة بـ SPEC-admin §2.6 (ADR 0001):
   - Edge Function جديدة `admin-reset-pin` (أدمن فقط، لا لحسابات الأدمن، حد 20/ساعة لكل أدمن، `updateUserById` بكلمة السر الجديدة، إبطال الجلسات، سجل تدقيق، الرمز لا يرجع ولا يُسجَّل).
-  - migration جديدة: `revoke_user_sessions(p_user_id)` (service_role فقط) وجدول `pin_resets` (قراءة للأدمن فقط بـ RLS) وصلاحيات `service_role` المطلوبة (وتحديث فحص `01_schema.sql`).
+  - `revoke_user_sessions(p_user_id)` (service_role فقط) **موجودة** (migration `20261119000001`، مراجعة T09-T15، مطبقة على mukhdar-dev): الدالة تستدعيها بعد `updateUserById`. migration جديدة: جدول `pin_resets` (قراءة للأدمن فقط بـ RLS) وصلاحيات `service_role` المطلوبة (وتحديث فحص `01_schema.sql`).
   - رموز `PIN_INVALID` و`TOO_MANY_RESETS` بـ `packages/shared/errors.ts` وSPEC-backend §5.
   - الواجهة: زر بصف المستخدم، تحذير "رسالة الواتساب من نفس الرقم"، رمز يدوي أو عشوائي (يمر بـ `validatePin`)، يظهر مرة واحدة مع نسخ ورابط `wa.me`.
   - نشر الدالة على mukhdar-dev بموافقة صاحب المشروع.
@@ -22,5 +22,5 @@
 - وحدة: تحليل المدى والقوائم ("1-100"، "1,2,5-9"، مدخلات خاطئة).
 - Playwright: ترقية رقم لسائق؛ محاولة الأدمن تخفيض نفسه تظهر رسالة؛ إعادة ضبط PIN زبون تعرض الرمز مرة واحدة.
 - `deno test` لـ `admin-reset-pin` (fetch مزيف): غير أدمن ← 403، هدف أدمن ← 403، رمز سهل ← 400، الحد ← 429، نجاح.
-- pgTAP: `revoke_user_sessions` وصلاحياتها، RLS `pin_resets`.
+- pgTAP: RLS `pin_resets` (`revoke_user_sessions` مغطاة بـ `17_revoke_user_sessions.sql`).
 - تكامل على dev (مثل `it:delete-account`): القديم يفشل والجديد ينجح بعد الضبط.

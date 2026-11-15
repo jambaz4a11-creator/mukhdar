@@ -15,7 +15,11 @@ import { useSelectedAddress } from '../features/addresses/selected';
 import { useAuth } from '../features/auth/store';
 import { cartSignature, useCart } from '../features/cart/store';
 import { summarizeCart } from '../features/cart/summary';
-import { PLACE_ORDER_TIMEOUT_MS, useOrderAttempt } from '../features/checkout/usePlaceOrder';
+import {
+  ORDER_KEY_TTL_MS,
+  PLACE_ORDER_TIMEOUT_MS,
+  useOrderAttempt,
+} from '../features/checkout/usePlaceOrder';
 import { ar } from '../i18n/ar';
 import {
   type Call,
@@ -164,11 +168,34 @@ beforeEach(() => {
   mockRouter.canGoBack.mockReturnValue(true);
   useAuth.setState({ session: SESSION as never, ready: true });
   useCart.setState({ items: {}, flags: {} });
-  useOrderAttempt.setState({ key: null, signature: null });
+  useOrderAttempt.setState({ key: null, signature: null, createdAt: null });
   useSelectedAddress.setState({ selectedId: null });
 });
 
 // ------------------------------------------------------------------ مخزن السلة والملخص
+describe('idempotency key lifetime (review S7)', () => {
+  it('same cart within 30 minutes reuses the key; after that a new key', () => {
+    const t0 = 1_000_000;
+    const { keyFor } = useOrderAttempt.getState();
+    const first = keyFor('t:2', t0);
+    expect(keyFor('t:2', t0 + ORDER_KEY_TTL_MS - 1)).toBe(first);
+    expect(ORDER_KEY_TTL_MS).toBe(30 * 60 * 1000);
+    const later = keyFor('t:2', t0 + ORDER_KEY_TTL_MS);
+    expect(later).not.toBe(first);
+    expect(useOrderAttempt.getState().createdAt).toBe(t0 + ORDER_KEY_TTL_MS);
+  });
+
+  it('a key saved by the old version (no timestamp) is not reused', async () => {
+    await AsyncStorage.setItem(
+      'mukhdar.orderAttempt',
+      JSON.stringify({ state: { key: 'old-key', signature: 't:2' }, version: 1 }),
+    );
+    await useOrderAttempt.persist.rehydrate();
+    expect(useOrderAttempt.getState().key).toBeNull();
+    expect(useOrderAttempt.getState().keyFor('t:2')).not.toBe('old-key');
+  });
+});
+
 describe('cart store', () => {
   it('add merges and caps at 99; remove deletes; changing a line clears its flag', () => {
     const { add, remove, flag, increment } = useCart.getState();

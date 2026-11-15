@@ -1083,6 +1083,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      revoke_user_sessions: { Args: { p_user_id: string }; Returns: number };
       round_iqd: { Args: { amount: number }; Returns: number };
       set_default_address: { Args: { p_address_id: string }; Returns: undefined };
       set_order_status: {
