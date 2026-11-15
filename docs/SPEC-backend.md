@@ -19,6 +19,8 @@
 | الدفع كاش عند التسليم | لا جداول دفع. `total_iqd` هو ما يستلمه السائق |
 | إشعار السائق تلقائي | `place_order` يبلّغ الأدمن والموظفين فقط؛ عند `ready` يكتب `set_order_status` إشعاراً لكل السائقين النشطين (طلب متاح) وللزبون |
 | تقييم بعد التسليم | `rate_order()` يقبل فقط طلباً `delivered` لنفس الزبون، مرة واحدة |
+| المبيعات وصافي الربح (قرار 2026-11-15، يُبنى بـ T18/T20) | المبيعات = `subtotal` للطلبات المسلّمة (بدون الأجرة، للسواق) بتاريخ `delivered_at`. صافي الربح = الربح الإجمالي − كلفة الهدر − كلفة تسويات الجرد السالبة، بكلفة الوحدة المحفوظة على كل حركة (§12) |
+| كتابة المال عبر دوال | المنتجات والأسعار وسعر الشراء والإعدادات تُكتب بدوال فقط (§12، T18/T19)؛ لا insert/update مباشر من المتصفح |
 
 ## 3) الأدوار
 `customer` (افتراضي عند التسجيل) · `driver` · `staff` · `admin`.
@@ -31,13 +33,13 @@
 | الجدول | الغرض | من يقرأ | من يكتب |
 |---|---|---|---|
 | `profiles` | دور، هاتف، اسم | صاحبه + أدمن | trigger عند التسجيل؛ الاسم من صاحبه |
-| `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن |
+| `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن (← `update_app_settings` فقط، T19) |
 | `sectors` / `subsections` / `buildings` | العنوان الهرمي: قطاع ← وحدة ← عمارة (قطاعان A وB، 17 وحدة، 1700 عمارة؛ رقم العمارة فريد داخل الوحدة فقط) | الجميع (النشط) | أدمن |
 | `addresses` | عناوين الزبون (عمارة + شقة نصاً)، عنوان افتراضي واحد | صاحبها + أدمن | صاحبها (أعمدة محددة) |
-| `categories` / `products` | الكتالوج | الجميع (النشط)، موظف/أدمن الكل | أدمن |
-| `product_costs` | سعر الشراء | أدمن | أدمن |
-| `stock` | الرصيد الحالي | موظف + أدمن | دوال فقط |
-| `inventory_movements` | دفتر حركات المخزون | أدمن | دوال فقط |
+| `categories` / `products` | الكتالوج | الجميع (النشط)، موظف/أدمن الكل | الأقسام: أدمن؛ المنتجات: أدمن (← دوال فقط، T18) |
+| `product_costs` | سعر الشراء (= آخر سعر مشتريات، T18) | أدمن | أدمن (← دوال فقط، T18) |
+| `stock` | الرصيد الحالي، وحد النقص `low_stock_threshold` (T18) | موظف + أدمن | دوال فقط |
+| `inventory_movements` | دفتر حركات المخزون، مع كلفة الوحدة `unit_cost_iqd` لكل حركة (T18) | أدمن | دوال فقط |
 | `orders` | الطلب + نسخة العنوان + اسم/هاتف الزبون | الزبون صاحبه، السائق المعيَّن (حسابه نشط ودوره `driver`)، موظف/أدمن | دوال فقط |
 | `order_items` | بنود بنسخة الاسم والسعر | من يرى الطلب | `place_order` |
 | `order_item_costs` | تكلفة البند لحظة الطلب | أدمن | `place_order` |
@@ -45,7 +47,8 @@
 | `ratings` | تقييم 1..5 + تعليق | الزبون + موظف/أدمن | `rate_order` |
 | `push_tokens` | رموز الإشعارات، ولكل رمز مزوّد `provider`: `expo` (افتراضي، مُنفَّذ) أو `fcm` (محجوز، يُتخطى عند الإرسال). انظر DRIVER-API §6 | صاحبها (قراءة وحذف) | `register_push_token` فقط (لا insert/update مباشر) |
 | `notification_outbox` | إشعارات بانتظار الإرسال (`claimed_at` = حجز عامل الإرسال، 5 دقائق) | service_role فقط | دوال |
-| `daily_stats` | تقارير يومية (توقيت بغداد) | أدمن | دوال |
+| `daily_stats` | تقارير يومية (توقيت بغداد)؛ تُضاف كلفة الهدر وخسارة التسويات (T18) | أدمن | دوال |
+| `user_creations` (T19) | تدقيق إنشاء الحسابات من اللوحة | أدمن | `admin-create-user` |
 | `cities` / `vendors` | للتوسع لاحقاً | الجميع (النشط) | أدمن |
 
 **لماذا نسخ (snapshots)؟** الطلب يحتفظ بالاسم والسعر والعنوان وهاتف الزبون كما كانت لحظة الطلب. تغيير سعر منتج أو حذف عنوان أو حذف الحساب لا يغيّر الفواتير القديمة ولا التقارير.
@@ -96,7 +99,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `rate_order(p_order_id, p_stars, p_comment?)`: `INVALID_STARS`, `ORDER_NOT_RATEABLE`, `ALREADY_RATED`.
 - `register_push_token(p_token, p_platform, p_provider = 'expo')`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي (مع مزوّده). رمز فارغ أو أطول من 255 حرفاً أو بلا منصة/مزوّد، أو رمز `expo` ليس بصيغة `ExponentPushToken[...]`/`ExpoPushToken[...]`: `INVALID_TOKEN`.
 - دوال `push-dispatch` (service_role فقط، T07): `claim_push_notifications(p_limit = 200)` تحجز صفوفاً غير مرسلة (`for update skip locked` + `claimed_at`) وترجع لكل صف مستلميه (رمز + مزوّد)؛ `finish_push_notifications(p_results, p_dead_tokens)` تسجل النتيجة وتحذف الرموز الميتة؛ `push_dispatch_authorized(p_secret)` تتحقق من السر المشترك.
-- `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`.
+- `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`. (يتغير بـ T18: كلفة الوحدة وسعر المشتريات، §12.)
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
 - حذف الحساب (service_role فقط، تستدعيها Edge Function `delete-account`، T08): `begin_account_deletion(p_user_id) → boolean` (is_active السابق) تأخذ قفل `place_order` لنفس المستخدم، ترفض `ADMIN_ACCOUNT` (أدمن) و`ACTIVE_ORDER` (طلب غير منتهٍ كزبون أو كسائق معيَّن)، وتعطّل الحساب حتى يكتمل `auth.admin.deleteUser`؛ `abort_account_deletion(p_user_id, p_was_active)` ترجع الحالة إن فشل الحذف. `USER_NOT_FOUND` إن لم يوجد ملف شخصي. الدالة ترجع نفس الرموز بـ `{error}` مع HTTP 403/409/404.
 - حماية الحسابات (trigger `before insert/update of phone` على `auth.users`، migration `20261116000001`، ADR 0001): `PHONE_INVALID` لحساب بلا هاتف أو برقم ليس `9647XXXXXXXXX` (يصل للتطبيق كخطأ GoTrue عام "Database error"؛ التطبيق يتحقق من الرقم قبل الإرسال).
@@ -137,6 +140,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 | `push-dispatch` | trigger (`after insert for each statement`) على `notification_outbox` يطلب الدالة بـ `pg_net`، + `pg_cron` كل دقيقة إن بقي شيء غير مرسل. المصادقة بترويسة `x-dispatch-secret` (سر بـ Vault، `verify_jwt = false`) | تحجز حتى 200 صف، تجمع الرموز حسب الجمهور (`user` / كل السائقين النشطين / الأدمن والموظفون النشطون)، ترسل كل رمز عبر مزوّده: Expo Push API بدفعات ≤100 (`channelId: orders`، أولوية عالية)؛ `fcm` يُتخطى بملاحظة بـ `last_error`. تحدّث `sent_at` أو `attempts` و`last_error` (حد أقصى 5 محاولات)، وتحذف الرموز التي يرجع لها `DeviceNotRegistered` |
 | `delete-account` | يستدعيها التطبيق بـ JWT المستخدم (`POST`، مطلوب من Apple وGoogle؛ `verify_jwt = true` + `auth.getUser`) | `begin_account_deletion` (يرفض `ADMIN_ACCOUNT` ← 403، `ACTIVE_ORDER` ← 409 لطلب غير منتهٍ كزبون أو كسائق معيَّن؛ ويعطّل الحساب)، ثم `auth.admin.deleteUser`؛ إن فشل: `abort_account_deletion` و500. الحذف يمتد: `profiles` ← العناوين والرموز تُحذف، والطلبات والتقييمات والسجل تبقى بنسخها مع `customer_id`/`driver_id` = null |
 | `signup` (ADR 0001، تحديث 2026-11-15) | التطبيقات قبل الدخول (`POST {phone, pin}`، `verify_jwt = false`؛ المفتاح المنشور ليس JWT) | `signup_rate_hit(ip, phone)` أولاً (كل محاولة تُحسب؛ 20/ساعة لكل IP من `cf-connecting-ip`، 5/ساعة لكل رقم)، ثم `normalizeIraqiPhone` و`validatePin` من `packages/shared` (عبر `import_map`)، ثم `auth.admin.createUser({phone, password, phone_confirm: true})` ← `201 {created: true}`، والتطبيق يدخل بـ `signInWithPassword`. الأخطاء (`{"error": CODE}`): `PHONE_INVALID` ← 400، `PIN_INVALID` ← 400، `PHONE_TAKEN` ← 409، `RATE_LIMITED` ← 429، `SIGNUP_FAILED` ← 400/405/500 (جسم خاطئ، أو فشل الحد أو Auth: يغلق ولا يمرر). لا يُسجَّل الـ PIN ولا جسم الطلب |
+| `admin-create-user` (**مواصفة؛ تُبنى بـ T19**) | لوحة الأدمن بـ JWT الأدمن (`POST`، `verify_jwt = true` + أدمن نشط) | إنشاء حساب موظف أو سائق (هاتف، اسم، دور، رمز مؤقت) بـ `auth.admin.createUser` ثم الدور وسجل `user_creations`. التفاصيل والأخطاء: SPEC-admin §2.6؛ الرموز تُضاف لهذا القسم مع البناء |
 | `admin-reset-pin` (**مواصفة؛ تُبنى بـ T19**) | لوحة الأدمن بـ JWT الأدمن (`POST`، `verify_jwt = true` + `auth.getUser` + `profiles.role = 'admin'` ونشط) | إعادة ضبط PIN مستخدم نسيه (بعد رسالة واتساب من نفس الرقم). التفاصيل والأخطاء: SPEC-admin §2.6 |
 
 ## 9) كيف نضمن الأداء
@@ -179,6 +183,33 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - Supabase Pro: نسخ يومي. تجربة استعادة واحدة على مشروع staging قبل الإطلاق.
 - تنبيه عند تجاوز 80% من مساحة قاعدة البيانات أو الاتصالات.
 - مراقبة `notification_outbox` (عدد غير المرسل أقدم من 5 دقائق) بلوحة الأدمن.
+
+## 12) تغييرات مخططة للوحة الأدمن (قرارات 2026-11-15؛ لم تُبنَ بعد)
+> مواصفة للمهام T18، T19، T20، T25، T26. كل بند = migration جديدة واختبارات pgTAP. الرموز الجديدة تُنقل إلى §5 (وerrors.ts) مع البناء فقط، لأن اختبار Jest يطابق §5 مع ما يرفعه SQL فعلاً.
+
+### 12.1 المخزون والكلفة (T18)
+- `inventory_movements.unit_cost_iqd bigint` (≥ 0، مضاعفات 250 للمشتريات). يُملأ لكل حركة: `purchase` من السعر المُدخل؛ `waste` و`adjust` و`sale` و`cancel_return` من `product_costs` لحظة الحركة (0 إن لم يوجد سعر شراء، مع بقاء تنبيه "منتج بلا سعر شراء"). **Backfill على dev:** الحركات القديمة من سعر الشراء الحالي.
+- `adjust_stock(p_product_id, p_qty, p_type, p_note?, p_unit_cost_iqd?)`: `purchase` يتطلب `p_unit_cost_iqd` (مضاعف 250) ويحدّث `product_costs` لآخر سعر؛ `adjust` يتطلب ملاحظة؛ `waste` و`adjust` السالبة تزيد `daily_stats` بـ `qty × unit_cost` (اليوم بتوقيت بغداد). الأخطاء الحالية (`INVALID_MOVEMENT` لسعر ناقص أو ملاحظة ناقصة).
+- `adjust_stock_bulk(p_items jsonb, p_type, p_note?)` (أدمن): `[{product_id, qty, unit_cost_iqd?}]` بمعاملة واحدة، بأقفال `stock` بترتيب `product_id`؛ أي بند خاطئ يُفشل الكل (`detail` = المنتج). لهدر اليوم (ويقبل المشتريات بالجملة).
+- `daily_stats`: أعمدة `waste_cost_iqd` و`adjust_loss_iqd` (≥ 0)، و`net_profit_iqd` = `gross_profit_iqd - waste_cost_iqd - adjust_loss_iqd` (عمود محسوب). `_bump_daily_stats` يقبلها.
+- `recompute_daily_stats(p_from date, p_to date)` (أدمن/service_role): يعيد بناء الأيام من `orders` و`order_item_costs` و`inventory_movements` (للتصحيح وللـ backfill)؛ اختبار pgTAP يقارن التحديث التراكمي بإعادة البناء.
+- **حد النقص:** `stock.low_stock_threshold int not null default 5` (0..10000). عند أي تغيير رصيد (البيع بـ `place_order`، الإلغاء، `adjust_stock*`) ينزل فيه الرصيد من ≥ الحد إلى < الحد ← `_notify('admins', …)` مرة واحدة (`type: low_stock`، `product_id`، النص: الاسم والرصيد بـ `formatQuantity` على الخادم أو نص بسيط بالوحدة). العودة فوق الحد ثم النزول = إشعار جديد. لا إشعار للموظفين (الجمهور `admins` يشمل الموظفين اليوم: يُضاف جمهور `admins_only` أو فلتر بالدور، يُحسم بالبناء ويُوثَّق).
+- اختبار ثابت (invariant): لكل منتج `stock.qty = Σ inventory_movements.qty` (الـ seed يُنشئ حركة رصيد افتتاحي بدل كتابة `stock` مباشرة).
+
+### 12.2 المنتجات والإعدادات عبر دوال (T18، T19)
+- `admin_save_product(p jsonb) → uuid` (أدمن): إنشاء أو تعديل (الاسم، الوصف، القسم، الوحدة من `SALE_UNITS`، سعر البيع، الصورة، النشاط، الترتيب، سعر الشراء، حد النقص) بمعاملة واحدة. سعر الشراء هنا للتصحيح اليدوي فقط (الطبيعي من المشتريات).
+- `set_product_price(p_product_id, p_price_iqd)` (أدمن) للتعديل السريع. `reorder_products(p_ids uuid[])` (أدمن).
+- `update_app_settings(p jsonb)` (أدمن): الأجرة، الحد الأدنى، `max_active_orders`، فتح/غلق المتجر ورسالته. قيد جديد: `min_order_iqd % 250 = 0`.
+- بعدها تُسحب صلاحيات الكتابة المباشرة (`insert`/`update`) على `products` و`product_costs` و`app_settings` من `authenticated` (الأقسام تبقى بـ RLS)، وتُحدَّث اختبارات `01_schema.sql` و`02_rls_catalog.sql`.
+
+### 12.3 التقارير والرئيسية والتقييمات (T20، T25، T26)
+- `report_top_products(p_from, p_to, p_limit = 20)`، `report_drivers(p_from, p_to)`، `report_waste(p_from, p_to)` (الكمية والكلفة لكل منتج، الهدر والتسويات السالبة)، `report_orders_placed(p_from, p_to)` (عدد الطلبات الواردة لكل يوم من `orders(created_at)`): أدمن فقط، بتوقيت بغداد، مدى أقصى 366 يوماً.
+- `dashboard_today() → jsonb` (موظف وأدمن): اليوم حتى الآن وأمس حتى نفس الدقيقة (بغداد): المسلّمة (`delivered_at`)، الملغاة (`cancelled_at`)، الواردة (`created_at`)، المفتوحة الآن بكل حالة، عدد المنتجات تحت حد النقص؛ وللأدمن فقط: المبيعات، متوسط الطلب، كلفة هدر اليوم، صافي ربح اليوم وأمس كاملاً (`daily_stats`). للموظف حقول المال `null`. فهارس جزئية جديدة: `orders(delivered_at) where status = 'delivered'` و`orders(cancelled_at) where status = 'cancelled'`.
+- `ratings_summary(p_from?, p_to?) → jsonb` (موظف وأدمن): المتوسط، العدد، التوزيع 1..5 (تجميعات PostgREST مطفأة، فالحساب بدالة). القائمة نفسها قراءة مباشرة لـ `ratings` بـ RLS الحالية.
+- لا يُكتب `daily_stats` عند كل طلب (§9 "لا صف ساخن"): الطلبات الواردة تُحسب من الفهرس.
+
+### 12.4 لاحقاً (غير مخطط)
+- جدول مصاريف تشغيل (إيجار، رواتب…) يُطرح من صافي الربح.
 
 ## افتراضات
 1. أسعار المنتجات وأجرة التوصيل **مضاعفات 250** (قيد بقاعدة البيانات). لذلك التقريب عملياً لا يغيّر المجموع، ويبقى كحماية.
@@ -238,3 +269,4 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 55. **مخاطر منخفضة معروفة (مراجعة 2026-11-15، بلا تغيير كود):**
     - **NH7، حجم جسم `signup`:** `readBody` (`supabase/functions/signup/handler.ts`) يقرأ الجسم كاملاً (`req.text()`) ثم يفحص `MAX_BODY_BYTES`، فجسم ضخم يُقرأ للذاكرة قبل رفضه. الخطر منخفض: منصة Edge Functions تحد حجم الطلب والذاكرة ووقت التنفيذ، وحدود المعدل (افتراض 54) تقيّد التكرار. التحسين إن لزم: رفض `Content-Length` الكبير أولاً أو قراءة متدفقة بحد.
     - **NH8، إعادة ربط رمز إشعارات معروف:** `register_push_token` (`20261112000003_push_dispatch.sql`) يعمل upsert بالـ `token`، فمستخدم مسجّل يعرف رمز Expo لجهاز آخر يستطيع نقله لحسابه فتتوقف إشعارات صاحبه وتصله هو. الخطر منخفض: الرمز لا يُعرض لأي مستخدم آخر (RLS `push_tokens_own`)، ومعرفته تتطلب الوصول للجهاز نفسه، ومحتوى الإشعار حالة طلب بلا بيانات حساسة. هذا السلوك نفسه مقصود لنقل الجهاز بين حسابات (خروج ثم دخول بحساب آخر). التحسين إن لزم: لا يُنقل رمز إلا إن كان `last_seen_at` قديماً أو بإثبات من الجهاز.
+56. **لوحة الأدمن (قرارات المالك 2026-11-15):** تعريف المبيعات وصافي الربح، كلفة الوحدة على كل حركة، آخر سعر مشتريات = سعر الشراء، حد نقص لكل منتج مع إشعار عند النزول، كتابة المنتجات والأسعار والإعدادات بدوال، و`admin-create-user`. التفاصيل §12 وSPEC-admin افتراض 8. **افتراض:** الحركات القديمة على dev تُقيَّم بسعر الشراء الحالي (لا تاريخ أسعار قبلها)، وتُعاد `daily_stats` بـ `recompute_daily_stats`.
