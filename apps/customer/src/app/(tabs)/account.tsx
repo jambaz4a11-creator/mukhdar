@@ -1,10 +1,12 @@
-// حسابي: محمية (T10). الآن: الرقم وتسجيل الخروج فقط؛ بقية الشاشة (الاسم، العناوين، حذف الحساب) بـ T15.
+// حسابي: محمية (T10). الآن: الرقم، عناويني (T12)، وتسجيل الخروج؛ بقية الشاشة (الاسم، حذف الحساب) بـ T15.
 // تسجيل الخروج يمسح الجلسة (secure-store) والسلة تبقى.
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { Placeholder } from '../../components/Screen';
+import { useMyAddresses } from '../../features/addresses/hooks';
 import { displayPhone } from '../../features/auth/api';
 import { useRequireAuth } from '../../features/auth/useRequireAuth';
 import { ar } from '../../i18n/ar';
@@ -15,6 +17,7 @@ import { colors, radius, sizes, spacing } from '../../theme';
 export default function AccountScreen() {
   const session = useRequireAuth();
   const [sent, setSent] = useState(false);
+  const addresses = useMyAddresses();
   if (!session) return null;
 
   async function signOut() {
@@ -31,6 +34,17 @@ export default function AccountScreen() {
       <AppText weight="semibold" size="title">
         {displayPhone(session.user.phone)}
       </AppText>
+      <Pressable
+        accessibilityRole="button"
+        style={styles.row}
+        onPress={() => router.push('/address')}
+        testID="my-addresses"
+      >
+        <Ionicons name="location-outline" size={20} color={colors.primary} />
+        <AppText style={styles.rowText}>{ar.address.listTitle}</AppText>
+        {addresses.data ? <AppText muted>{addresses.data.length}</AppText> : null}
+        <Ionicons name="chevron-back" size={16} color={colors.textMuted} />
+      </Pressable>
       <AppText muted>{ar.placeholders.soon}</AppText>
       <Pressable
         accessibilityRole="button"
@@ -70,5 +84,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.control,
     backgroundColor: colors.dangerSoft,
   },
+  row: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 56,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  rowText: { flex: 1 },
   signOut: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
 });

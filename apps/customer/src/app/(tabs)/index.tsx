@@ -1,4 +1,4 @@
-// الرئيسية والكتالوج (T11، SPEC-customer §2.2، تصميم Home): بحث، شريط "المتجر مغلق"، الأقسام،
+// الرئيسية والكتالوج (T11، SPEC-customer §2.2، تصميم Home): "التوصيل إلى" (T12)، بحث، شريط "المتجر مغلق"، الأقسام،
 // شبكة عمودين بتمرير لانهائي (30 بالصفحة)، سحب للتحديث، وشريط السلة العائم.
 import { errorMessage } from '@mukhdar/shared';
 import { router } from 'expo-router';
@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../components/AppText';
 import { CART_BAR_SPACE, CartBar } from '../../components/CartBar';
 import { CategoryChips } from '../../components/CategoryChips';
+import { DeliveryAddressHeader } from '../../components/DeliveryAddressHeader';
 import { CARD_HEIGHT, ProductCard } from '../../components/ProductCard';
 import { SearchBox } from '../../components/SearchBox';
 import { StoreClosedBanner } from '../../components/StoreClosedBanner';
@@ -98,9 +99,12 @@ function Catalog() {
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
-        <AppText weight="bold" size="heading" color={colors.primary} accessibilityRole="header">
-          {ar.home.title}
-        </AppText>
+        <View style={styles.topRow}>
+          <DeliveryAddressHeader />
+          <AppText weight="bold" size="heading" color={colors.primary} accessibilityRole="header">
+            {ar.home.title}
+          </AppText>
+        </View>
         <SearchBox value={search} onChange={setSearch} />
       </View>
 
@@ -237,6 +241,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screen,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.md,
   },
   heading: { height: HEADING_HEIGHT, lineHeight: 28, paddingBottom: spacing.md },

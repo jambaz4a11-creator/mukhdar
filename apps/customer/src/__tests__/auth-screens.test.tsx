@@ -1,5 +1,6 @@
 // RNTL (T10): شاشات الدخول والتسجيل والاسم، الحارس، وتسجيل الخروج. Supabase مزيف، بلا شبكة.
 import { AUTH_MESSAGES, PIN_MESSAGES } from '@mukhdar/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Linking } from 'react-native';
@@ -27,10 +28,15 @@ jest.mock('../config', () => ({
   isSupabaseConfigured: () => true,
 }));
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 let mockParams: Record<string, string> = {};
 let mockPathname = '/';
 jest.mock('expo-router', () => ({
-  router: { replace: (...a: unknown[]) => mockReplace(...a), back: jest.fn() },
+  router: {
+    replace: (...a: unknown[]) => mockReplace(...a),
+    push: (...a: unknown[]) => mockPush(...a),
+    back: jest.fn(),
+  },
   useLocalSearchParams: () => mockParams,
   usePathname: () => mockPathname,
 }));
@@ -41,11 +47,14 @@ interface FakeOptions {
   signIn?: () => { data: unknown; error: unknown };
   invoke?: () => { data: unknown; error: unknown };
   fullName?: string | null;
+  /** عناوين الزبون (شاشة الاسم تفحص وجود عنوان). الافتراضي: عنوان واحد. */
+  addresses?: unknown[];
 }
 
 function setup(opts: FakeOptions = {}) {
   const fake = createFakeSupabase((call: Call): Result => {
     if (call.table === 'profiles' && opArgs(call, 'update')) return { data: null, error: null };
+    if (call.table === 'addresses') return { data: opts.addresses ?? [{ id: 'a1' }], error: null };
     if (call.table === 'profiles')
       return { data: { full_name: opts.fullName ?? null }, error: null };
     return { data: null, error: null };
@@ -84,7 +93,11 @@ async function renderScreen(ui: ReactElement) {
         insets: { top: 0, left: 0, right: 0, bottom: 0 },
       }}
     >
-      {ui}
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        {ui}
+      </QueryClientProvider>
     </SafeAreaProvider>,
   );
 }
@@ -304,6 +317,21 @@ describe('name screen', () => {
     expect(opArgs(update as Call, 'update')).toEqual([{ full_name: 'أحمد علي' }]);
     expect(opArgs(update as Call, 'eq')).toEqual(['id', 'u1']);
   });
+
+  it('first sign-up without an address: after the name → add the first address (step 2 of 2)', async () => {
+    mockParams = { redirect: '/orders' };
+    useAuth.setState({ session: SESSION as never, ready: true });
+    setup({ addresses: [] });
+    await renderScreen(<NameScreen />);
+    await type('name-input', 'أحمد');
+    await fireEvent.press(screen.getByTestId('name-submit'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith({
+        pathname: '/address/new',
+        params: { onboarding: '1', redirect: '/orders' },
+      }),
+    );
+  });
 });
 
 describe('guard', () => {
@@ -348,5 +376,14 @@ describe('sign out', () => {
     expect(useAuth.getState().session).toBeNull();
     expect(useCart.getState().items).toEqual({ t: 2 });
     expect(mockReplace).toHaveBeenCalledWith('/');
+  });
+
+  it('account links to my addresses (T12) with their count', async () => {
+    useAuth.setState({ session: SESSION as never, ready: true });
+    setup({ addresses: [{ id: 'a1' }, { id: 'a2' }] });
+    await renderScreen(<AccountScreen />);
+    expect(await screen.findByText('2')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('my-addresses'));
+    expect(mockPush).toHaveBeenCalledWith('/address');
   });
 });

@@ -11,7 +11,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initAuth } from '../features/auth/store';
-import { createQueryClient, PERSIST_MAX_AGE, queryPersister } from '../lib/query';
+import {
+  createQueryClient,
+  PERSIST_MAX_AGE,
+  queryPersister,
+  shouldPersistQuery,
+} from '../lib/query';
 import { ensureRTL } from '../lib/rtl';
 import { captureError, initSentry, wrapRoot } from '../lib/sentry';
 import { getSupabase } from '../lib/supabase';
@@ -60,7 +65,11 @@ function RootLayout() {
     <SafeAreaProvider>
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={{ persister: queryPersister, maxAge: PERSIST_MAX_AGE }}
+        persistOptions={{
+          persister: queryPersister,
+          maxAge: PERSIST_MAX_AGE,
+          dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
+        }}
       >
         <StatusBar style="dark" />
         <Stack

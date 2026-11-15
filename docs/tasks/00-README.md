@@ -19,7 +19,7 @@
 | 09 | [هيكل تطبيق الزبون](09-customer-scaffold.md) | 06 | ✅ (فحص Expo Go وSentry يدوي) |
 | 10 | [دخول الزبون](10-customer-auth.md) | 09 | ✅ (فحص الأجهزة يدوي) |
 | 11 | [الكتالوج](11-customer-catalog.md) | 05، 09 | ✅ (فحص التمرير وبدون شبكة يدوي) |
-| 12 | [العناوين](12-customer-addresses.md) | 10 | ⬜ |
+| 12 | [العناوين](12-customer-addresses.md) | 10 | ✅ (فحص الجهاز يدوي) |
 | 13 | [السلة وتأكيد الطلب](13-customer-cart-checkout.md) | 11، 12 | ⬜ |
 | 14 | [تتبع الطلبات والتقييم والإشعارات](14-customer-orders.md) | 07، 13 | ⬜ |
 | 15 | [حسابي وحذف الحساب](15-customer-account.md) | 08، 10 | ⬜ |

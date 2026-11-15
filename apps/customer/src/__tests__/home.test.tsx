@@ -68,6 +68,8 @@ describe('home catalog', () => {
     expect(await screen.findByText('فواكه')).toBeTruthy();
     expect(screen.getByText(ar.catalog.all)).toBeTruthy();
     expect(screen.queryByTestId('store-closed-banner')).toBeNull();
+    // "التوصيل إلى" (T12): بلا دخول يطلب اختيار العنوان
+    expect(screen.getByText(ar.address.chooseAddress)).toBeTruthy();
 
     await fireEvent.press(screen.getByText('فواكه'));
     // قائمة القسم الجديد تُحمَّل بعد الضغط: ننتظر ظهورها (موز) لا اختفاء القديمة فقط

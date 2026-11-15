@@ -1,5 +1,5 @@
-// الاسم أول مرة (T10، تصميم Name): يُحفظ بـ profiles.full_name ثم الرجوع لمكان المستخدم.
-// افتراض: زر "حفظ ومتابعة" بدل "التالي: عنوان التوصيل" حتى تُبنى شاشة العنوان (T12).
+// الاسم أول مرة (T10، تصميم Name): يُحفظ بـ profiles.full_name، ثم إضافة أول عنوان إن لم يوجد (T12)،
+// ثم الرجوع لمكان المستخدم.
 import { errorMessage } from '@mukhdar/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -8,7 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../components/AppText';
 import { FieldLabel, FormMessage } from '../../components/AuthFields';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { safeRedirect } from '../../features/auth/redirect';
+import { hasAnyAddress } from '../../features/addresses/api';
+import { NEW_ADDRESS, safeRedirect } from '../../features/auth/redirect';
 import { useRequireAuth } from '../../features/auth/useRequireAuth';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
@@ -39,7 +40,16 @@ export default function NameScreen() {
       setBusy(false);
       return;
     }
-    router.replace(redirect);
+    // أول تسجيل: بعد الاسم ← إضافة أول عنوان (T12). إن تعذّر الفحص لا نوقف المستخدم.
+    const needsAddress = await hasAnyAddress(client).then(
+      (has) => !has,
+      () => false,
+    );
+    if (needsAddress) {
+      router.replace({ pathname: NEW_ADDRESS, params: { onboarding: '1', redirect } });
+    } else {
+      router.replace(redirect);
+    }
   }
 
   return (
