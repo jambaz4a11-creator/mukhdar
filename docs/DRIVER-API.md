@@ -144,6 +144,11 @@ assigned to them:
 | `ready` | `out_for_delivery` | picked up, on the way |
 | `out_for_delivery` | `delivered` | delivered and cash collected (confirm twice in the UI) |
 
+**Fallback (2026-11-16):** staff and admin may also make these two transitions from the admin panel
+(`out_for_delivery` still requires an assigned driver) when the driver app is down or the driver
+forgot to update. The driver app must therefore expect an assigned order to move to
+`out_for_delivery` or `delivered` without its own action (it arrives as a normal Realtime UPDATE).
+
 Checks run in this order; the first failure is returned:
 
 | Error | SQL state | When |
@@ -311,8 +316,8 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 | `preparing → ready` | staff/admin | push "new order" to all active drivers (or "ready" to the pre-assigned driver) and to the customer |
 | driver takes it (status unchanged) | driver | `accept_order`, only while `ready` and unassigned |
 | or assigned manually | staff/admin | `assign_driver` from `preparing` or `ready`; push "assigned" to that driver. A pre-assigned `preparing` order shows the button disabled ("waiting for preparation") |
-| `ready → out_for_delivery` | **assigned driver** | `set_order_status` (requires a driver assigned) |
-| `out_for_delivery → delivered` | **assigned driver** | `set_order_status`; collect `total_iqd` in cash |
+| `ready → out_for_delivery` | **assigned driver** (fallback: staff/admin) | `set_order_status` (requires a driver assigned) |
+| `out_for_delivery → delivered` | **assigned driver** (fallback: staff/admin) | `set_order_status`; collect `total_iqd` in cash |
 | `→ cancelled` | customer (`pending` only), staff (`pending`/`preparing`/`ready`), admin (also `out_for_delivery`) | drivers cannot cancel; "problem with order" = call the administration |
 
 `delivered` and `cancelled` are final. The driver cannot change order items.

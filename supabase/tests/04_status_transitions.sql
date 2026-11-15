@@ -1,5 +1,5 @@
 -- 04: set_order_status. جدول الأدوار كاملاً (مسار ready)، التحويلات غير الصحيحة، الإشعارات، الإلغاء والتسليم
-select plan(96);
+select plan(97);
 
 select tests.remember('admin', tests.new_user('admin'));
 select tests.remember('staff', tests.new_user('staff'));
@@ -33,9 +33,9 @@ begin
       ('staff',   'pending',          'cancelled',        'OK'),
       ('staff',   'preparing',        'ready',            'OK'),
       ('staff',   'preparing',        'cancelled',        'OK'),
-      ('staff',   'ready',            'out_for_delivery', 'NOT_ALLOWED'),
+      ('staff',   'ready',            'out_for_delivery', 'OK'),          -- احتياطي (2026-11-16)
       ('staff',   'ready',            'cancelled',        'OK'),
-      ('staff',   'out_for_delivery', 'delivered',        'NOT_ALLOWED'),
+      ('staff',   'out_for_delivery', 'delivered',        'OK'),          -- احتياطي (2026-11-16)
       ('staff',   'out_for_delivery', 'cancelled',        'NOT_ALLOWED'),
       ('driver',  'pending',          'preparing',        'NOT_ALLOWED'),
       ('driver',  'pending',          'cancelled',        'NOT_ALLOWED'),
@@ -113,6 +113,10 @@ select tests.remember('o_nodriver', tests.order_in('ready', tests.id('cust')));
 select tests.set_uid(tests.id('admin'));
 select throws_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o_nodriver')),
   'NO_DRIVER_ASSIGNED', 'ready -> out_for_delivery without a driver is rejected');
+select tests.set_uid(tests.id('staff'));
+select throws_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o_nodriver')),
+  'NO_DRIVER_ASSIGNED', 'staff fallback: out_for_delivery still needs an assigned driver');
+select tests.set_uid(tests.id('admin'));
 select throws_ok($$ select public.set_order_status(gen_random_uuid(), 'preparing') $$,
   'ORDER_NOT_FOUND', 'unknown order');
 select tests.set_uid(gen_random_uuid());

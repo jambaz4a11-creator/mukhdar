@@ -175,7 +175,7 @@ test.describe.serial('orders (writes: live order and actions)', () => {
     await expect(badge).toHaveText(String(badgeBefore + 1));
   });
 
-  test('start preparing → assign driver → mark ready', async () => {
+  test('start preparing → assign driver → ready → fallback out for delivery → delivered', async () => {
     const order = await placeOrder();
     await openOrders(page, `?tab=pending&q=${order.order_number}`);
     await page.getByRole('button', { name: `الطلب رقم ${order.order_number}` }).click();
@@ -199,6 +199,26 @@ test.describe.serial('orders (writes: live order and actions)', () => {
     await panel.getByRole('button', { name: 'الطلب جاهز' }).click();
     await expect(panel.locator('[data-status="ready"]')).toBeVisible();
     await expect(panel.getByRole('button', { name: 'بدء التحضير' })).toHaveCount(0);
+
+    // احتياطي بدل السائق (2026-11-16): بالطريق ثم تم التوصيل، بتأكيد
+    page.on('dialog', (d) => void d.accept());
+    await panel.getByRole('button', { name: 'بالطريق (بدل السائق)' }).click();
+    await expect(panel.locator('[data-status="out_for_delivery"]')).toBeVisible();
+    await panel.getByRole('button', { name: 'تم التوصيل (بدل السائق)' }).click();
+    await expect(panel.locator('[data-status="delivered"]')).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'إلغاء الطلب' })).toHaveCount(0);
+  });
+
+  test('fallback out-for-delivery is disabled until a driver is assigned', async () => {
+    const order = await placeOrder();
+    await openOrders(page, `?q=${order.order_number}&order=${order.id}`);
+    const panel = page.getByTestId('order-detail');
+    await panel.getByRole('button', { name: 'بدء التحضير' }).click();
+    await expect(panel.locator('[data-status="preparing"]')).toBeVisible();
+    await panel.getByRole('button', { name: 'الطلب جاهز' }).click();
+    await expect(panel.locator('[data-status="ready"]')).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'بالطريق (بدل السائق)' })).toBeDisabled();
+    await expect(panel.getByText('عيّن سائقاً أولاً')).toBeVisible();
   });
 
   test('cancel with a reason', async () => {

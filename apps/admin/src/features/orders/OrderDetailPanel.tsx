@@ -5,7 +5,14 @@ import { STATUS_LABELS, errorMessage, formatIQD, formatQuantity } from '@mukhdar
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
-import { ACTION_LABELS, CANCEL_REASON_MAX, orderActions, validateCancelReason } from './actions';
+import {
+  ACTION_LABELS,
+  ACTION_TARGET,
+  CANCEL_REASON_MAX,
+  actionBlocked,
+  orderActions,
+  validateCancelReason,
+} from './actions';
 import {
   assignDriver,
   fetchOrderCosts,
@@ -227,9 +234,10 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
               key={a}
               type="button"
               disabled={busy}
-              onClick={() =>
-                statusMutation.mutate({ status: a === 'start_preparing' ? 'preparing' : 'ready' })
-              }
+              onClick={() => {
+                const target = ACTION_TARGET[a];
+                if (target) statusMutation.mutate({ status: target });
+              }}
               className="h-12 rounded-control bg-primary text-[15px] font-bold text-white hover:bg-primary-pressed disabled:opacity-60"
             >
               {ACTION_LABELS[a]}
@@ -269,6 +277,32 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
             </div>
           </div>
         )}
+
+        {actions
+          .filter((a) => a === 'mark_out_for_delivery' || a === 'mark_delivered')
+          .map((a) => {
+            const blocked = actionBlocked(a, order);
+            return (
+              <div key={a} className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  disabled={busy || blocked !== null}
+                  onClick={() => {
+                    const target = ACTION_TARGET[a];
+                    if (!target) return;
+                    // احتياطي بدل السائق: تأكيد قبل التنفيذ
+                    if (!window.confirm(`${ACTION_LABELS[a]}؟ استخدمه فقط إن تعذّر على السائق.`))
+                      return;
+                    statusMutation.mutate({ status: target });
+                  }}
+                  className="h-11 rounded-control border border-primary bg-surface text-sm font-semibold text-primary disabled:opacity-50"
+                >
+                  {ACTION_LABELS[a]}
+                </button>
+                {blocked && <span className="text-xs text-text-muted">{blocked}</span>}
+              </div>
+            );
+          })}
 
         <div className="flex gap-2">
           <a

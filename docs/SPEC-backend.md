@@ -80,7 +80,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 | الدور | المسموح |
 |---|---|
 | admin | أي تحويل صحيح (ومنه الإلغاء من `out_for_delivery`، للأدمن وحده) |
-| staff | ← `preparing`، ← `ready`؛ والإلغاء من `pending`/`preparing`/`ready` |
+| staff | ← `preparing`، ← `ready`، ← `out_for_delivery` (يتطلب سائقاً معيَّناً)، ← `delivered`؛ والإلغاء من `pending`/`preparing`/`ready`. آخر تحويلين **احتياطيان** (migration `20261120000001`، 2026-11-16) حين يكون تطبيق السائق معطّلاً أو نسي السائق |
 | driver (المعيَّن فقط) | `ready` ← `out_for_delivery` (يتطلب أن يكون معيَّناً)، `out_for_delivery` ← `delivered` |
 | customer (صاحب الطلب) | الإلغاء وهو `pending` فقط |
 

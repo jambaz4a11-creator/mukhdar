@@ -1,7 +1,13 @@
 import { ORDER_STATUSES, STATUS_TRANSITIONS, type OrderStatus } from '@mukhdar/shared';
 import { describe, expect, it } from 'vitest';
 import type { PanelRole } from '@/lib/access';
-import { ACTION_TARGET, orderActions, validateCancelReason, type OrderAction } from './actions';
+import {
+  ACTION_TARGET,
+  actionBlocked,
+  orderActions,
+  validateCancelReason,
+  type OrderAction,
+} from './actions';
 
 // (الحالة × الدور) ← الأزرار المتوقعة، حسب set_order_status وassign_driver (SPEC-backend §5).
 const EXPECTED: Record<OrderStatus, Record<PanelRole, OrderAction[]>> = {
@@ -14,12 +20,12 @@ const EXPECTED: Record<OrderStatus, Record<PanelRole, OrderAction[]>> = {
     staff: ['mark_ready', 'assign_driver', 'cancel'],
   },
   ready: {
-    admin: ['assign_driver', 'cancel'],
-    staff: ['assign_driver', 'cancel'],
+    admin: ['assign_driver', 'mark_out_for_delivery', 'cancel'],
+    staff: ['assign_driver', 'mark_out_for_delivery', 'cancel'],
   },
   out_for_delivery: {
-    admin: ['cancel'], // الإلغاء من بالطريق للأدمن وحده
-    staff: [],
+    admin: ['mark_delivered', 'cancel'], // الإلغاء من بالطريق للأدمن وحده
+    staff: ['mark_delivered'],
   },
   delivered: { admin: [], staff: [] },
   cancelled: { admin: [], staff: [] },
@@ -45,14 +51,11 @@ describe('orderActions (status × role)', () => {
     }
   });
 
-  it('never offers delivering or dispatching from the panel (driver-only transitions)', () => {
-    for (const status of ORDER_STATUSES) {
-      for (const role of ['admin', 'staff'] as const) {
-        const targets = orderActions(status, role).map((a) => ACTION_TARGET[a]);
-        expect(targets).not.toContain('delivered');
-        expect(targets).not.toContain('out_for_delivery');
-      }
-    }
+  it('fallback out-for-delivery needs an assigned driver; delivered does not block', () => {
+    expect(actionBlocked('mark_out_for_delivery', { driver_id: null })).toBe('عيّن سائقاً أولاً');
+    expect(actionBlocked('mark_out_for_delivery', { driver_id: 'd1' })).toBeNull();
+    expect(actionBlocked('mark_delivered', { driver_id: null })).toBeNull();
+    expect(actionBlocked('start_preparing', { driver_id: null })).toBeNull();
   });
 });
 
