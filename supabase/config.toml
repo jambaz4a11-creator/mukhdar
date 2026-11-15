@@ -299,12 +299,14 @@ uri = "pg-functions://postgres/private/hook_send_sms_reject"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# المخضر (T16): Supabase CLI 3.x يطفئ مزوّد الهاتف (phone_provider_disabled) ما لم يُفعَّل مزوّد SMS.
+# مزوّد وهمي بقيم ليست أسراراً، كما يطلب ADR 0001 للوحة السحابة: لا يُستدعى أبداً لأن Send SMS Hook
+# أعلاه يسبقه ويرفض كل رسالة. لا تضع بيانات Twilio حقيقية هنا.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+enabled = true
+account_sid = "ACnot-used-sms-hook-rejects"
+message_service_sid = "MGnot-used-sms-hook-rejects"
+auth_token = "not-a-secret-sms-hook-rejects"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
