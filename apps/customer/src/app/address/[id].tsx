@@ -7,6 +7,8 @@ import { useMyAddresses } from '../../features/addresses/hooks';
 import { useRequireAuth } from '../../features/auth/useRequireAuth';
 import { ar } from '../../i18n/ar';
 import { colors, spacing } from '../../theme';
+import { OfflineState } from '../../components/OfflineState';
+import { isOfflineEmpty } from '../../lib/network';
 
 export default function EditAddressScreen() {
   const session = useRequireAuth();
@@ -20,7 +22,9 @@ export default function EditAddressScreen() {
   if (!address) {
     return (
       <View style={styles.center}>
-        {addresses.isPending ? (
+        {isOfflineEmpty(addresses) ? (
+          <OfflineState />
+        ) : addresses.isPending ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
           <AppText muted>{ar.address.unavailable}</AppText>

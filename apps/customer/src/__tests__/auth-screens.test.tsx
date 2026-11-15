@@ -43,6 +43,7 @@ jest.mock('expo-router', () => ({
   },
   useLocalSearchParams: () => mockParams,
   usePathname: () => mockPathname,
+  useFocusEffect: jest.fn(),
 }));
 
 const SESSION = { user: { id: 'u1', phone: '9647701234567' }, access_token: 't' };

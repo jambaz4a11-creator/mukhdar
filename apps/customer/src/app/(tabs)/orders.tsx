@@ -25,10 +25,15 @@ import { useMyOrders } from '../../features/orders/hooks';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
 import { colors, radius, sizes, spacing } from '../../theme';
+import { OfflineState } from '../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../lib/network';
+import { useRefetchOnFocus } from '../../lib/useRefetchOnFocus';
 
 export default function OrdersScreen() {
   const session = useRequireAuth();
   const orders = useMyOrders();
+  // التبويب يبقى مركّباً: تحديث عند كل رجوع إليه (مراجعة S3)
+  useRefetchOnFocus(orders.refetch, session !== null);
   if (!session) return null;
 
   const list = orders.data?.pages.flat() ?? [];
@@ -40,8 +45,10 @@ export default function OrdersScreen() {
           {ar.orders.title}
         </AppText>
       </View>
-      {orders.isPending && orders.fetchStatus !== 'idle' ? (
+      {isFirstLoad(orders) ? (
         <ActivityIndicator style={styles.loading} color={colors.primary} />
+      ) : isOfflineEmpty(orders) ? (
+        <OfflineState />
       ) : orders.isError && list.length === 0 ? (
         <View style={styles.empty}>
           <AppText muted>{ar.orders.loadFailed}</AppText>

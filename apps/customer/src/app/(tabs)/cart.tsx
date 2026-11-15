@@ -16,9 +16,12 @@ import { MAX_QTY, useCart } from '../../features/cart/store';
 import { type CartLineView, type CartSummary, useCartSummary } from '../../features/cart/summary';
 import { ar } from '../../i18n/ar';
 import { colors, radius, sizes, spacing } from '../../theme';
+import { useRefetchOnFocus } from '../../lib/useRefetchOnFocus';
 
 export default function CartScreen() {
-  const { summary } = useCartSummary();
+  const { summary, products } = useCartSummary();
+  // التبويب يبقى مركّباً: أحدث أسعار وتوفر عند كل رجوع للسلة (مراجعة S3)
+  useRefetchOnFocus(products.refetch, summary.count > 0);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

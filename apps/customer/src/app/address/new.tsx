@@ -6,6 +6,8 @@ import { useMyAddresses } from '../../features/addresses/hooks';
 import { safeRedirect } from '../../features/auth/redirect';
 import { useRequireAuth } from '../../features/auth/useRequireAuth';
 import { colors } from '../../theme';
+import { OfflineState } from '../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../lib/network';
 
 type Params = { redirect?: string; onboarding?: string };
 
@@ -18,10 +20,14 @@ export default function NewAddressScreen() {
 
   if (!session) return null;
   // نعرف هل هو أول عنوان (يصير افتراضياً) قبل رسم النموذج
-  if (addresses.isPending && addresses.fetchStatus !== 'idle') {
+  if (isFirstLoad(addresses) || isOfflineEmpty(addresses)) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
+        {isOfflineEmpty(addresses) ? (
+          <OfflineState />
+        ) : (
+          <ActivityIndicator color={colors.primary} />
+        )}
       </View>
     );
   }

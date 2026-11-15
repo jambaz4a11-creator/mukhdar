@@ -1,5 +1,6 @@
 // AsyncStorage بذاكرة مؤقتة للاختبارات (mock الرسمي للمكتبة)
 import mockAsyncStorage from '@react-native-async-storage/async-storage/jest/async-storage-mock';
+import { onlineManager } from '@tanstack/react-query';
 import { configure } from '@testing-library/react-native';
 import { clearTestQueryClients } from './src/test-utils/queryClient';
 
@@ -22,6 +23,16 @@ jest.mock('expo-notifications', () => ({
   DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
 }));
 jest.mock('expo-device', () => ({ __esModule: true, isDevice: false }));
+// مراجعة S4: حالة الشبكة (وحدة أصلية). onlineManager يُعاد لمتصل بعد كل اختبار.
+jest.mock('expo-network', () => ({
+  getNetworkStateAsync: jest.fn(() =>
+    Promise.resolve({ isConnected: true, isInternetReachable: true }),
+  ),
+  addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })),
+}));
 
 // مراجعة S5: تفريغ QueryClients الاختبارات بعد كل اختبار (لا مؤقتات معلقة)
-afterEach(() => clearTestQueryClients());
+afterEach(() => {
+  clearTestQueryClients();
+  onlineManager.setOnline(true);
+});

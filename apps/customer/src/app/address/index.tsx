@@ -22,6 +22,8 @@ import { useRequireAuth } from '../../features/auth/useRequireAuth';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
 import { colors, radius, sizes, spacing } from '../../theme';
+import { OfflineState } from '../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../lib/network';
 
 export default function AddressesScreen() {
   const session = useRequireAuth();
@@ -120,8 +122,10 @@ export default function AddressesScreen() {
           />
         )}
         ListEmptyComponent={
-          addresses.isPending && addresses.fetchStatus !== 'idle' ? (
+          isFirstLoad(addresses) ? (
             <ActivityIndicator color={colors.primary} style={styles.state} />
+          ) : isOfflineEmpty(addresses) ? (
+            <OfflineState />
           ) : addresses.isError ? (
             <FormMessage text={errorMessage(addresses.error)} />
           ) : (

@@ -28,6 +28,8 @@ import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { colors, radius, sizes, spacing } from '../../theme';
+import { OfflineState } from '../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../lib/network';
 
 export const SEARCH_DEBOUNCE_MS = 300;
 const ROW_HEIGHT = CARD_HEIGHT + spacing.md;
@@ -152,7 +154,8 @@ function Catalog() {
         }
         ListEmptyComponent={
           <ListState
-            pending={active.isPending && active.fetchStatus !== 'idle'}
+            pending={isFirstLoad(active)}
+            offline={isOfflineEmpty(active)}
             error={active.isError ? active.error : null}
             onRetry={() => void active.refetch()}
             emptyText={searching ? ar.catalog.noResults(term) : ar.catalog.noProducts}
@@ -189,17 +192,20 @@ function Catalog() {
 
 function ListState({
   pending,
+  offline,
   error,
   onRetry,
   emptyText,
   emptyHint,
 }: {
   pending: boolean;
+  offline: boolean;
   error: unknown;
   onRetry: () => void;
   emptyText: string;
   emptyHint?: string;
 }) {
+  if (offline) return <OfflineState />;
   if (pending) {
     return (
       <View style={styles.state} accessibilityLabel={ar.home.loading}>

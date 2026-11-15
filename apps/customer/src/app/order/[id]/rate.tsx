@@ -26,6 +26,8 @@ import { useOrder } from '../../../features/orders/hooks';
 import { ar } from '../../../i18n/ar';
 import { getSupabase } from '../../../lib/supabase';
 import { colors, fontSizes, fonts, radius, sizes, spacing } from '../../../theme';
+import { OfflineState } from '../../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../../lib/network';
 
 const STARS = [1, 2, 3, 4, 5] as const;
 
@@ -107,8 +109,10 @@ export default function RateScreen() {
             {data ? ar.rate.title(data.order_number) : ar.order.titleNoNumber}
           </AppText>
 
-          {order.isPending && order.fetchStatus !== 'idle' ? (
+          {isFirstLoad(order) ? (
             <ActivityIndicator color={colors.primary} />
+          ) : isOfflineEmpty(order) ? (
+            <OfflineState />
           ) : done ? (
             <AppText weight="semibold" color={colors.primary} testID="rate-thanks">
               {ar.rate.thanks}

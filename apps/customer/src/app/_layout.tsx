@@ -1,4 +1,5 @@
-// الجذر: Sentry (إن وُجد DSN)، الخط، RTL، الجلسة (T10)، TanStack Query المحفوظ، الإشعارات (T14)، ثم التنقل.
+// الجذر: Sentry (إن وُجد DSN)، الخط، RTL، الجلسة (T10)، TanStack Query المحفوظ مع الشبكة والتركيز (S4)،
+// الإشعارات (T14)، شريط بدون إنترنت، ثم التنقل.
 import { useFonts } from '@expo-google-fonts/ibm-plex-sans-arabic/useFonts';
 import { IBMPlexSansArabic_400Regular } from '@expo-google-fonts/ibm-plex-sans-arabic/400Regular';
 import { IBMPlexSansArabic_500Medium } from '@expo-google-fonts/ibm-plex-sans-arabic/500Medium';
@@ -10,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { initAuth } from '../features/auth/store';
 import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
 import { configureNotificationHandler } from '../features/notifications/push';
@@ -19,6 +21,7 @@ import {
   queryPersister,
   shouldPersistQuery,
 } from '../lib/query';
+import { setupQueryManagers } from '../lib/network';
 import { ensureRTL } from '../lib/rtl';
 import { captureError, initSentry, wrapRoot } from '../lib/sentry';
 import { getSupabase } from '../lib/supabase';
@@ -26,6 +29,7 @@ import { colors } from '../theme';
 
 initSentry();
 configureNotificationHandler();
+setupQueryManagers();
 void SplashScreen.preventAutoHideAsync();
 
 const queryClient = createQueryClient();
@@ -76,6 +80,7 @@ function RootLayout() {
       >
         <StatusBar style="dark" />
         <NotificationsBridge />
+        <OfflineBanner />
         <Stack
           screenOptions={{
             headerShown: false,

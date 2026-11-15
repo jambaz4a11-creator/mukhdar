@@ -14,6 +14,8 @@ import { useCategories, useProduct } from '../../features/catalog/hooks';
 import { MAX_QTY, useCart, useCartQty } from '../../features/cart/store';
 import { ar } from '../../i18n/ar';
 import { colors, radius, sizes, spacing } from '../../theme';
+import { OfflineState } from '../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../lib/network';
 
 const IMAGE_HEIGHT = 340;
 
@@ -28,8 +30,10 @@ export default function ProductScreen() {
     <SafeAreaView style={styles.safe}>
       <BackButton floating={false} />
       <View style={styles.state}>
-        {product.isPending && product.fetchStatus !== 'idle' ? (
+        {isFirstLoad(product) ? (
           <ActivityIndicator color={colors.primary} accessibilityLabel={ar.home.loading} />
+        ) : isOfflineEmpty(product) ? (
+          <OfflineState />
         ) : product.isError ? (
           <>
             <AppText color={colors.danger} style={styles.center}>

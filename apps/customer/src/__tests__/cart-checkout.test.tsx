@@ -3,9 +3,10 @@
 // تعليم المنتج من detail، ورسائل كل أخطاء place_order). Supabase مزيف يسجل المفاتيح، بلا شبكة.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ERROR_MESSAGES, formatIQD, type ErrorCode } from '@mukhdar/shared';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '../test-utils/queryClient';
 import { expectTouchTarget } from '../test-utils/touchTarget';
+import { refocus } from '../test-utils/focus';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -54,6 +55,10 @@ jest.mock('expo-router', () => ({
   },
   useLocalSearchParams: () => mockParams,
   usePathname: () => '/checkout',
+  useFocusEffect: (cb: () => void) =>
+    (
+      jest.requireActual('../test-utils/focus') as typeof import('../test-utils/focus')
+    ).mockFocusEffect(cb),
 }));
 
 const SESSION = { user: { id: 'u1', phone: '9647701234567' }, access_token: 't' };
@@ -303,6 +308,18 @@ describe('cart screen', () => {
     expect(screen.queryByText('خيار')).toBeNull();
   });
 
+  it('refetches the cart products every time the tab regains focus (review S3)', async () => {
+    useCart.setState({ items: { t: 1 }, flags: {} });
+    const { calls } = setup();
+    await renderUi(<CartScreen />);
+    await screen.findByText('طماطة');
+    const fetches = () => calls.filter((c) => c.table === 'products').length;
+    const before = fetches();
+    expect(before).toBe(1); // التركيز الأول لا يكرر طلب التركيب
+    await act(async () => refocus());
+    await waitFor(() => expect(fetches()).toBe(before + 1));
+  });
+
   it('a product that became unavailable after refreshing is highlighted and blocks checkout', async () => {
     useCart.setState({ items: { t: 1, c: 2 }, flags: {} });
     const { calls } = setup({ products: [TOMATO] }); // الخيار أُوقف
@@ -543,6 +560,19 @@ describe('checkout', () => {
     expect(isDisabled('checkout-confirm')).toBe(true);
     await fireEvent.press(screen.getByTestId('checkout-confirm'));
     expect(placeOrderCalls).toHaveLength(0);
+  });
+
+  it('offline: confirm disabled until the connection is back (SPEC §1, review S4)', async () => {
+    const { placeOrderCalls } = setup();
+    await renderUi(<CheckoutScreen />);
+    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · شقة 12');
+    await waitFor(() => expect(isDisabled('checkout-confirm')).toBe(false));
+    await act(async () => onlineManager.setOnline(false));
+    expect(isDisabled('checkout-confirm')).toBe(true);
+    await fireEvent.press(screen.getByTestId('checkout-confirm'));
+    expect(placeOrderCalls).toHaveLength(0);
+    await act(async () => onlineManager.setOnline(true));
+    expect(isDisabled('checkout-confirm')).toBe(false);
   });
 
   it('no address: prompt to add one, confirm disabled', async () => {

@@ -9,8 +9,9 @@ import {
   STATUS_LABELS,
   type OrderStatus,
 } from '@mukhdar/shared';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '../test-utils/queryClient';
+import { refocus } from '../test-utils/focus';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
 import type { ReactElement } from 'react';
@@ -67,6 +68,10 @@ jest.mock('expo-router', () => ({
   },
   useLocalSearchParams: () => mockParams,
   usePathname: () => '/orders',
+  useFocusEffect: (cb: () => void) =>
+    (
+      jest.requireActual('../test-utils/focus') as typeof import('../test-utils/focus')
+    ).mockFocusEffect(cb),
 }));
 // expo-constants الحقيقي (expo-asset يحتاجه) مع حقول قابلة للتغيير لاختبار شروط الإشعارات
 jest.mock('expo-constants', () => {
@@ -380,6 +385,17 @@ describe('order again plan', () => {
 
 // ------------------------------------------------------------------ شاشة الطلب
 describe('order screen', () => {
+  it('offline with nothing cached: says so instead of spinning, loads when back online (review S4)', async () => {
+    setup();
+    onlineManager.setOnline(false);
+    await renderUi(<OrderScreen />);
+    expect(await screen.findByTestId('offline-state')).toBeTruthy();
+    expect(screen.getByText(ar.offline.title)).toBeTruthy();
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(ar.order.title(1042))).toBeTruthy();
+    expect(screen.queryByTestId('offline-state')).toBeNull();
+  });
+
   it('shows backend totals, items with formatQuantity, address via formatAddress', async () => {
     setup();
     await renderUi(<OrderScreen />);
@@ -573,6 +589,26 @@ describe('my orders', () => {
     }),
     listItem({ id: 'o1', order_number: 1041, status: 'delivered', rating: { stars: 5 } }),
   ];
+
+  it('refetches every time the tab regains focus (review S3)', async () => {
+    const env = setup({ list: LIST });
+    await renderUi(<OrdersScreen />);
+    await screen.findByText(ar.order.title(1043));
+    const fetches = () => env.calls.filter((c) => c.table === 'orders').length;
+    const before = fetches();
+    expect(before).toBe(1);
+    await act(async () => refocus());
+    await waitFor(() => expect(fetches()).toBe(before + 1));
+  });
+
+  it('offline with nothing cached: offline state, not an endless spinner (review S4)', async () => {
+    setup({ list: LIST });
+    onlineManager.setOnline(false);
+    await renderUi(<OrdersScreen />);
+    expect(await screen.findByTestId('offline-state')).toBeTruthy();
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(ar.order.title(1043))).toBeTruthy();
+  });
 
   it('cards with number, status badge from shared and total; actions per status', async () => {
     setup({ list: LIST });

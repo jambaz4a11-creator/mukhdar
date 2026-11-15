@@ -37,6 +37,8 @@ import { useOrderTracking } from '../../../features/orders/hooks';
 import { ar } from '../../../i18n/ar';
 import { getSupabase } from '../../../lib/supabase';
 import { colors, radius, sizes, spacing } from '../../../theme';
+import { OfflineState } from '../../../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty } from '../../../lib/network';
 
 type Params = { id: string; number?: string };
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -85,8 +87,10 @@ export default function OrderScreen() {
 
       {data ? (
         <OrderBody order={data} refreshing={order.isRefetching} onRefresh={order.refetch} />
-      ) : order.isPending && order.fetchStatus !== 'idle' ? (
+      ) : isFirstLoad(order) ? (
         <ActivityIndicator style={styles.loading} color={colors.primary} />
+      ) : isOfflineEmpty(order) ? (
+        <OfflineState />
       ) : (
         <View style={styles.center}>
           <AppText muted style={styles.centerText}>

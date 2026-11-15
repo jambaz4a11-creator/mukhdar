@@ -29,6 +29,8 @@ import { useCartSummary } from '../features/cart/summary';
 import { ORDER_NOTE_MAX, usePlaceOrder } from '../features/checkout/usePlaceOrder';
 import { ar } from '../i18n/ar';
 import { colors, fontSizes, fonts, radius, sizes, spacing } from '../theme';
+import { OfflineState } from '../components/OfflineState';
+import { isFirstLoad, isOfflineEmpty, useIsOnline } from '../lib/network';
 
 export default function CheckoutScreen() {
   const session = useRequireAuth();
@@ -37,6 +39,8 @@ export default function CheckoutScreen() {
   const select = useSelectedAddress((s) => s.select);
   const { submit, sending, failure } = usePlaceOrder();
   const [note, setNote] = useState('');
+  // SPEC-customer §1: بدون اتصال زر الطلب معطّل (مراجعة S4)
+  const online = useIsOnline();
 
   if (!session) return null;
 
@@ -49,6 +53,7 @@ export default function CheckoutScreen() {
     summary.storeOpen &&
     !summary.blocked &&
     !summary.belowMin &&
+    online &&
     !sending;
   const title = failure?.retryable
     ? ar.checkout.retry
@@ -95,8 +100,10 @@ export default function CheckoutScreen() {
                 </AppText>
               </Pressable>
             </View>
-            {addresses.isPending && addresses.fetchStatus !== 'idle' ? (
+            {isFirstLoad(addresses) ? (
               <ActivityIndicator color={colors.primary} />
+            ) : isOfflineEmpty(addresses) ? (
+              <OfflineState />
             ) : usable.length === 0 ? (
               <Pressable
                 accessibilityRole="button"
