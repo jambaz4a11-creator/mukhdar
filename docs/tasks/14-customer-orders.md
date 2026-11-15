@@ -33,6 +33,6 @@
 1. حساب Expo + `eas login`، ثم `eas init` بـ `apps/customer` ← `projectId`؛ يوضع بـ `EAS_PROJECT_ID` (`.env` محلياً ومتغير بيئة EAS).
 2. **Android:** مشروع Firebase بتطبيق `com.mukhdar.customer` ← `google-services.json` (متغير EAS من نوع ملف `GOOGLE_SERVICES_JSON`، لا يُرفع لـ git) + مفتاح حساب خدمة FCM V1 يُرفع بـ `eas credentials` (Android ← Push Notifications).
 3. **iOS:** حساب Apple Developer مدفوع؛ `eas credentials` ينشئ مفتاح APNs ويربطه، وتسجيل الآيفون بـ `eas device:create` (توزيع داخلي).
-4. `eas build --profile development --platform android|ios` (ملف `eas.json` بـ T24 أو قبلها)، تثبيت البناء، تشغيل `expo start --dev-client`.
+4. `eas build --profile development --platform android|ios` (`apps/customer/eas.json` موجود منذ T09؛ ملف development فيه `developmentClient: true` و`expo-dev-client` مثبّت منذ 2026-11-15)، تثبيت البناء، تشغيل `expo start --dev-client`.
 5. الفحص على `mukhdar-dev`: دخول، طلب ← قبول الإذن ← صف بـ `push_tokens` (provider expo)؛ تغيير الحالة من SQL/اللوحة (`ready`) ← الإشعار "طلبك جاهز، بانتظار السائق" خلال 10 ثوانٍ، والشاشة تتغير خلال ثانيتين؛ الضغط يفتح الطلب، والتسليم يفتح التقييم.
 6. Realtime Inspector (لوحة Supabase ← Realtime): القناة `order:<id>` تظهر بفتح الشاشة وتختفي بمغادرتها أو بحالة نهائية. (هذا الجزء يعمل في Expo Go أيضاً، لا يحتاج بناء.)
