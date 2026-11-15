@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { isNavActive, type NavItem, type PanelRole } from '@/lib/access';
 import { signOut } from '@/app/actions';
 import { NavIconSvg } from './icons';
+import { usePendingCount } from './usePendingCount';
 
 interface Props {
   items: NavItem[];
@@ -17,6 +18,7 @@ interface Props {
 export function Sidebar({ items, role, name, pendingOrders }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const pending = usePendingCount(pendingOrders);
   useEffect(() => setOpen(false), [pathname]);
 
   return (
@@ -74,13 +76,13 @@ export function Sidebar({ items, role, name, pendingOrders }: Props) {
                 <NavIconSvg icon={item.icon} />
               </span>
               <span className="flex-1">{item.label}</span>
-              {item.badge === 'pendingOrders' && pendingOrders > 0 && (
+              {item.badge === 'pendingOrders' && pending > 0 && (
                 <span
                   className="num flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-white"
-                  aria-label={`${pendingOrders} طلب جديد`}
+                  aria-label={`${pending} طلب جديد`}
                   data-testid="orders-badge"
                 >
-                  {pendingOrders}
+                  {pending}
                 </span>
               )}
             </Link>

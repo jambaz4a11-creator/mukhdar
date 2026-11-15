@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
-import { Placeholder } from '@/components/Placeholder';
+import { Suspense } from 'react';
+import { OrdersScreen } from '@/features/orders/OrdersScreen';
 
 export const metadata: Metadata = { title: 'الطلبات' };
 
-export default function Page() {
+export default function OrdersPage() {
   return (
-    <Placeholder title="الطلبات" task="T17">
-      تبويبات بالحالة، جدول الطلبات، التفاصيل والطباعة، وتحديث حي.
-    </Placeholder>
+    <Suspense fallback={<p className="text-sm text-text-muted">جارٍ التحميل…</p>}>
+      <OrdersScreen />
+    </Suspense>
   );
 }

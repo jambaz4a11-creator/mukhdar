@@ -376,3 +376,5 @@ select bucket, hits, window_start from private.signup_rate_limits
 - نطاق فرعي (مثلاً `admin.<domain>`) وإضافته لـ Supabase ← Authentication ← URL Configuration (Site URL / Redirect URLs) وإن لم تُستخدم روابط بريد.
 - بعد النشر: رابط `/delete-account` بـ Google Play Console (Data safety ← Account deletion)، وروابط `/privacy` و`/terms` بـ `EXPO_PUBLIC_PRIVACY_URL` و`EXPO_PUBLIC_TERMS_URL` لتطبيق الزبون وبـ App Store Connect.
 - قبل الإنتاج: استبدال بيانات المتجر بـ `apps/admin/src/content/legal.ts` و`IS_DRAFT = false` (SPEC-admin افتراض 15).
+
+**T17:** اختبارات Playwright التي تنشئ وتعدّل طلبات تعمل فقط مع `E2E_ALLOW_WRITES=1` (CI ضد Supabase محلي مع Realtime). لا تضبطه ضد mukhdar-dev؛ بدونه تعمل اختبارات القراءة فقط.

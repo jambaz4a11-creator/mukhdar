@@ -2,6 +2,13 @@ import { defineConfig, devices } from '@playwright/test';
 
 // E2E ضد Supabase (محلي بـ CI مع seed:demo، أو mukhdar-dev محلياً) بحسابات العرض و DEMO_PIN.
 // المتغيرات: NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (من .env.local أو البيئة).
+// محلياً: نفس متغيرات .env.local للاختبارات (عميل Supabase بالـ Node) وللخادم.
+try {
+  process.loadEnvFile('.env.local');
+} catch {
+  // CI: المتغيرات من البيئة
+}
+
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 
 export default defineConfig({

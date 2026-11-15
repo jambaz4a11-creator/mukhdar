@@ -20,6 +20,7 @@ export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
   '/reports': ['admin'],
   '/staff': ['admin'], // الموظفون والسائقون
   '/settings': ['admin'],
+  '/print': ['admin', 'staff'], // إيصال 80mm للطلب (T17)، بلا قائمة
 };
 
 export function isPanelRole(role: unknown): role is PanelRole {
