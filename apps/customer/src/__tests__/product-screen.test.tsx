@@ -1,6 +1,7 @@
 // شاشة المنتج: التفاصيل، العداد (نص كيلو بكل ضغطة) والمجموع، وزر "أضف للسلة".
 import { formatIQD } from '@mukhdar/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ProductScreen from '../app/product/[id]';
@@ -33,7 +34,7 @@ function setup(product: unknown) {
 }
 
 async function renderScreen() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   return await render(
     <SafeAreaProvider
       initialMetrics={{

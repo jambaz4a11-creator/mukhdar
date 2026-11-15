@@ -1,6 +1,7 @@
 // RNTL (T10): شاشات الدخول والتسجيل والاسم، الحارس، وتسجيل الخروج. Supabase مزيف، بلا شبكة.
 import { AUTH_MESSAGES, PIN_MESSAGES } from '@mukhdar/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Linking } from 'react-native';
@@ -96,11 +97,7 @@ async function renderScreen(ui: ReactElement) {
         insets: { top: 0, left: 0, right: 0, bottom: 0 },
       }}
     >
-      <QueryClientProvider
-        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-      >
-        {ui}
-      </QueryClientProvider>
+      <QueryClientProvider client={createTestQueryClient()}>{ui}</QueryClientProvider>
     </SafeAreaProvider>,
   );
 }

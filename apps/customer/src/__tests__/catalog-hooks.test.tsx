@@ -1,5 +1,6 @@
 // hooks الكتالوج مع Supabase مزيف: الصفحة الثانية تُطلب بالمدى الصحيح (30..59)، الفلترة والترتيب، والبحث.
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { escapeLike, PAGE_SIZE } from '../features/catalog/api';
@@ -10,7 +11,7 @@ let mockClient: unknown = null;
 jest.mock('../lib/supabase', () => ({ getSupabase: () => mockClient }));
 
 function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 

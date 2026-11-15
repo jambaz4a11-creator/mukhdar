@@ -1,5 +1,6 @@
 // RNTL (T09): التبويبات الأربعة تُعرض بالعربية، والرئيسية هي الافتراضية.
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { renderRouter, screen } from 'expo-router/testing-library';
 import type { ReactNode } from 'react';
 import TabLayout from '../app/(tabs)/_layout';
@@ -12,7 +13,7 @@ import { ar } from '../i18n/ar';
 jest.mock('../lib/supabase', () => ({ getSupabase: () => null }));
 
 function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 

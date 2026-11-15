@@ -157,6 +157,7 @@ function CartLine({ line }: { line: CartLineView }) {
           accessibilityLabel={ar.cart.removeA11y(name)}
           onPress={() => remove(line.id)}
           style={styles.remove}
+          testID={`cart-remove-${line.id}`}
         >
           <Ionicons name="trash-outline" size={14} color={colors.danger} />
           <AppText size="caption" color={colors.danger}>
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    minHeight: 32,
+    minHeight: sizes.touchTarget,
     paddingHorizontal: spacing.xs,
   },
   removeIcon: {

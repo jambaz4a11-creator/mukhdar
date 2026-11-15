@@ -3,7 +3,8 @@
 // Supabase مزيف (from/auth/functions)، بلا شبكة.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ERROR_MESSAGES, PIN_MESSAGES } from '@mukhdar/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Alert, type AlertButton, Linking } from 'react-native';
@@ -108,7 +109,7 @@ function setup(opts: Options = {}) {
 }
 
 async function renderUi(ui: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   return await render(
     <SafeAreaProvider
       initialMetrics={{

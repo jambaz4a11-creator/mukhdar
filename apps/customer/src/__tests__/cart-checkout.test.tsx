@@ -3,7 +3,9 @@
 // تعليم المنتج من detail، ورسائل كل أخطاء place_order). Supabase مزيف يسجل المفاتيح، بلا شبكة.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ERROR_MESSAGES, formatIQD, type ErrorCode } from '@mukhdar/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
+import { expectTouchTarget } from '../test-utils/touchTarget';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -144,7 +146,7 @@ const rpcArgs = (call: Call) =>
 
 /** seed: يضع منتجات بكاش الكتالوج (كما بعد تصفح الرئيسية). */
 async function renderUi(ui: ReactElement, seed?: ReturnType<typeof makeProduct>[]) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   if (seed) client.setQueryData(catalogKeys.list(null), { pages: [seed], pageParams: [0] });
   return await render(
     <SafeAreaProvider
@@ -294,6 +296,8 @@ describe('cart screen', () => {
     const decs = screen.getAllByLabelText(ar.catalog.decrease);
     expect(decs[1]?.props.accessibilityState?.disabled).toBe(true);
 
+    // مراجعة S6: زر الحذف بمساحة لمس ≥ 44
+    expectTouchTarget(screen.getByTestId('cart-remove-c'));
     await fireEvent.press(screen.getByLabelText(ar.cart.removeA11y('خيار')));
     expect(useCart.getState().items).toEqual({ t: 3 });
     expect(screen.queryByText('خيار')).toBeNull();

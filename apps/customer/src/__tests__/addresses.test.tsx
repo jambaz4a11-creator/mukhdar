@@ -1,6 +1,7 @@
 // العناوين (T12): النموذج (لا حفظ بدون شقة، تغيير القطاع يمسح ما بعده، التحقق من رقم العمارة)، القائمة
 // (افتراضي واحد، حذف، اختيار)، و"التوصيل إلى" بالرئيسية. Supabase مزيف، بلا شبكة.
-import { type Query, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type Query, QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Alert, type AlertButton } from 'react-native';
@@ -20,6 +21,7 @@ import { useAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
 import { shouldPersistQuery } from '../lib/query';
 import { type Call, createFakeSupabase, opArgs, type Result } from '../test-utils/fakeSupabase';
+import { expectTouchTarget } from '../test-utils/touchTarget';
 
 // ------------------------------------------------------------------ mocks
 let mockClient: unknown = null;
@@ -129,7 +131,7 @@ const rpcAddress = (call: Call) => {
 };
 
 async function renderUi(ui: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   return await render(
     <SafeAreaProvider
       initialMetrics={{
@@ -428,6 +430,8 @@ describe('delivery address header', () => {
     setup([makeAddress('a2', { unit: 24, building: 60 }), makeAddress('a1', { isDefault: true })]);
     await renderUi(<DeliveryAddressHeader />);
     expect(await screen.findByText('وحدة A3 - عمارة 12')).toBeTruthy();
+    // مراجعة S6: مساحة لمس ≥ 44
+    expectTouchTarget(screen.getByTestId('delivery-address'));
     await fireEvent.press(screen.getByTestId('delivery-address'));
     expect(mockRouter.push).toHaveBeenCalledWith({
       pathname: '/address',

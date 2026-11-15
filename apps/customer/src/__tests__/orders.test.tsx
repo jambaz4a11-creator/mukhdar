@@ -9,7 +9,8 @@ import {
   STATUS_LABELS,
   type OrderStatus,
 } from '@mukhdar/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils/queryClient';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
 import type { ReactElement } from 'react';
@@ -237,7 +238,7 @@ function setup(opts: Options = {}) {
 }
 
 async function renderUi(ui: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = createTestQueryClient();
   return await render(
     <SafeAreaProvider
       initialMetrics={{

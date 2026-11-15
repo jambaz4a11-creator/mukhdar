@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    minHeight: sizes.touchTarget - 12,
+    minHeight: sizes.touchTarget,
   },
   text: { flexShrink: 1 },
 });

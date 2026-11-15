@@ -1,6 +1,7 @@
 // AsyncStorage بذاكرة مؤقتة للاختبارات (mock الرسمي للمكتبة)
 import mockAsyncStorage from '@react-native-async-storage/async-storage/jest/async-storage-mock';
 import { configure } from '@testing-library/react-native';
+import { clearTestQueryClients } from './src/test-utils/queryClient';
 
 jest.mock('@react-native-async-storage/async-storage', () => mockAsyncStorage);
 
@@ -21,3 +22,6 @@ jest.mock('expo-notifications', () => ({
   DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
 }));
 jest.mock('expo-device', () => ({ __esModule: true, isDevice: false }));
+
+// مراجعة S5: تفريغ QueryClients الاختبارات بعد كل اختبار (لا مؤقتات معلقة)
+afterEach(() => clearTestQueryClients());
