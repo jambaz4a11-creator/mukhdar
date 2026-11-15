@@ -14,14 +14,14 @@
 | 04 | [التحقق عبر واتساب (لاحقاً، اختياري)](04-whatsapp-verification.md) | - | ⏸ اختياري، لا يمنع شيئاً |
 | 05 | [بيانات تجريبية seed](05-seed-demo.md) | 02 | ✅ |
 | 06 | [الحزمة المشتركة](06-shared-package.md) | 02 | ✅ |
-| 07 | [Edge Function: push-dispatch](07-edge-push-dispatch.md) | 03 | ✅ (فحص الجهاز الحقيقي ← T14) |
+| 07 | [Edge Function: push-dispatch](07-edge-push-dispatch.md) | 03 | ✅ (فحص الجهاز الحقيقي ← T14، بانتظار development build) |
 | 08 | [Edge Function: delete-account](08-edge-delete-account.md) | 03 | ✅ (صفحة الويب ← T16) |
 | 09 | [هيكل تطبيق الزبون](09-customer-scaffold.md) | 06 | ✅ (فحص Expo Go وSentry يدوي) |
 | 10 | [دخول الزبون](10-customer-auth.md) | 09 | ✅ (فحص الأجهزة يدوي) |
 | 11 | [الكتالوج](11-customer-catalog.md) | 05، 09 | ✅ (فحص التمرير وبدون شبكة يدوي) |
 | 12 | [العناوين](12-customer-addresses.md) | 10 | ✅ (فحص الجهاز يدوي) |
 | 13 | [السلة وتأكيد الطلب](13-customer-cart-checkout.md) | 11، 12 | ✅ (فحص قطع الشبكة على جهاز يدوي) |
-| 14 | [تتبع الطلبات والتقييم والإشعارات](14-customer-orders.md) | 07، 13 | ⬜ |
+| 14 | [تتبع الطلبات والتقييم والإشعارات](14-customer-orders.md) | 07، 13 | ✅ (إشعار الجهاز الحقيقي ← development build؛ Realtime Inspector يدوي) |
 | 15 | [حسابي وحذف الحساب](15-customer-account.md) | 08، 10 | ⬜ |
 | 16 | [هيكل لوحة الأدمن والدخول](16-admin-scaffold.md) | 06 | ⬜ |
 | 17 | [صفحة الطلبات](17-admin-orders.md) | 16 | ⬜ |

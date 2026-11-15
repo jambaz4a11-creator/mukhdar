@@ -21,6 +21,7 @@ import { getSupabase } from '../../lib/supabase';
 import { APP_SETTINGS_KEY } from '../settings/useAppSettings';
 import { cartSignature, useCart } from '../cart/store';
 import { useSelectedAddress } from '../addresses/selected';
+import { askAfterFirstOrder } from '../notifications/push';
 
 /** بعدها نعتبر الطلب منقطعاً (الرد قد يصل للخلفية؛ إعادة المحاولة بنفس المفتاح آمنة). */
 export const PLACE_ORDER_TIMEOUT_MS = 20_000;
@@ -133,6 +134,7 @@ export function usePlaceOrder() {
       useOrderAttempt.getState().reset();
       useSelectedAddress.getState().select(addressId);
       void queryClient.invalidateQueries({ queryKey: ['products'] });
+      void queryClient.invalidateQueries({ queryKey: ['orders'] }); // "طلباتي" تعرض الطلب الجديد
       router.replace({
         pathname: '/order/[id]',
         params: {
@@ -141,6 +143,8 @@ export function usePlaceOrder() {
           total: String(result.total_iqd),
         },
       });
+      // T14: إذن الإشعارات بعد أول طلب ناجح (مرة واحدة بالجهاز، مع شرح)
+      void askAfterFirstOrder(client);
     } catch (e) {
       const parsed = e instanceof PlaceOrderTimeout ? null : parseBackendError(e);
       const code = parsed?.code ?? null;

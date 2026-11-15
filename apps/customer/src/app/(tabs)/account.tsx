@@ -1,5 +1,5 @@
 // حسابي: محمية (T10). الآن: الرقم، عناويني (T12)، وتسجيل الخروج؛ بقية الشاشة (الاسم، حذف الحساب) بـ T15.
-// تسجيل الخروج يمسح الجلسة (secure-store) والسلة تبقى.
+// تسجيل الخروج يحذف رمز إشعارات الجهاز (T14) ثم يمسح الجلسة (secure-store)، والسلة تبقى.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -9,6 +9,7 @@ import { Placeholder } from '../../components/Screen';
 import { useMyAddresses } from '../../features/addresses/hooks';
 import { displayPhone } from '../../features/auth/api';
 import { useRequireAuth } from '../../features/auth/useRequireAuth';
+import { unregisterPushToken } from '../../features/notifications/push';
 import { ar } from '../../i18n/ar';
 import { captureError, isSentryEnabled } from '../../lib/sentry';
 import { getSupabase } from '../../lib/supabase';
@@ -21,8 +22,11 @@ export default function AccountScreen() {
   if (!session) return null;
 
   async function signOut() {
+    const client = getSupabase();
     try {
-      await getSupabase()?.auth.signOut();
+      // رمز الإشعارات أولاً (يحتاج الجلسة، RLS)، ثم إنهاء الجلسة
+      if (client) await unregisterPushToken(client);
+      await client?.auth.signOut();
     } catch (e) {
       captureError(e);
     }

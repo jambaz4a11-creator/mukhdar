@@ -1,4 +1,4 @@
-// الجذر: Sentry (إن وُجد DSN)، الخط، RTL، الجلسة (T10)، TanStack Query المحفوظ، ثم التنقل.
+// الجذر: Sentry (إن وُجد DSN)، الخط، RTL، الجلسة (T10)، TanStack Query المحفوظ، الإشعارات (T14)، ثم التنقل.
 import { useFonts } from '@expo-google-fonts/ibm-plex-sans-arabic/useFonts';
 import { IBMPlexSansArabic_400Regular } from '@expo-google-fonts/ibm-plex-sans-arabic/400Regular';
 import { IBMPlexSansArabic_500Medium } from '@expo-google-fonts/ibm-plex-sans-arabic/500Medium';
@@ -11,6 +11,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initAuth } from '../features/auth/store';
+import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
+import { configureNotificationHandler } from '../features/notifications/push';
 import {
   createQueryClient,
   PERSIST_MAX_AGE,
@@ -23,6 +25,7 @@ import { getSupabase } from '../lib/supabase';
 import { colors } from '../theme';
 
 initSentry();
+configureNotificationHandler();
 void SplashScreen.preventAutoHideAsync();
 
 const queryClient = createQueryClient();
@@ -72,6 +75,7 @@ function RootLayout() {
         }}
       >
         <StatusBar style="dark" />
+        <NotificationsBridge />
         <Stack
           screenOptions={{
             headerShown: false,

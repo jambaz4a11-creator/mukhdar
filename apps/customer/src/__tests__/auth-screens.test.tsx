@@ -343,7 +343,7 @@ describe('guard', () => {
       pathname: '/auth/sign-in',
       params: { redirect: '/orders' },
     });
-    expect(screen.queryByText(ar.placeholders.orders)).toBeNull();
+    expect(screen.queryByText(ar.orders.title)).toBeNull();
   });
 
   it('waits for the saved session before redirecting', async () => {
@@ -357,7 +357,7 @@ describe('guard', () => {
     useAuth.setState({ session: SESSION as never, ready: true });
     setup();
     await renderScreen(<OrdersScreen />);
-    expect(screen.getByText(ar.placeholders.orders)).toBeTruthy();
+    expect(screen.getByText(ar.orders.title)).toBeTruthy();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

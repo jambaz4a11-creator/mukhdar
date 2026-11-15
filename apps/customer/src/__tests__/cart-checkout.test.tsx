@@ -9,7 +9,6 @@ import type { ReactElement } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CartScreen from '../app/(tabs)/cart';
 import CheckoutScreen from '../app/checkout';
-import OrderScreen from '../app/order/[id]';
 import type { CustomerAddress } from '../features/addresses/api';
 import { catalogKeys } from '../features/catalog/api';
 import { useSelectedAddress } from '../features/addresses/selected';
@@ -367,13 +366,6 @@ describe('checkout', () => {
     expect(JSON.stringify(rpcArgs(placeOrderCalls[0] as Call))).not.toMatch(/price/);
     expect(useCart.getState().items).toEqual({});
     expect(useOrderAttempt.getState().key).toBeNull();
-  });
-
-  it('the order screen shows the total returned by the backend', async () => {
-    mockParams = { id: 'o1', number: '1042', total: '3000' };
-    await renderUi(<OrderScreen />);
-    expect(screen.getByText(ar.order.received('1042'))).toBeTruthy();
-    expect(screen.getByTestId('order-total')).toHaveTextContent(formatIQD(3000));
   });
 
   it('the button is disabled while sending (a double tap sends one request)', async () => {

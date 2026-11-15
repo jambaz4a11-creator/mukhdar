@@ -24,6 +24,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    // T14: إشعارات Android عبر FCM. الملف من Firebase، يُمرَّر كمتغير ملف بـ EAS (لا يُرفع لـ git).
+    ...(process.env.GOOGLE_SERVICES_JSON
+      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+      : {}),
   },
   web: { favicon: './assets/images/favicon.png' },
   plugins: [
@@ -37,8 +41,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-splash-screen',
       { backgroundColor: '#F7F8F3', image: './assets/images/splash-icon.png', imageWidth: 76 },
     ],
+    // T14: الإشعارات البعيدة تحتاج development build (لا تعمل في Expo Go منذ SDK 53)
+    ['expo-notifications', { color: '#1F6B3A' }],
   ],
   extra: {
     appEnv: process.env.APP_ENV ?? 'development',
+    // T14: معرّف مشروع EAS (ليس سراً). بدونه لا يُطلب رمز Expo Push والتطبيق يتخطى التسجيل.
+    ...(process.env.EAS_PROJECT_ID ? { eas: { projectId: process.env.EAS_PROJECT_ID } } : {}),
   },
 });
