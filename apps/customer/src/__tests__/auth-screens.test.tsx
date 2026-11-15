@@ -24,6 +24,9 @@ jest.mock('../config', () => ({
     supabaseKey: 'sb_publishable_x',
     sentryDsn: '',
     shopWhatsapp: '9647801112222',
+    shopPhone: '',
+    privacyUrl: '',
+    termsUrl: '',
   },
   isSupabaseConfigured: () => true,
 }));

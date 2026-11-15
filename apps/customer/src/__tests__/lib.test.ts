@@ -73,23 +73,17 @@ describe('ensureRTL', () => {
 
 describe('config', () => {
   it('needs an https URL and a key', () => {
-    expect(
-      isSupabaseConfigured({ supabaseUrl: '', supabaseKey: 'k', sentryDsn: '', shopWhatsapp: '' }),
-    ).toBe(false);
+    expect(isSupabaseConfigured({ supabaseUrl: '', supabaseKey: 'k' })).toBe(false);
     expect(
       isSupabaseConfigured({
         supabaseUrl: 'https://x.supabase.co',
         supabaseKey: '',
-        sentryDsn: '',
-        shopWhatsapp: '',
       }),
     ).toBe(false);
     expect(
       isSupabaseConfigured({
         supabaseUrl: 'https://x.supabase.co',
         supabaseKey: 'sb_publishable_x',
-        sentryDsn: '',
-        shopWhatsapp: '',
       }),
     ).toBe(true);
   });

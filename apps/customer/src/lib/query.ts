@@ -22,8 +22,8 @@ export const queryPersister = createAsyncStoragePersister({
 
 export const PERSIST_MAX_AGE = DAY;
 
-/** بيانات شخصية لا تُحفظ على AsyncStorage: العناوين (T12) والطلبات (T14). القوائم الهرمية والكتالوج تُحفظ. */
-const NOT_PERSISTED = new Set(['addresses', 'orders']);
+/** بيانات شخصية لا تُحفظ على AsyncStorage: العناوين (T12) والطلبات (T14) والاسم (T15). القوائم الهرمية والكتالوج تُحفظ. */
+const NOT_PERSISTED = new Set(['addresses', 'orders', 'profile']);
 
 export function shouldPersistQuery(query: Query): boolean {
   return defaultShouldDehydrateQuery(query) && !NOT_PERSISTED.has(String(query.queryKey[0]));
