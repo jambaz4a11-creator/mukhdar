@@ -437,12 +437,13 @@ async function seedDemo() {
 
     await q('begin');
     const before = await statsRow();
-    // شراء صباحي: كل منتج رصيده أقل من 60 يُكمَّل لـ 150 (عبر adjust_stock)
+    // تعبئة صباحية: كل منتج رصيده أقل من 60 يُكمَّل لـ 150 (عبر adjust_stock، تسوية موجبة بملاحظة:
+    // لا تغيّر سعر الشراء، بخلاف 'purchase' التي تتطلب سعراً منذ T18)
     await q(`select set_config('request.jwt.claims', $1, true)`, [
       JSON.stringify({ sub: admin.id, role: 'authenticated' }),
     ]);
     await q(
-      `select public.adjust_stock(product_id, 150 - qty, 'purchase', 'شراء صباحي (عرض)') from public.stock where qty < 60`,
+      `select public.adjust_stock(product_id, 150 - qty, 'adjust', 'تعبئة صباحية (عرض)') from public.stock where qty < 60`,
     );
     await q(`select set_config('request.jwt.claims', '{}', true)`);
 

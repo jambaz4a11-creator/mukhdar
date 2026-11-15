@@ -44,8 +44,8 @@ const RESET_SQL = [
           cost_iqd = s.cost_iqd - p.k, gross_profit_iqd = s.gross_profit_iqd - (p.r - p.k), updated_at = now()
      from per_day p where s.day = p.day`,
   `delete from public.daily_stats
-    where (delivered_count, cancelled_count, revenue_iqd, delivery_fees_iqd, cost_iqd, gross_profit_iqd)
-          = (0, 0, 0, 0, 0, 0)`,
+    where (delivered_count, cancelled_count, revenue_iqd, delivery_fees_iqd, cost_iqd, gross_profit_iqd,
+           waste_cost_iqd, adjust_loss_iqd) = (0, 0, 0, 0, 0, 0, 0, 0)`,
 
   // المخزون: نعكس صافي حركات العرض (بيع، إرجاع، شراء صباحي) ثم نحذفها من الدفتر
   `create temp table demo_moves on commit drop as

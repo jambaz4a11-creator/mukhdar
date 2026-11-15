@@ -98,16 +98,14 @@ insert into public.product_costs (product_id, cost_iqd)
 select ins.id, sp.cost
   from ins join public.categories c on c.id = ins.category_id join seed_products sp on sp.cat = c.name and sp.name = ins.name;
 
--- الرصيد الابتدائي للمنتجات التي رصيدها صفر ولا حركات لها (أي الجديدة)، مع حركة purchase بالدفتر
-with s as (
-  update public.stock st set qty = sp.qty, updated_at = now()
-    from public.products p join public.categories c on c.id = p.category_id
-    join seed_products sp on sp.cat = c.name and sp.name = p.name
-   where st.product_id = p.id and st.qty = 0
-     and not exists (select 1 from public.inventory_movements m where m.product_id = p.id)
-  returning st.product_id, st.qty
-)
-insert into public.inventory_movements (product_id, qty, type, note)
-select product_id, qty, 'purchase', 'رصيد ابتدائي (seed)' from s;
+-- الرصيد الافتتاحي للمنتجات التي رصيدها صفر ولا حركات لها (أي الجديدة): حركة 'adjust' بالدفتر عبر
+-- private.apply_stock_movement (T18: تحدّث stock والدفتر معاً، والكلفة من سعر الشراء)، لا كتابة stock مباشرة
+select private.apply_stock_movement(p.id, sp.qty, 'adjust', 'رصيد افتتاحي (seed)', null, null)
+  from public.products p
+  join public.categories c on c.id = p.category_id
+  join seed_products sp on sp.cat = c.name and sp.name = p.name
+  join public.stock st on st.product_id = p.id
+ where st.qty = 0
+   and not exists (select 1 from public.inventory_movements m where m.product_id = p.id);
 
 drop table seed_products;

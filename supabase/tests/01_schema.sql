@@ -32,9 +32,10 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['accept_order', 'adjust_stock', 'assign_driver', 'available_orders', 'list_drivers', 'place_order',
-        'rate_order', 'register_push_token', 'set_order_status', 'set_user_role'],
-  'authenticated can execute exactly the 10 RPCs among SECURITY DEFINER functions');
+  array['accept_order', 'adjust_stock', 'adjust_stock_bulk', 'admin_save_product', 'assign_driver',
+        'available_orders', 'list_drivers', 'place_order', 'rate_order', 'recompute_daily_stats',
+        'register_push_token', 'reorder_products', 'set_order_status', 'set_product_price', 'set_user_role'],
+  'authenticated can execute exactly the 15 RPCs among SECURITY DEFINER functions');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');
@@ -104,8 +105,8 @@ select ok(not has_column_privilege('authenticated', 'public.products', 'in_stock
   'products.in_stock cannot be set on insert');
 select ok(not has_column_privilege('authenticated', 'public.products', 'id', 'insert'),
   'products.id cannot be chosen by the client');
-select ok(has_column_privilege('authenticated', 'public.products', 'price_iqd', 'update'),
-  'products.price_iqd is writable (admin via RLS)');
+select ok(not has_column_privilege('authenticated', 'public.products', 'price_iqd', 'update'),
+  'products.price_iqd is not directly writable (admin_save_product / set_product_price, T18)');
 select ok(not has_column_privilege('authenticated', 'public.addresses', 'customer_id', 'update'),
   'addresses.customer_id cannot be changed');
 select ok(not has_column_privilege('authenticated', 'public.addresses', 'id', 'insert'),

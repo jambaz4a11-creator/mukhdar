@@ -51,6 +51,8 @@ export const ERROR_MESSAGES = {
   // الأدمن
   INVALID_MOVEMENT: 'حركة المخزون غير صحيحة',
   PRODUCT_NOT_FOUND: 'المنتج غير موجود',
+  INVALID_PRODUCT: 'بيانات المنتج غير صحيحة',
+  INVALID_DATE_RANGE: 'مدى التاريخ غير صحيح (حتى سنة واحدة)',
   CANNOT_DEMOTE_SELF: 'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك',
   USER_NOT_FOUND: 'المستخدم غير موجود',
 } as const satisfies Record<string, string>;

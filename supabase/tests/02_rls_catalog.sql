@@ -35,10 +35,10 @@ select is_empty($$ select 1 from public.inventory_movements $$, 'customer sees n
 select is_empty($$ select 1 from public.daily_stats $$, 'customer sees no daily_stats');
 select is_empty($$ select 1 from public.order_item_costs $$, 'customer sees no order_item_costs');
 select throws_ok($$ insert into public.categories (name) values ('x') $$, '42501', null, 'customer cannot insert a category');
-select results_eq($$ with u as (update public.products set price_iqd = 250 where id = tests.id('p_active') returning 1)
-                     select count(*)::int from u $$, array[0], 'customer cannot update a product');
-select results_eq($$ with d as (delete from public.products where id = tests.id('p_active') returning 1)
-                     select count(*)::int from d $$, array[0], 'customer cannot delete a product');
+select throws_ok($$ update public.products set price_iqd = 250 where id = tests.id('p_active') $$,
+  '42501', null, 'customer cannot update a product');
+select throws_ok($$ delete from public.products where id = tests.id('p_active') $$,
+  '42501', null, 'customer cannot delete a product');
 select results_eq($$ with u as (update public.app_settings set store_open = false returning 1)
                      select count(*)::int from u $$, array[0], 'customer cannot update app_settings');
 select results_eq($$ select id from public.addresses $$, array[tests.id('a1')], 'customer sees only own address');
@@ -63,23 +63,26 @@ select isnt_empty($$ select 1 from public.sectors where name = 'test-hidden-sect
 select results_eq($$ select cost_iqd from public.product_costs where product_id = tests.id('p_active') $$,
   array[600::bigint], 'admin reads product_costs');
 select lives_ok($$ insert into public.categories (name) values ('test admin category') $$, 'admin inserts a category');
-select results_eq($$ with u as (update public.products set price_iqd = 1250 where id = tests.id('p_active') returning 1)
-                     select count(*)::int from u $$, array[1], 'admin updates a product');
+select throws_ok($$ update public.products set price_iqd = 1250 where id = tests.id('p_active') $$,
+  '42501', null, 'even admin cannot update a product directly (functions only, T18)');
 select results_eq($$ with u as (update public.app_settings set delivery_fee_iqd = 1500 returning 1)
                      select count(*)::int from u $$, array[1], 'admin updates app_settings');
-select throws_ok($$ insert into public.products (category_id, name, unit, price_iqd)
-                    select id, 'bad price', 'نص كيلو', 1100 from public.categories limit 1 $$,
-  '23514', null, 'price not a multiple of 250 is rejected');
-select throws_ok($$ insert into public.products (category_id, name, unit, price_iqd)
-                    select id, 'free-text unit', 'كيلو', 1000 from public.categories limit 1 $$,
-  '23514', null, 'a unit outside the fixed list is rejected (S7)');
-select throws_ok($$ update public.products set unit = 'نصف كيلو' where id = tests.id('p_active') $$,
-  '23514', null, 'changing a product to a free-text unit is rejected');
-select lives_ok($$ insert into public.products (category_id, name, unit, price_iqd)
-                   select c.id, 'unit ' || u, u, 1000 from public.categories c,
-                          unnest(array['نص كيلو', 'باقة', 'حبة', 'علبة', 'قنينة', 'سلة']) u
-                    where c.id = (select id from public.categories limit 1) $$,
-  'every allowed sale unit is accepted');
+select throws_ok($$ select public.admin_save_product(jsonb_build_object(
+                      'category_id', (select id from public.categories limit 1),
+                      'name', 'bad price', 'unit', 'نص كيلو', 'price_iqd', 1100)) $$,
+  'INVALID_PRODUCT', 'price not a multiple of 250 is rejected');
+select throws_ok($$ select public.admin_save_product(jsonb_build_object(
+                      'category_id', (select id from public.categories limit 1),
+                      'name', 'free-text unit', 'unit', 'كيلو', 'price_iqd', 1000)) $$,
+  'INVALID_PRODUCT', 'a unit outside the fixed list is rejected (S7)');
+select throws_ok(format($$ select public.admin_save_product(jsonb_build_object('id', %L::text, 'unit', 'نصف كيلو')) $$,
+                        tests.id('p_active')),
+  'INVALID_PRODUCT', 'changing a product to a free-text unit is rejected');
+select is((select count(*)::int from unnest(array['نص كيلو', 'باقة', 'حبة', 'علبة', 'قنينة', 'سلة']) u
+            where public.admin_save_product(jsonb_build_object(
+                    'category_id', (select id from public.categories limit 1),
+                    'name', 'unit ' || u, 'unit', u, 'price_iqd', 1000)) is not null),
+  6, 'every allowed sale unit is accepted');
 select results_eq($$ select count(*)::int from public.addresses where id in (tests.id('a1'), tests.id('a2')) $$,
   array[2], 'admin sees all customers'' addresses');
 

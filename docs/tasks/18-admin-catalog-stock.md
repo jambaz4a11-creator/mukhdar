@@ -1,4 +1,4 @@
-# 18: المنتجات والمخزون
+# 18: المنتجات والمخزون ✅
 
 **الهدف:** SPEC-admin §2.2 و§2.3 و§2.9، وSPEC-backend §12.1 و§12.2 (المنتجات) و§12.5. قرارات المالك 2026-11-15.
 
@@ -39,3 +39,10 @@
 - pgTAP: `adjust_stock` الجديدة و`adjust_stock_bulk` (الصلاحيات، الكلفة، الخسائر، الذرية)، إشعار النقص (مرة عند العبور)، `recompute_daily_stats` = التحديث التراكمي، الثابت `stock = Σ الحركات`، دوال المنتجات وسحب الكتابة المباشرة.
 - Playwright: قسم بصورة وإخفاؤه، إدخال سعر وكمية بالكيلو (يُحفظ بالنصف/الضعف)، إنشاء منتج بصورة، تعطيله يخفيه من تطبيق الزبون (استعلام anon)، مشتريات بسعر تجعله `in_stock` وتحدّث سعر الشراء، هدر اليوم، الموظف يرى الأرصدة ولا يرى أزرار الحركات ولا المبالغ.
 - وحدة: تصغير الصورة، التحقق من السعر، حساب كلفة الهدر بالشاشة.
+
+## ملاحظات التنفيذ (2026-11-16)
+- **المساعد:** `packages/shared/src/adminUnits.ts` (+ `isValidAdminPrice`/`isValidAdminQty`/خطوات الإدخال) واختباراته `adminUnits.test.ts`. الصفحات تستعمله عبر `apps/admin/src/features/catalog/forms.ts`.
+- **قاعدة البيانات:** migration `20261121000001_catalog_stock.sql` (طُبّقت على mukhdar-dev بموافقة صاحب المشروع): `unit_cost_iqd` + backfill، رصيد افتتاحي بالدفتر لكل فرق (`adjust` "رصيد افتتاحي (T18)")، أعمدة `daily_stats` الجديدة + `recompute_daily_stats` (شُغّلت للـ backfill)، `low_stock_threshold`، جمهور `admins_only`، `adjust_stock` (5 معاملات) و`adjust_stock_bulk`، `admin_save_product`/`set_product_price`/`reorder_products`، وسحب insert/update/delete على `products` و`product_costs`. الكلفة والخسائر وتنبيه النقص بـ triggers (كل المسارات، بلا تعديل `place_order` أو `set_order_status`). رموز جديدة: `INVALID_PRODUCT`، `INVALID_DATE_RANGE`.
+- **اللوحة:** `apps/admin/src/features/catalog`: `ProductsScreen` (الجدول، التعديل السريع، التعطيل، الترتيب بالسحب والأسهم، بطاقات الأقسام)، `ProductDialog`، `CategoryDialog`، `StockScreen` (+ سجل الحركات)، `StockDialogs` (مشتريات، تسوية، حد)، `WasteScreen`، `image.ts` (تصغير WebP بالمتصفح).
+- **الـ seed:** `seed.sql` يكتب الرصيد الافتتاحي عبر `private.apply_stock_movement` (حركة + رصيد معاً)؛ `seed:demo` يعبّئ بـ `adjust` موجبة (لا تغيّر سعر الشراء).
+- **الاختبارات:** pgTAP 619 (جديد `18_catalog_stock.sql` 72، و`10_storage` لصور الأقسام، وتحديث `01`/`02`/`06`)؛ وحدة: shared 203، admin 119؛ Playwright: القراءة محلياً ضد mukhdar-dev، والكتابة (قسم بصورة وإخفاؤه، منتج بصورة 5MB، سعر بالكيلو، مشتريات، هدر، تعطيل) بـ CI فقط (Supabase محلي مع Storage).

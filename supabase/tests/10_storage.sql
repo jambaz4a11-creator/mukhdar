@@ -1,5 +1,5 @@
 -- 10: سياسات Storage لصور المنتجات (bucket عام: العرض بالرابط العام، لا بقائمة الملفات)
-select plan(12);
+select plan(15);
 
 select tests.remember('admin', tests.new_user('admin'));
 select tests.remember('cust', tests.new_user('customer'));
@@ -44,6 +44,18 @@ select is(tests.affected($$ update storage.objects set metadata = '{"x": 1}'
 select is(tests.affected($$ delete from storage.objects
                             where bucket_id = 'product-images' and name = 'tests/admin-upload.png' $$),
   0, 'customer cannot delete a product image');
+
+-- صور الأقسام (T18): نفس الـ bucket تحت categories/، للأدمن فقط
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('product-images', 'categories/1/1.webp') $$,
+  '42501', null, 'customer cannot upload a category image');
+select tests.as_postgres();
+select tests.remember('staff', tests.new_user('staff'));
+select tests.as_user(tests.id('staff'));
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('product-images', 'categories/1/2.webp') $$,
+  '42501', null, 'staff cannot upload a category image');
+select tests.as_user(tests.id('admin'));
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('product-images', 'categories/1/3.webp') $$,
+  'admin uploads a category image');
 
 select tests.as_anon();
 select throws_ok($$ insert into storage.objects (bucket_id, name) values ('product-images', 'tests/anon-upload.png') $$,

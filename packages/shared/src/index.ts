@@ -4,6 +4,7 @@ export const PACKAGE_NAME = '@mukhdar/shared';
 export * from './types';
 export * from './money';
 export * from './quantity';
+export * from './adminUnits';
 export * from './address';
 export * from './phone';
 export * from './pin';

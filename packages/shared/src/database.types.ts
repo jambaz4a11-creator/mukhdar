@@ -198,35 +198,44 @@ export type Database = {
       };
       daily_stats: {
         Row: {
+          adjust_loss_iqd: number;
           cancelled_count: number;
           cost_iqd: number;
           day: string;
           delivered_count: number;
           delivery_fees_iqd: number;
           gross_profit_iqd: number;
+          net_profit_iqd: number | null;
           revenue_iqd: number;
           updated_at: string;
+          waste_cost_iqd: number;
         };
         ComputedFields: never;
         Insert: {
+          adjust_loss_iqd?: number;
           cancelled_count?: number;
           cost_iqd?: number;
           day: string;
           delivered_count?: number;
           delivery_fees_iqd?: number;
           gross_profit_iqd?: number;
+          net_profit_iqd?: never;
           revenue_iqd?: number;
           updated_at?: string;
+          waste_cost_iqd?: number;
         };
         Update: {
+          adjust_loss_iqd?: number;
           cancelled_count?: number;
           cost_iqd?: number;
           day?: string;
           delivered_count?: number;
           delivery_fees_iqd?: number;
           gross_profit_iqd?: number;
+          net_profit_iqd?: never;
           revenue_iqd?: number;
           updated_at?: string;
+          waste_cost_iqd?: number;
         };
         Relationships: [];
       };
@@ -240,6 +249,7 @@ export type Database = {
           product_id: string;
           qty: number;
           type: Database['public']['Enums']['movement_type'];
+          unit_cost_iqd: number;
         };
         ComputedFields: never;
         Insert: {
@@ -251,6 +261,7 @@ export type Database = {
           product_id: string;
           qty: number;
           type: Database['public']['Enums']['movement_type'];
+          unit_cost_iqd: number;
         };
         Update: {
           created_at?: string;
@@ -261,6 +272,7 @@ export type Database = {
           product_id?: string;
           qty?: number;
           type?: Database['public']['Enums']['movement_type'];
+          unit_cost_iqd?: number;
         };
         Relationships: [
           {
@@ -826,17 +838,20 @@ export type Database = {
       };
       stock: {
         Row: {
+          low_stock_threshold: number;
           product_id: string;
           qty: number;
           updated_at: string;
         };
         ComputedFields: never;
         Insert: {
+          low_stock_threshold?: number;
           product_id: string;
           qty?: number;
           updated_at?: string;
         };
         Update: {
+          low_stock_threshold?: number;
           product_id?: string;
           qty?: number;
           updated_at?: string;
@@ -981,9 +996,19 @@ export type Database = {
           p_product_id: string;
           p_qty: number;
           p_type: Database['public']['Enums']['movement_type'];
+          p_unit_cost_iqd?: number;
         };
         Returns: number;
       };
+      adjust_stock_bulk: {
+        Args: {
+          p_items: Json;
+          p_note?: string;
+          p_type: Database['public']['Enums']['movement_type'];
+        };
+        Returns: number;
+      };
+      admin_save_product: { Args: { p: Json }; Returns: string };
       assign_driver: {
         Args: { p_driver_id: string; p_order_id: string };
         Returns: {
@@ -1075,6 +1100,7 @@ export type Database = {
         Args: { p_comment?: string; p_order_id: string; p_stars: number };
         Returns: undefined;
       };
+      recompute_daily_stats: { Args: { p_from: string; p_to: string }; Returns: number };
       register_push_token: {
         Args: {
           p_platform: Database['public']['Enums']['push_platform'];
@@ -1083,6 +1109,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
       revoke_user_sessions: { Args: { p_user_id: string }; Returns: number };
       round_iqd: { Args: { amount: number }; Returns: number };
       set_default_address: { Args: { p_address_id: string }; Returns: undefined };
@@ -1125,6 +1152,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      set_product_price: {
+        Args: { p_price_iqd: number; p_product_id: string };
+        Returns: undefined;
       };
       set_user_role: {
         Args: {

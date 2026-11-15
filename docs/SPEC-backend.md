@@ -36,8 +36,8 @@
 | `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن (← `update_app_settings` فقط، T19) |
 | `sectors` / `subsections` / `buildings` | العنوان الهرمي: قطاع ← وحدة ← عمارة (قطاعان A وB، 17 وحدة، 1700 عمارة؛ رقم العمارة فريد داخل الوحدة فقط) | الجميع (النشط) | أدمن |
 | `addresses` | عناوين الزبون (عمارة + شقة نصاً)، عنوان افتراضي واحد | صاحبها + أدمن | صاحبها (أعمدة محددة) |
-| `categories` / `products` | الكتالوج | الجميع (النشط)، موظف/أدمن الكل | الأقسام: أدمن؛ المنتجات: أدمن (← دوال فقط، T18) |
-| `product_costs` | سعر الشراء (= آخر سعر مشتريات، T18) | أدمن | أدمن (← دوال فقط، T18) |
+| `categories` / `products` | الكتالوج | الجميع (النشط)، موظف/أدمن الكل | الأقسام: أدمن (RLS)؛ المنتجات: أدمن عبر الدوال فقط (T18) |
+| `product_costs` | سعر الشراء (= آخر سعر مشتريات) | أدمن | دوال فقط (`adjust_stock*`، `admin_save_product`) |
 | `stock` | الرصيد الحالي، وحد النقص `low_stock_threshold` (T18) | موظف + أدمن | دوال فقط |
 | `inventory_movements` | دفتر حركات المخزون، مع كلفة الوحدة `unit_cost_iqd` لكل حركة (T18) | أدمن | دوال فقط |
 | `orders` | الطلب + نسخة العنوان + اسم/هاتف الزبون | الزبون صاحبه، السائق المعيَّن (حسابه نشط ودوره `driver`)، موظف/أدمن | دوال فقط |
@@ -99,7 +99,12 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `rate_order(p_order_id, p_stars, p_comment?)`: `INVALID_STARS`, `ORDER_NOT_RATEABLE`, `ALREADY_RATED`.
 - `register_push_token(p_token, p_platform, p_provider = 'expo')`: لو الرمز مسجّل لحساب آخر (نفس الجهاز)، ينتقل للحساب الحالي (مع مزوّده). رمز فارغ أو أطول من 255 حرفاً أو بلا منصة/مزوّد، أو رمز `expo` ليس بصيغة `ExponentPushToken[...]`/`ExpoPushToken[...]`: `INVALID_TOKEN`.
 - دوال `push-dispatch` (service_role فقط، T07): `claim_push_notifications(p_limit = 200)` تحجز صفوفاً غير مرسلة (`for update skip locked` + `claimed_at`) وترجع لكل صف مستلميه (رمز + مزوّد)؛ `finish_push_notifications(p_results, p_dead_tokens)` تسجل النتيجة وتحذف الرموز الميتة؛ `push_dispatch_authorized(p_secret)` تتحقق من السر المشترك.
-- `adjust_stock(p_product_id, p_qty, p_type, p_note?)` (أدمن): `purchase` موجب، `waste` سالب، `adjust` أي إشارة. يرفض الرصيد السالب. أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK`. (يتغير بـ T18: كلفة الوحدة وسعر المشتريات، §12.)
+- `adjust_stock(p_product_id, p_qty, p_type, p_note?, p_unit_cost_iqd?)` (أدمن، T18 migration `20261121000001`): `purchase` موجب ويتطلب `p_unit_cost_iqd` (موجب، مضاعف 250، لكل وحدة بيع) ويصير سعر الشراء الحالي (`product_costs`)؛ `waste` سالب؛ `adjust` أي إشارة بملاحظة إلزامية. يرفض الرصيد السالب. كل حركة تحفظ كلفة وحدتها (`unit_cost_iqd`: المُدخلة للمشتريات، وإلا سعر الشراء لحظة الحركة أو 0). الهدر والتسوية السالبة تزيد `daily_stats` (بيوم الحركة، بغداد). أخطاء: `NOT_ALLOWED`, `INVALID_MOVEMENT`, `PRODUCT_NOT_FOUND`, `INSUFFICIENT_STOCK` (`detail` = المنتج).
+- `adjust_stock_bulk(p_items, p_type, p_note?) → int` (أدمن): `[{product_id, qty, unit_cost_iqd?}]` (حتى 500، بلا تكرار) بمعاملة واحدة وأقفال `stock` بترتيب `product_id`؛ أي بند خاطئ يُفشل الكل. لهدر اليوم والمشتريات بالجملة. نفس أخطاء `adjust_stock`.
+- `recompute_daily_stats(p_from, p_to) → int` (أدمن أو service_role): يعيد بناء أيام `daily_stats` من `orders` و`order_item_costs` و`inventory_movements` (مطابق للتحديث التراكمي؛ اختبار pgTAP). أخطاء: `NOT_ALLOWED`, `INVALID_DATE_RANGE` (البداية بعد النهاية أو أكثر من 366 يوماً).
+- `admin_save_product(p jsonb) → uuid` (أدمن): إنشاء (بلا `id`؛ يتطلب `name`، `category_id`، `unit`، `price_iqd`) أو تعديل (مع `id`؛ الحقول الموجودة فقط تتغير): `name`، `description`، `category_id`، `unit` (القائمة الثابتة، قيد `products_unit_allowed`)، `price_iqd` (مضاعف 250)، `image_path`، `is_active`، `sort_order`، `cost_iqd` (سعر الشراء، تصحيح يدوي؛ null = بلا تغيير)، `low_stock_threshold` (0..10000). أخطاء: `NOT_ALLOWED`, `INVALID_PRODUCT` (`detail` = اسم الحقل)، `PRODUCT_NOT_FOUND`.
+- `set_product_price(p_product_id, p_price_iqd)` (أدمن، التعديل السريع): `NOT_ALLOWED`, `INVALID_PRODUCT`, `PRODUCT_NOT_FOUND`. `reorder_products(p_ids uuid[])` (أدمن؛ `sort_order` = الموضع 1، 2، …): `NOT_ALLOWED`, `INVALID_PRODUCT` (فارغة أو مكررة)، `PRODUCT_NOT_FOUND`.
+- **إشعار النقص** (trigger على `stock`، كل المسارات: `place_order`، الإلغاء، `adjust_stock*`): نزول الرصيد من ≥ `low_stock_threshold` إلى أقل منه لمنتج نشط ← `_notify('admins_only', …)` مرة واحدة (`data.type = 'low_stock'`، `product_id`؛ النص بالكيلو لنص الكيلو). جمهور `admins_only` = الأدمن وحده (`admins` = الأدمن والموظفون للطلب الجديد).
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
 - حذف الحساب (service_role فقط، تستدعيها Edge Function `delete-account`، T08): `begin_account_deletion(p_user_id) → boolean` (is_active السابق) تأخذ قفل `place_order` لنفس المستخدم، ترفض `ADMIN_ACCOUNT` (أدمن) و`ACTIVE_ORDER` (طلب غير منتهٍ كزبون أو كسائق معيَّن)، وتعطّل الحساب حتى يكتمل `auth.admin.deleteUser`؛ `abort_account_deletion(p_user_id, p_was_active)` ترجع الحالة إن فشل الحذف. `USER_NOT_FOUND` إن لم يوجد ملف شخصي. الدالة ترجع نفس الرموز بـ `{error}` مع HTTP 403/409/404.
 - حماية الحسابات (trigger `before insert/update of phone` على `auth.users`، migration `20261116000001`، ADR 0001): `PHONE_INVALID` لحساب بلا هاتف أو برقم ليس `9647XXXXXXXXX` (يصل للتطبيق كخطأ GoTrue عام "Database error"؛ التطبيق يتحقق من الرقم قبل الإرسال).
@@ -184,7 +189,8 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - تنبيه عند تجاوز 80% من مساحة قاعدة البيانات أو الاتصالات.
 - مراقبة `notification_outbox` (عدد غير المرسل أقدم من 5 دقائق) بلوحة الأدمن.
 
-## 12) تغييرات مخططة للوحة الأدمن (قرارات 2026-11-15؛ لم تُبنَ بعد)
+## 12) تغييرات مخططة للوحة الأدمن (قرارات 2026-11-15)
+> **بُني بـ T18 (migration `20261121000001`):** §12.1 كاملاً، و§12.2 للمنتجات (`update_app_settings` بـ T19)، و§12.5. التفاصيل النهائية بـ §5.
 > مواصفة للمهام T18، T19، T20، T25، T26. كل بند = migration جديدة واختبارات pgTAP. الرموز الجديدة تُنقل إلى §5 (وerrors.ts) مع البناء فقط، لأن اختبار Jest يطابق §5 مع ما يرفعه SQL فعلاً.
 
 ### 12.1 المخزون والكلفة (T18)
@@ -193,7 +199,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `adjust_stock_bulk(p_items jsonb, p_type, p_note?)` (أدمن): `[{product_id, qty, unit_cost_iqd?}]` بمعاملة واحدة، بأقفال `stock` بترتيب `product_id`؛ أي بند خاطئ يُفشل الكل (`detail` = المنتج). لهدر اليوم (ويقبل المشتريات بالجملة).
 - `daily_stats`: أعمدة `waste_cost_iqd` و`adjust_loss_iqd` (≥ 0)، و`net_profit_iqd` = `gross_profit_iqd - waste_cost_iqd - adjust_loss_iqd` (عمود محسوب). `_bump_daily_stats` يقبلها.
 - `recompute_daily_stats(p_from date, p_to date)` (أدمن/service_role): يعيد بناء الأيام من `orders` و`order_item_costs` و`inventory_movements` (للتصحيح وللـ backfill)؛ اختبار pgTAP يقارن التحديث التراكمي بإعادة البناء.
-- **حد النقص:** `stock.low_stock_threshold int not null default 5` (0..10000). عند أي تغيير رصيد (البيع بـ `place_order`، الإلغاء، `adjust_stock*`) ينزل فيه الرصيد من ≥ الحد إلى < الحد ← `_notify('admins', …)` مرة واحدة (`type: low_stock`، `product_id`، النص: الاسم والرصيد بـ `formatQuantity` على الخادم أو نص بسيط بالوحدة). العودة فوق الحد ثم النزول = إشعار جديد. لا إشعار للموظفين (الجمهور `admins` يشمل الموظفين اليوم: يُضاف جمهور `admins_only` أو فلتر بالدور، يُحسم بالبناء ويُوثَّق).
+- **حد النقص:** `stock.low_stock_threshold int not null default 5` (0..10000). عند أي تغيير رصيد (البيع بـ `place_order`، الإلغاء، `adjust_stock*`) ينزل فيه الرصيد من ≥ الحد إلى < الحد ← `_notify('admins_only', …)` مرة واحدة (`type: low_stock`، `product_id`، النص: الاسم والرصيد بالكيلو لنص الكيلو أو بالوحدة). العودة فوق الحد ثم النزول = إشعار جديد. لا إشعار للموظفين: **حُسم بالبناء** بجمهور جديد `admins_only` (الأدمن وحده) بقيد `notification_outbox` و`claim_push_notifications`؛ trigger على `stock` (لمنتج نشط فقط).
 - اختبار ثابت (invariant): لكل منتج `stock.qty = Σ inventory_movements.qty` (الـ seed يُنشئ حركة رصيد افتتاحي بدل كتابة `stock` مباشرة).
 
 ### 12.2 المنتجات والإعدادات عبر دوال (T18، T19)

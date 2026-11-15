@@ -12,6 +12,12 @@ function env() {
   return { url, key };
 }
 
+/** زائر بلا جلسة (ما يراه تطبيق الزبون قبل الدخول). */
+export function anonClient(): SupabaseClient {
+  const { url, key } = env();
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
 export async function signedInClient(phone: string): Promise<SupabaseClient> {
   const { url, key } = env();
   const client = createClient(url, key, {

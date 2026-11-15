@@ -89,11 +89,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Start local Supabase (Postgres + Auth + REST + Realtime via Kong)
+      - name: Start local Supabase (Postgres + Auth + REST + Realtime + Storage via Kong)
         timeout-minutes: 10
         run: >-
           pnpm exec supabase start
-          -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,storage-api
+          -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: seed:demo (demo admin, staff, drivers, customers with DEMO_PIN)
         run: pnpm seed:demo --no-images
       - name: Local Supabase URL and anon key for the admin app

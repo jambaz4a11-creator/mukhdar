@@ -112,11 +112,14 @@ begin
   insert into public.products (category_id, name, unit, price_iqd, is_active)
   values (v_cat, 'test-product ' || left(gen_random_uuid()::text, 8), 'نص كيلو', p_price, p_active)
   returning id into v_id;
-  if p_stock > 0 then
-    update public.stock set qty = p_stock where product_id = v_id;
-  end if;
   if p_cost is not null then
     insert into public.product_costs (product_id, cost_iqd) values (v_id, p_cost);
+  end if;
+  -- الرصيد الافتتاحي مع حركته بالدفتر (الثابت stock.qty = Σ الحركات، T18)
+  if p_stock > 0 then
+    update public.stock set qty = p_stock where product_id = v_id;
+    insert into public.inventory_movements (product_id, qty, type, note)
+    values (v_id, p_stock, 'adjust', 'opening (test)');
   end if;
   return v_id;
 end $$;
