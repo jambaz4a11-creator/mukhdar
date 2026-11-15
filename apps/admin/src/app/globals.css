@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+/* الرموز من docs/design/README.md (نفس تطبيق الزبون؛ اختبار theme.test.ts يطابقها). */
+@theme {
+  --color-primary: #1f6b3a;
+  --color-primary-pressed: #174f2b;
+  --color-primary-soft: #e8f2ea;
+  --color-background: #f7f8f3;
+  --color-surface: #ffffff;
+  --color-border: #e3e7de;
+  --color-divider: #eef0eb;
+  --color-text: #1b1f1a;
+  --color-text-muted: #5b6458;
+  --color-danger: #a1332a;
+  --color-danger-soft: #fcedeb;
+  --color-warning-text: #7a4a00;
+  --color-warning-soft: #fff1dc;
+  --color-star: #e8a13a;
+
+  --radius-control: 12px;
+  --radius-input: 14px;
+  --radius-card: 16px;
+
+  --font-sans: var(--font-plex), system-ui, sans-serif;
+}
+
+/* داخل طبقة base حتى تغلبها أصناف Tailwind (مثل text-text بالقائمة). */
+@layer base {
+  html,
+  body {
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  a {
+    color: var(--color-primary);
+  }
+  a:hover {
+    color: var(--color-primary-pressed);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* الأرقام لا تُقص أبداً (SPEC-admin §2.0): أرقام بعرض ثابت، والسطر يلتف بدل القص. */
+.num {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* الصفحات العامة */
+.legal h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.legal h2 {
+  margin-top: 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.legal ul,
+.legal ol {
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+.legal ol {
+  list-style: decimal;
+}

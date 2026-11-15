@@ -8,3 +8,6 @@ supabase/migrations
 docs
 *.md
 supabase/functions/deno.lock
+playwright-report
+test-results
+next-env.d.ts

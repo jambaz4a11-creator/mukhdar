@@ -361,3 +361,18 @@ select bucket, hits, window_start from private.signup_rate_limits
 
 ### الحالة على mukhdar-dev (2026-11-15)
 الـ migration مطبّق والدالة منشورة (`verify_jwt = false`). `pnpm it:signup`: 14/14، بلا بقايا؛ فُحص أن مفتاح الـ IP هو IP العميل الحقيقي (لا IP مشترك ولا ترويسة مزوّرة). **Allow new users to sign up: OFF** (أطفأه صاحب المشروع 2026-11-15). `pnpm it:signup -- --signup-disabled`: 6/6 (`signUp` العام وOTP لرقم جديد ← 422 `signup_disabled` بلا حساب؛ الدالة تنشئ حساباً ويدخل به).
+
+## 15) لوحة الأدمن (T16)
+**التشغيل محلياً (ضد mukhdar-dev):**
+1. انسخ `apps/admin/.env.example` إلى `apps/admin/.env.local` وضع `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (نفس قيم `EXPO_PUBLIC_*` بتطبيق الزبون). مفتاح خادم (`service_role` / `sb_secret_`) يوقف اللوحة.
+2. `pnpm install` ثم `pnpm --filter @mukhdar/admin dev` ← http://localhost:3000.
+3. الدخول بحسابات العرض (تطوير فقط) والرمز `DEMO_PIN` = `482915` (§6): أدمن `07000000001`، موظف `07000000002`. (سائق `07000000011` وزبون `07000000101` يرون "غير مصرح".)
+
+**الاختبارات:** `pnpm --filter @mukhdar/admin test` (وحدة)، و`pnpm --filter @mukhdar/admin exec playwright install chromium` مرة واحدة ثم `pnpm --filter @mukhdar/admin test:e2e` (يبني اللوحة ويشغّلها على المنفذ 3100، يدخل بحسابات العرض؛ محلياً ضد المشروع بـ `.env.local`). بـ CI: job `admin-e2e` ضد Supabase محلي + `seed:demo`. حد Auth لكل IP (30/5 دقائق): التشغيل الكامل يدخل ~8 مرات.
+
+**النشر لاحقاً (Vercel، يحتاج موافقة صاحب المشروع):**
+- حساب Vercel (الخطة المجانية تكفي للبداية) وربط مستودع GitHub؛ Root Directory = `apps/admin`، Framework = Next.js، أمر التثبيت `pnpm install --frozen-lockfile` (pnpm من `packageManager`).
+- متغيرات البيئة بـ Vercel (Preview ← mukhdar-dev، Production ← مشروع الإنتاج): `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` فقط. **لا `service_role` أبداً.**
+- نطاق فرعي (مثلاً `admin.<domain>`) وإضافته لـ Supabase ← Authentication ← URL Configuration (Site URL / Redirect URLs) وإن لم تُستخدم روابط بريد.
+- بعد النشر: رابط `/delete-account` بـ Google Play Console (Data safety ← Account deletion)، وروابط `/privacy` و`/terms` بـ `EXPO_PUBLIC_PRIVACY_URL` و`EXPO_PUBLIC_TERMS_URL` لتطبيق الزبون وبـ App Store Connect.
+- قبل الإنتاج: استبدال بيانات المتجر بـ `apps/admin/src/content/legal.ts` و`IS_DRAFT = false` (SPEC-admin افتراض 15).

@@ -26,3 +26,8 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 *.log
+
+# playwright
+playwright-report/
+test-results/
+next-env.d.ts
