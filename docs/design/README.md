@@ -60,7 +60,7 @@ Font: **IBM Plex Sans Arabic** in four weights. It covers both Arabic and Latin 
 | Product | large image, price per sale unit, quantity stepper (`formatQuantity`) |
 | Cart | lines with stepper, minimum-order warning, total |
 | Checkout | address, note, cash on delivery, confirm (56 high primary button) |
-| Order tracking | 5-step timeline: تم الاستلام ← قيد التحضير ← جاهز، بانتظار السائق ← بالطريق ← تم التوصيل (or cancelled) |
+| Order tracking | 5-step timeline: تم استلام الطلب ← قيد التحضير ← جاهز، بانتظار السائق ← بالطريق ← تم التوصيل (or cancelled) |
 | Orders | list with status badges |
 | Rate | 1-5 stars (`star` color) and optional comment |
 | Account | name, phone, addresses, privacy policy, sign out, delete account |

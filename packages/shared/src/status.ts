@@ -22,12 +22,12 @@ export const ORDER_FLOW = [
 
 /** الأسماء العربية (SPEC-customer §2.6). */
 export const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: 'تم الاستلام',
+  pending: 'تم استلام الطلب',
   preparing: 'قيد التحضير',
   ready: 'جاهز، بانتظار السائق',
   out_for_delivery: 'بالطريق',
   delivered: 'تم التوصيل',
-  cancelled: 'أُلغي',
+  cancelled: 'أُلغي الطلب',
 };
 
 /** ألوان الشارة: نص وخلفية فاتحة (افتراض؛ SPEC-customer افتراضات). */
