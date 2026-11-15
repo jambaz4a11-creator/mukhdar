@@ -33,6 +33,8 @@ export const catalogKeys = {
   list: (categoryId: number | null) => ['products', 'list', categoryId] as const,
   search: (term: string) => ['products', 'search', term] as const,
   detail: (id: string) => ['products', 'detail', id] as const,
+  /** منتجات السلة بأحدث حالة (T13): المنتج الموقوف لا يرجع (RLS)، فيُعلَّم غير متوفر. */
+  cart: (ids: string[]) => ['products', 'cart', [...ids].sort().join(',')] as const,
 };
 
 export async function fetchCategories(client: MukhdarClient): Promise<Category[]> {
@@ -101,4 +103,16 @@ export async function fetchProduct(client: MukhdarClient, id: string): Promise<P
 export function productImageUrl(client: MukhdarClient | null, path: string | null): string | null {
   if (!client || !path) return null;
   return client.storage.from('product-images').getPublicUrl(path).data.publicUrl;
+}
+
+/** أحدث حالة لمنتجات السلة (السعر والتوفر). المنتج غير النشط لا يرجع. */
+export async function fetchProductsByIds(client: MukhdarClient, ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await client
+    .from('products')
+    .select(PRODUCT_COLUMNS)
+    .in('id', ids)
+    .eq('is_active', true);
+  if (error) throw error;
+  return data;
 }
