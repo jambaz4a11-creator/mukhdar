@@ -252,7 +252,8 @@ test.describe.serial('catalog (writes: categories, products, images, stock, wast
     const row = page.locator(`tr[data-product="${productName}"]`);
     const anon = anonClient();
     expect((await anon.from('products').select('id').eq('name', productName)).data).toHaveLength(1);
-    await row.getByLabel(`نشط: ${productName}`).uncheck();
+    // الخانة تعكس حالة قاعدة البيانات: تتغير بعد الحفظ وإعادة الجلب، لا فوراً
+    await row.getByLabel(`نشط: ${productName}`).click();
     await expect(row.getByLabel(`نشط: ${productName}`)).not.toBeChecked();
     await expect
       .poll(
