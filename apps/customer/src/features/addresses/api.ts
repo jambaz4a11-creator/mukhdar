@@ -1,6 +1,6 @@
 // العناوين (T12، SPEC-customer §2.5): قطاع ← وحدة ← عمارة ← شقة.
 // القوائم الهرمية مقروءة للجميع (النشطة فقط بـ RLS). العناوين CRUD مباشر على addresses، وRLS يحصرها بصاحبها.
-// عنوان افتراضي واحد لكل زبون (فهرس unique جزئي): نلغي الافتراضي القديم قبل تعيين الجديد.
+// عنوان افتراضي واحد لكل زبون (فهرس unique جزئي): التعيين عبر RPC set_default_address بمعاملة واحدة.
 import type { MukhdarClient } from '@mukhdar/shared';
 
 export const APARTMENT_MAX = 20;
@@ -116,57 +116,47 @@ export async function fetchMyAddresses(client: MukhdarClient): Promise<CustomerA
   return data as unknown as CustomerAddress[];
 }
 
-async function clearDefault(client: MukhdarClient, userId: string, exceptId?: string) {
-  let q = client
-    .from('addresses')
-    .update({ is_default: false })
-    .eq('customer_id', userId)
-    .eq('is_default', true);
-  if (exceptId) q = q.neq('id', exceptId);
-  const { error } = await q;
+/**
+ * يجعل العنوان افتراضياً بمعاملة واحدة (RPC set_default_address، migration 20261118000001):
+ * يلغي الافتراضي القديم ويعيّن الجديد معاً، فلا يبقى الزبون بلا افتراضي ولا بافتراضيين.
+ */
+export async function setDefaultAddress(client: MukhdarClient, id: string): Promise<void> {
+  const { error } = await client.rpc('set_default_address', { p_address_id: id });
   if (error) throw error;
 }
 
+/** يضيف العنوان (غير افتراضي)، ثم يجعله افتراضياً بالـ RPC إن طُلب. */
 export async function createAddress(
   client: MukhdarClient,
   userId: string,
   input: AddressInput,
 ): Promise<string> {
-  if (input.is_default) await clearDefault(client, userId);
+  const { is_default: makeDefault, ...fields } = input;
   const { data, error } = await client
     .from('addresses')
-    .insert({ ...input, customer_id: userId })
+    .insert({ ...fields, customer_id: userId, is_default: false })
     .select('id')
     .single();
   if (error) throw error;
+  if (makeDefault) await setDefaultAddress(client, data.id);
   return data.id;
 }
 
+/** يعدّل حقول العنوان؛ "افتراضي" فقط عبر الـ RPC (لا يُلغى الافتراضي من هنا). */
 export async function updateAddress(
   client: MukhdarClient,
-  userId: string,
   id: string,
   input: AddressInput,
 ): Promise<void> {
-  if (input.is_default) await clearDefault(client, userId, id);
-  const { error } = await client.from('addresses').update(input).eq('id', id);
+  const { is_default: makeDefault, ...fields } = input;
+  const { error } = await client.from('addresses').update(fields).eq('id', id);
   if (error) throw error;
-}
-
-export async function setDefaultAddress(
-  client: MukhdarClient,
-  userId: string,
-  id: string,
-): Promise<void> {
-  await clearDefault(client, userId, id);
-  const { error } = await client.from('addresses').update({ is_default: true }).eq('id', id);
-  if (error) throw error;
+  if (makeDefault) await setDefaultAddress(client, id);
 }
 
 /** حذف العنوان. إن كان الافتراضي وبقيت عناوين، يصير أحدثها افتراضياً (افتراض T12). */
 export async function deleteAddress(
   client: MukhdarClient,
-  userId: string,
   address: Pick<CustomerAddress, 'id' | 'is_default'>,
   remaining: Pick<CustomerAddress, 'id' | 'created_at'>[],
 ): Promise<void> {
@@ -175,7 +165,7 @@ export async function deleteAddress(
   const others = remaining.filter((a) => a.id !== address.id);
   if (address.is_default && others.length > 0) {
     const newest = [...others].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-    if (newest) await setDefaultAddress(client, userId, newest.id);
+    if (newest) await setDefaultAddress(client, newest.id);
   }
 }
 

@@ -54,7 +54,7 @@ export default function AddressesScreen() {
   function makeDefault(a: CustomerAddress) {
     const client = getSupabase();
     if (!client || !session) return;
-    void run(a.id, () => setDefaultAddress(client, session.user.id, a.id));
+    void run(a.id, () => setDefaultAddress(client, a.id));
   }
 
   function remove(a: CustomerAddress) {
@@ -68,7 +68,7 @@ export default function AddressesScreen() {
         style: 'destructive',
         onPress: () => {
           void run(a.id, async () => {
-            await deleteAddress(client, session.user.id, a, list);
+            await deleteAddress(client, a, list);
             if (selectedId === a.id) select(null);
           });
         },

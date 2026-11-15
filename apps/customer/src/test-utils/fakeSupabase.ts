@@ -38,6 +38,12 @@ export function createFakeSupabase(resolve: (call: Call) => Result) {
       );
       return builder;
     },
+    /** rpc(fn, args): يُسجَّل كـ table = "rpc:fn" وعملية ['rpc', [args]]، والنتيجة من resolve. */
+    rpc(fn: string, args?: unknown) {
+      const call: Call = { table: `rpc:${fn}`, ops: [['rpc', [args]]] };
+      calls.push(call);
+      return Promise.resolve().then(() => resolve(call));
+    },
     storage: {
       from: () => ({
         getPublicUrl: (path: string) => ({ data: { publicUrl: `https://cdn.test/${path}` } }),

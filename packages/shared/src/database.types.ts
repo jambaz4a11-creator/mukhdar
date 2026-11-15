@@ -1084,6 +1084,7 @@ export type Database = {
         Returns: undefined;
       };
       round_iqd: { Args: { amount: number }; Returns: number };
+      set_default_address: { Args: { p_address_id: string }; Returns: undefined };
       set_order_status: {
         Args: {
           p_order_id: string;
@@ -1132,6 +1133,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      signup_rate_hit: { Args: { p_ip: string; p_phone: string }; Returns: boolean };
     };
     Enums: {
       movement_type: 'purchase' | 'sale' | 'waste' | 'adjust' | 'cancel_return';

@@ -117,7 +117,7 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
     try {
       let id: string;
       if (initial) {
-        await updateAddress(client, session.user.id, initial.id, input);
+        await updateAddress(client, initial.id, input);
         id = initial.id;
       } else {
         id = await createAddress(client, session.user.id, input);

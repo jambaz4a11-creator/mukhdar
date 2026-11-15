@@ -115,12 +115,18 @@ function setup(addresses: CustomerAddress[] = []) {
   return fake;
 }
 
+/** كتابات العناوين بالترتيب، ومنها RPC set_default_address. */
 const writes = (calls: Call[]) =>
   calls.filter(
     (c) =>
-      c.table === 'addresses' &&
-      (opArgs(c, 'insert') || opArgs(c, 'update') || opArgs(c, 'delete')),
+      c.table === 'rpc:set_default_address' ||
+      (c.table === 'addresses' &&
+        (opArgs(c, 'insert') || opArgs(c, 'update') || opArgs(c, 'delete'))),
   );
+const rpcAddress = (call: Call) => {
+  expect(call.table).toBe('rpc:set_default_address');
+  return (opArgs(call, 'rpc')?.[0] as { p_address_id: string }).p_address_id;
+};
 
 async function renderUi(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -241,7 +247,7 @@ describe('address form', () => {
     expect(input.props.value).toBe('100');
   });
 
-  it('first address: saved as default (old default cleared first), selected, then back', async () => {
+  it('first address: added, made default by the RPC, selected, then back', async () => {
     const { calls } = setup([]);
     await renderUi(<NewAddressScreen />);
     await pickA3Building45();
@@ -258,19 +264,21 @@ describe('address form', () => {
     await fireEvent.press(screen.getByTestId('address-save'));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
 
-    const [clear, insert] = writes(calls) as [Call, Call];
-    expect(opArgs(clear, 'update')).toEqual([{ is_default: false }]);
-    expect(eqArg(clear, 'customer_id')).toBe('u1');
+    // يُضاف غير افتراضي، ثم يصير افتراضياً بالـ RPC (معاملة واحدة)
+    const w = writes(calls);
+    expect(w).toHaveLength(2);
+    const [insert, rpc] = w as [Call, Call];
     expect(opArgs(insert, 'insert')).toEqual([
       {
         building_id: 13045,
         apartment: '12',
         note: 'الطابق الثالث',
         label: 'البيت',
-        is_default: true,
         customer_id: 'u1',
+        is_default: false,
       },
     ]);
+    expect(rpcAddress(rpc)).toBe('new-id');
     expect(useSelectedAddress.getState().selectedId).toBe('new-id');
   });
 
@@ -326,13 +334,12 @@ describe('address form', () => {
     await fireEvent.press(screen.getByTestId('address-save'));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
 
-    const [clear, update] = writes(calls) as [Call, Call];
-    expect(opArgs(clear, 'update')).toEqual([{ is_default: false }]);
-    expect(opArgs(clear, 'neq')).toEqual(['id', 'a2']);
+    const [update, rpc] = writes(calls) as [Call, Call];
     expect(opArgs(update, 'update')).toEqual([
-      { building_id: 24060, apartment: '8', note: null, label: null, is_default: true },
+      { building_id: 24060, apartment: '8', note: null, label: null },
     ]);
     expect(eqArg(update, 'id')).toBe('a2');
+    expect(rpcAddress(rpc)).toBe('a2');
   });
 });
 
@@ -354,17 +361,13 @@ describe('my addresses', () => {
     expect(screen.getAllByLabelText(ar.address.setDefault)).toHaveLength(2);
   });
 
-  it('set default: clears the other default first, then sets this one', async () => {
+  it('set default: one atomic RPC call (set_default_address)', async () => {
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
     await screen.findByText('قطاع B · وحدة B4 · عمارة 60 · شقة 7');
     await fireEvent.press(screen.getAllByLabelText(ar.address.setDefault)[0] as never);
-    await waitFor(() => expect(writes(calls)).toHaveLength(2));
-    const [clear, set] = writes(calls) as [Call, Call];
-    expect(opArgs(clear, 'update')).toEqual([{ is_default: false }]);
-    expect(opArgs(clear, 'neq')).toEqual(['id', 'a2']);
-    expect(opArgs(set, 'update')).toEqual([{ is_default: true }]);
-    expect(eqArg(set, 'id')).toBe('a2');
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(rpcAddress(writes(calls)[0] as Call)).toBe('a2');
   });
 
   it('deleting the default (after confirming) makes the newest remaining address the default', async () => {
@@ -380,12 +383,11 @@ describe('my addresses', () => {
     await act(async () => {
       fireEvent.press(screen.getAllByLabelText(ar.address.delete)[0] as never);
     });
-    await waitFor(() => expect(writes(calls)).toHaveLength(3));
-    const [del, clear, set] = writes(calls) as [Call, Call, Call];
+    await waitFor(() => expect(writes(calls)).toHaveLength(2));
+    const [del, rpc] = writes(calls) as [Call, Call];
     expect(opArgs(del, 'delete')).toEqual([]);
     expect(eqArg(del, 'id')).toBe('a1');
-    expect(opArgs(clear, 'neq')).toEqual(['id', 'a2']);
-    expect(eqArg(set, 'id')).toBe('a2'); // الأحدث بين الباقية
+    expect(rpcAddress(rpc)).toBe('a2'); // الأحدث بين الباقية
     expect(useSelectedAddress.getState().selectedId).toBeNull();
     alert.mockRestore();
   });
