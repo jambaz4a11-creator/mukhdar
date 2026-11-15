@@ -102,6 +102,12 @@ jobs:
           test -n "$API_URL" && test -n "$ANON_KEY"
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+      - name: Auth smoke (demo admin signs in with phone + PIN; prints status and error code only)
+        run: |
+          code=$(curl -sS -o /tmp/auth.json -w '%{http_code}'             "$NEXT_PUBLIC_SUPABASE_URL/auth/v1/token?grant_type=password"             -H "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" -H 'content-type: application/json'             -d '{"phone":"+9647000000001","password":"482915"}')
+          echo "HTTP $code"
+          jq -c 'del(.access_token, .refresh_token, .user)' /tmp/auth.json
+          test "$code" = 200
       - name: Playwright browser
         working-directory: apps/admin
         run: pnpm exec playwright install --with-deps chromium
