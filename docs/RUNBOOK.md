@@ -312,14 +312,21 @@ pnpm it:delete-account
 EXPO_PUBLIC_SUPABASE_URL=https://ghcohlrzvehtcettaaiu.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # Dashboard ← Project Settings ← API Keys ← Publishable key
 EXPO_PUBLIC_SENTRY_DSN=                                   # فارغ = Sentry معطّل
-EXPO_PUBLIC_SHOP_WHATSAPP=9647XXXXXXXXX                   # رقم واتساب المتجر ("نسيت الرمز؟")؛ القيمة الوهمية = الرابط مخفي
+EXPO_PUBLIC_SHOP_WHATSAPP=9647XXXXXXXXX                   # رقم واتساب المتجر ("نسيت الرمز؟"، "تواصل عبر واتساب")؛ القيمة الوهمية = الرابط مخفي
+EXPO_PUBLIC_SHOP_PHONE=                                   # T15: رقم اتصال المتجر (07… أو 9647…)؛ فارغ = زر "اتصل بالمحل" مخفي
+EXPO_PUBLIC_PRIVACY_URL=                                  # T15: رابط https لسياسة الخصوصية (لازم لـ iOS قبل النشر)؛ فارغ = مخفي
+EXPO_PUBLIC_TERMS_URL=                                    # T15: رابط https للشروط؛ فارغ = مخفي
+EAS_PROJECT_ID=                                           # T14، اختياري: معرّف مشروع EAS (`eas init`، ليس سراً)؛ فارغ = لا رمز Expo Push
+GOOGLE_SERVICES_JSON=                                     # T14، اختياري: مسار google-services.json (FCM أندرويد)؛ بـ EAS متغير من نوع ملف
 ```
+`EAS_PROJECT_ID` و`GOOGLE_SERVICES_JSON` يقرأهما `app.config.ts` وقت البناء فقط (بلا بادئة `EXPO_PUBLIC_`، فلا يُضمَّنان بكود التطبيق). الإشعارات البعيدة تحتاج development build (Expo Go لا يستقبلها).
 **التشغيل** (من جذر المستودع): `pnpm --filter @mukhdar/customer start`، ثم امسح رمز QR بتطبيق **Expo Go** (SDK 58) على نفس شبكة الـ Wi-Fi. إن لم يتصل الهاتف (شبكة مختلفة/جدار حماية): `pnpm --filter @mukhdar/customer start -- --tunnel`. بعد تعديل `.env`: أعد التشغيل مع `-- --clear`.
 
 - أول فتح بـ Expo Go قد يعيد التحميل مرة واحدة لتفعيل RTL (طبيعي).
 - الرئيسية تعرض "حالة المتجر" من `app_settings` (اختبار الاتصال). رسالة "إعداد الاتصال ناقص" = `.env` غير موجود أو ناقص.
 - `expo export` محلياً يحتاج ذاكرة أكبر لـ Node على هذا الجهاز: `NODE_OPTIONS=--max-old-space-size=6144`.
 - الاختبارات: `pnpm --filter @mukhdar/customer test` (jest-expo + RNTL)، وهي ضمن `pnpm test` و CI.
+- وحدات أصلية أُضيفت بعد آخر development build (مثل `expo-network`، مراجعة S4) تحتاج بناء dev client جديداً؛ Expo Go يتضمنها.
 
 ## 14) التسجيل: Edge Function `signup` (ADR 0001، تحديث 2026-11-15)
 
