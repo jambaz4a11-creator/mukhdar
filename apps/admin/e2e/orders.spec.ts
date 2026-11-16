@@ -102,6 +102,35 @@ test.describe.serial('orders (admin, read)', () => {
     await search.fill('');
   });
 
+  test('rapid filter changes never revert each other; a tab click beats a pending search (M2)', async () => {
+    await openOrders(page, '?tab=delivered');
+    const select = page.getByLabel('فلتر السائق');
+    await expect(select.locator('option').nth(1)).toBeAttached();
+    const driverId = (await select.locator('option').nth(1).getAttribute('value')) ?? '';
+    const day = '2026-11-10';
+    // سائق ثم يوم بلا انتظار بينهما: الاثنان بالرابط
+    await select.selectOption(driverId);
+    await page.getByLabel('التاريخ').fill(day);
+    await expect
+      .poll(
+        () =>
+          new URL(page.url()).searchParams.get('driver') +
+          '|' +
+          new URL(page.url()).searchParams.get('day'),
+      )
+      .toBe(driverId + '|' + day);
+
+    // نكتب بحثاً ثم ننقر تبويباً خلال 300ms: التبويب يفوز، ومربع البحث فارغ، والسائق باقٍ
+    const search = page.getByRole('searchbox');
+    await search.fill('#12345');
+    await page.locator('[data-tab="cancelled"]').click();
+    await page.waitForTimeout(800); // أكثر من مهلة البحث (350ms): المؤقت المتأخر لا يغيّر شيئاً
+    const sp = new URL(page.url()).searchParams;
+    expect(sp.get('tab')).toBe('cancelled');
+    expect(sp.get('q')).toBeNull();
+    await expect(search).toHaveValue('');
+  });
+
   test('driver filter limits rows to that driver', async () => {
     await openOrders(page, '?tab=delivered');
     const select = page.getByLabel('فلتر السائق');

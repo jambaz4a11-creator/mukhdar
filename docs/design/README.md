@@ -91,7 +91,6 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 | Orders (Main) | status tabs with counts, table, side panel with details, print (§2.1) |
 | Products & stock | categories section (image cards: image, name, product count, edit; "+ قسم جديد"), products table with price and cost **per kilo**, stock in kilos, "(قليل)" under the threshold, "نفد" at 0, "غير محدد" for a missing cost (§2.2, §2.3) |
 | Daily Waste (هدر اليوم) | read-only "today" label (Baghdad date, no date input), one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
-| Ratings (التقييمات) | average, count, star distribution, filtered list (§2.8) |
 | Ratings (التقييمات) | average + stars, count, distribution bars, filter chips, list of ratings with order link (SPEC-admin §2.8). Built in T26; deviations below |
 | Reports (التقارير والأرباح) | range picker, cards, daily chart, waste and top products in kilos, CSV (§2.5). Chart: sales `chartSales` + net profit `primary`, zero baseline (net profit can be negative), legend, hover values and a daily table view. The design's light green `#A9CDB3` failed the chart-colour checks (lightness, chroma, contrast 1.7:1), so `chartSales` replaces it (T20) |
 | Settings & staff | fee, minimum order, store open/closed, staff and drivers, PIN reset (§2.6, §2.7) |
@@ -131,7 +130,8 @@ Differences, all deliberate:
 6. **Low-stock list**: quantities via `formatAdminQuantity` (kilos for half-kilo products: "1.5 كيلو من حد 2.5 كيلو"),
    "نفد" at 0, first 8 by quantity, then "و N منتج آخر". The "منتجات ناقصة" card and "كل المخزون" link go to `/stock`
    (both roles may open it) rather than the design's products page.
-7. **Realtime:** the existing orders subscription (250 ms debounce, `PanelProviders`) refreshes the page; the task
+7. **Realtime:** the existing orders subscription (250 ms debounce with a 2 s max wait since review C / M4, so a steady
+   stream still refreshes at least every 2 s; `PanelProviders`) refreshes the page; the task
    file's separate 2 s debounce was not added (no new mechanism). Stock and the "same minute" window refresh by the
    same 60 s polling the settings page already uses.
 8. **Stuck notifications** are not on the Home screen: neither the approved design nor SPEC-admin §2.0 has them

@@ -328,20 +328,22 @@ protection (7a). The Medium items are a login pre-hydration submit that puts the
 
 ## Ordered fix list
 
-| # | Item | Severity | Where | Migration | Redeploy |
-|---|---|---|---|---|---|
-| 1 | **H1** dev/prod target guard (`pnpm sb`, `PROD_PROJECT_REFS`, separate prod worktree, `mukhdar-prod` name, RUNBOOK) | High | `scripts/sb.mjs`, `scripts/lib/db.mjs`, RUNBOOK §2/§3/§11/§14/§16/§17 | No | No (before T24) |
-| 2 | **M1** login: `method="post"`, button disabled until hydrated, no `name` on fields; e2e waits for `data-ready` | Medium | `LoginForm.tsx`, `e2e/helpers.ts`, `authError` | No | Admin panel only (not yet deployed) |
-| 3 | **M3** staff-money test sees `jsonb`/`record` RPCs; structural money-key check on `dashboard_today`; ratings RPCs as staff | Medium | `21_staff_money.sql` | No | No |
-| 4 | **M2** shared `useUrlParams` (read `window.location` at call time, `history.replaceState`) for Orders (and Ratings); sync `searchInput` | Medium | `OrdersScreen.tsx`, `RatingsScreen.tsx`, `src/lib` | No | Admin panel only |
-| 5 | **M4** Realtime throttle with max wait; Home invalidation ≤ every 2 s | Medium | `PanelProviders.tsx`, `dashboard/api.ts` | No | Admin panel only |
-| 6 | **L1** CSV formula-injection prefix for text cells | Low | `reports/csv.ts` | No | Admin panel only |
-| 7 | **L7** access matrix + `search_path` catalog check | Low | new `27_access_matrix.sql` | No | No |
-| 8 | **L5** `report-perf` covers `dashboard_today` and ratings | Low | `scripts/report-perf.mjs` | No | No |
-| 9 | **L2 + L3 + L4** one migration: wider control-char strip in `rate_order`, `ratings_list` hides deleted customers' names, drop `ratings_created_idx`; UI `<bdi>` | Low | new migration, `RatingsScreen`, `ReportsScreen`, pgTAP `26`, `01` | **Yes** (one new migration; apply to dev with owner approval, add as row 29 in RUNBOOK §17) | No Edge Function |
-| 10 | **L6** ratings polling: summary + first page only | Low | `RatingsScreen.tsx` | No | Admin panel only |
-| 11 | **L9** docs drift (DRIVER-API T20 line, RUNBOOK row 28 wording, §8 counts, §17 heading, design README duplicate row, SPEC-admin assumption 22) | Low | docs | No | No |
-| 12 | **L8** partial-cost average in cancel-without-return | Low | `set_order_status` | Yes (only when next touched) | No |
+**Status after fix session D (2026-11-17):** items 1–11 done, item 12 deferred by design.
+
+| # | Item | Severity | Where | Migration | Redeploy | Status |
+|---|---|---|---|---|---|---|
+| 1 | **H1** dev/prod target guard (`pnpm sb`, `PROD_PROJECT_REFS`, separate prod worktree, `mukhdar-prod` name, RUNBOOK) | High | `scripts/sb.mjs`, `scripts/lib/db.mjs`, RUNBOOK §2/§3/§11/§14/§16/§17 | No | No (before T24) | ✅ done (session D): `pnpm sb` + `scripts/lib/sb.mjs` (DEV/PROD allowlists, banner, typed-ref confirm for PROD, placeholder prod ref refuses); RUNBOOK §1/§2/§3/§17 updated (separate prod worktree, `mukhdar-prod`); 8 node tests |
+| 2 | **M1** login: `method="post"`, button disabled until hydrated, no `name` on fields; e2e waits for `data-ready` | Medium | `LoginForm.tsx`, `e2e/helpers.ts`, `authError` | No | Admin panel only (not yet deployed) | ✅ done: `method=post`, no `name`, button disabled until hydrated (`data-ready`); e2e submits before hydration and asserts no phone/PIN in the URL. (Optional `phone_provider_disabled` message not added) |
+| 3 | **M3** staff-money test sees `jsonb`/`record` RPCs; structural money-key check on `dashboard_today`; ratings RPCs as staff | Medium | `21_staff_money.sql` | No | No | ✅ done: 21 now fixes the `jsonb`/`record`/`TABLE` RPC list, the `dashboard_today` key list, a recursive money-key check and ratings RPCs as staff (38 checks; a planted `zz_money()` fails it) |
+| 4 | **M2** shared `useUrlParams` (read `window.location` at call time, `history.replaceState`) for Orders (and Ratings); sync `searchInput` | Medium | `OrdersScreen.tsx`, `RatingsScreen.tsx`, `src/lib` | No | Admin panel only | ✅ done: shared `src/lib/urlParams.ts` (`useUrlParams`) used by Orders and Ratings; search box syncs with the URL; vitest + 2 e2e (rapid clicks, tab vs pending search) |
+| 5 | **M4** Realtime throttle with max wait; Home invalidation ≤ every 2 s | Medium | `PanelProviders.tsx`, `dashboard/api.ts` | No | Admin panel only | ✅ done: `src/lib/maxWaitDebounce.ts` (250 ms wait, 2 s max wait) in `PanelProviders`; Home refreshes through the same invalidation (its keys live under `orders`); fake-timer tests |
+| 6 | **L1** CSV formula-injection prefix for text cells | Low | `reports/csv.ts` | No | Admin panel only | ✅ done: `csvText`/`cell` prefix a single quote (`'`) for text starting with `= + - @ TAB CR`, numbers untouched; vitest |
+| 7 | **L7** access matrix + `search_path` catalog check | Low | new `27_access_matrix.sql` | No | No | ✅ done: `27_access_matrix.sql` (12 checks: 7 refused roles × all 10 RPCs, active staff/admin controls, catalog completeness, `search_path`). Note: `01_schema.sql` already checks `search_path` for every function |
+| 8 | **L5** `report-perf` covers `dashboard_today` and ratings | Low | `scripts/report-perf.mjs` | No | No | ✅ done: `report-perf` seeds ratings and times `dashboard_today`, `ratings_summary` (all, month), `ratings_list` (page 1, page 10) and counts the report comments call in the page total (limits 300/300/100 ms). On dev (20k orders): all < 31 ms |
+| 9 | **L2 + L3 + L4** one migration: wider control-char strip in `rate_order`, `ratings_list` hides deleted customers' names, drop `ratings_created_idx`; UI `<bdi>` | Low | new migration, `RatingsScreen`, `ReportsScreen`, pgTAP `26`, `01` | **Yes** (one new migration; apply to dev with owner approval, add as row 29 in RUNBOOK §17) | No Edge Function | ✅ done: migration `20261129000001_ratings_privacy.sql` applied to mukhdar-dev only (owner approval), RUNBOOK §17 row 29; pgTAP 26 (+7); UI `<bdi>` and `زبون محذوف` |
+| 10 | **L6** ratings polling: summary + first page only | Low | `RatingsScreen.tsx` | No | Admin panel only | ✅ done: only the summary polls; the list refetches when the count changes |
+| 11 | **L9** docs drift (DRIVER-API T20 line, RUNBOOK row 28 wording, §8 counts, §17 heading, design README duplicate row, SPEC-admin assumption 22) | Low | docs | No | No | ✅ done: DRIVER-API T20 line, RUNBOOK row 28 wording / §8 counts / §17 heading, duplicate Ratings row, SPEC-admin assumption 22, plus SPEC-backend assumption 61 (6)–(8) and design README Home note |
+| 12 | **L8** partial-cost average in cancel-without-return | Low | `set_order_status` | Yes (only when next touched) | No | ⏸ not done by design (only when `set_order_status` is next touched) |
 
 Items 1–8 and 10–11 need no migration and no Edge Function redeploy. The admin panel isn't deployed yet (SPEC-admin
 assumption 16), so "admin panel only" means a code change that ships with the first Vercel deploy. Item 9 is the only

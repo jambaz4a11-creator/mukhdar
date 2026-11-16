@@ -1,7 +1,7 @@
 'use client';
 import { PIN_MESSAGES, authError, phonePinCredentials, normalizeIraqiPhone } from '@mukhdar/shared';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 
 export function LoginForm({ next }: { next: string }) {
@@ -10,6 +10,9 @@ export function LoginForm({ next }: { next: string }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // قبل التهيئة (hydration) لا يوجد onSubmit: نمنع الإرسال الأصلي كلياً (M1، مراجعة C).
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,11 +40,17 @@ export function LoginForm({ next }: { next: string }) {
   const input =
     'num h-12 w-full rounded-input border border-border bg-surface px-4 text-base outline-none focus:border-primary';
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form
+      method="post"
+      action="/login"
+      data-ready={ready}
+      onSubmit={onSubmit}
+      noValidate
+      className="flex flex-col gap-4"
+    >
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         رقم الهاتف
         <input
-          name="phone"
           type="tel"
           inputMode="tel"
           autoComplete="username"
@@ -55,7 +64,6 @@ export function LoginForm({ next }: { next: string }) {
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         رمز الدخول (PIN)
         <input
-          name="pin"
           type="password"
           inputMode="numeric"
           autoComplete="current-password"
@@ -77,7 +85,7 @@ export function LoginForm({ next }: { next: string }) {
       )}
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || !ready}
         className="h-14 rounded-card bg-primary text-base font-bold text-white hover:bg-primary-pressed disabled:opacity-60"
       >
         {busy ? 'جارٍ الدخول…' : 'دخول'}

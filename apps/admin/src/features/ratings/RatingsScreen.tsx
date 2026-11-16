@@ -4,9 +4,11 @@
 // التعليق يُعرض نصاً صرفاً (React يهرّب كل شيء؛ لا dangerouslySetInnerHTML).
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { usePanel } from '@/components/PanelProviders';
 import { isDay } from '@/features/orders/filters';
+import { useUrlParams } from '@/lib/urlParams';
 import { fetchRatingsPage, fetchRatingsSummary, ratingsKeys, type RatingRow } from './api';
 import {
   PRESETS,
@@ -20,6 +22,7 @@ import {
 } from './filters';
 
 const POLL_MS = 60_000;
+const RATINGS_URL_DEFAULTS = { f: 'all' };
 const STAR_PATH = 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z';
 const BAR: Record<'primary' | 'star' | 'danger', string> = {
   primary: 'bg-primary',
@@ -34,7 +37,6 @@ const card = 'rounded-card border border-border bg-surface';
 
 export function RatingsScreen() {
   const { supabase } = usePanel();
-  const pathname = usePathname();
   const params = useSearchParams();
 
   const rawFrom = params.get('from');
@@ -48,17 +50,8 @@ export function RatingsScreen() {
     to: rangeOk ? to : null,
   };
 
-  // يقرأ الرابط الحالي لحظة الاستدعاء (لا لقطة العرض): تعبئة "من" ثم "إلى" بسرعة لا تُسقط الأولى
-  const setParams = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(window.location.search);
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null || v === '' || (k === 'f' && v === 'all')) next.delete(k);
-      else next.set(k, v);
-    }
-    const qs = next.toString();
-    // history.replaceState يحدّث الرابط فوراً ويزامنه Next مع useSearchParams (لا لقطة قديمة بين نقرتين سريعتين)
-    window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
-  };
+  // يقرأ الرابط لحظة الاستدعاء (lib/urlParams، M2): تعبئة "من" ثم "إلى" بسرعة لا تُسقط الأولى
+  const setParams = useUrlParams(RATINGS_URL_DEFAULTS);
 
   const summary = useQuery({
     queryKey: ratingsKeys.summary(filters),
@@ -70,10 +63,20 @@ export function RatingsScreen() {
     queryFn: ({ pageParam }) => fetchRatingsPage(supabase, filters, pageParam),
     initialPageParam: null as { created_at: string; order_id: string } | null,
     getNextPageParam: (last) => last.next,
-    refetchInterval: POLL_MS,
+    // لا استطلاع للقائمة (L6): TanStack كان يعيد جلب كل الصفحات المحمّلة تباعاً كل دقيقة.
+    // الرأس وحده يُستطلع، والقائمة تُحدَّث فقط عندما يتغير العدد (تقييم جديد).
   });
 
   const s = summary.data;
+  const filterKey = JSON.stringify(filters);
+  const seen = useRef<{ key: string; count: number } | null>(null);
+  const refetchList = list.refetch;
+  useEffect(() => {
+    if (s === undefined) return;
+    const prev = seen.current;
+    seen.current = { key: filterKey, count: s.count };
+    if (prev && prev.key === filterKey && prev.count !== s.count) void refetchList();
+  }, [s, filterKey, refetchList]);
   const rows: RatingRow[] = list.data?.pages.flatMap((p) => p.rows) ?? [];
   const max = s ? Math.max(...Object.values(s.distribution)) : 0;
   const nowIso = new Date().toISOString();
@@ -232,7 +235,9 @@ export function RatingsScreen() {
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-2.5">
-                  <span className="text-[15px] font-bold">{r.customer_name ?? 'زبون'}</span>
+                  <span className="text-[15px] font-bold">
+                    {r.customer_name === null ? 'زبون محذوف' : <bdi>{r.customer_name}</bdi>}
+                  </span>
                   <span
                     className={`num rounded-full px-2.5 py-0.5 text-sm font-bold ${
                       low ? 'bg-danger-soft text-danger' : 'bg-[#FFF4E0] text-warning-text'
@@ -253,7 +258,7 @@ export function RatingsScreen() {
               </div>
               {r.comment && (
                 <p className="m-0 text-[15px] leading-[1.7] whitespace-pre-line text-[#3A4237]">
-                  {r.comment}
+                  <bdi>{r.comment}</bdi>
                 </p>
               )}
             </article>

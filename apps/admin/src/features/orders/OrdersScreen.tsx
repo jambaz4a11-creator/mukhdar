@@ -2,9 +2,10 @@
 // صفحة الطلبات (SPEC-admin §2.1، تصميم "Orders"): تبويبات بعدادات حية، بحث، يوم، سائق، جدول بصفحات 50،
 // ولوحة تفاصيل. حالة الفلاتر بالرابط (?tab=&day=&driver=&q=&order=) حتى يعمل الرجوع والمشاركة.
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
+import { useUrlParams } from '@/lib/urlParams';
 import { fetchDrivers, fetchOrdersPage, fetchTabCounts, ordersKeys } from './api';
 import {
   DAY_TABS,
@@ -20,8 +21,6 @@ import { OrdersTable } from './OrdersTable';
 
 export function OrdersScreen() {
   const { supabase, newOrderIds, realtimeStatus } = usePanel();
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const today = baghdadToday();
 
@@ -35,23 +34,27 @@ export function OrdersScreen() {
   const isDayTab = DAY_TABS.includes(filters.tab);
   const countsDay = isDayTab && filters.day ? filters.day : today;
 
-  const setParams = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null || v === '') next.delete(k);
-      else next.set(k, v);
-    }
-    const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
+  // يقرأ الرابط لحظة الاستدعاء (M2): نقرتان سريعتان أو مؤقت البحث المتأخر لا يلغيان بعضهما
+  const setParams = useUrlParams();
 
   // البحث يُكتب محلياً ويُطبَّق بعد توقف قصير
   const [searchInput, setSearchInput] = useState(filters.search);
+  const lastCommittedQ = useRef(filters.search);
   useEffect(() => {
-    if (searchInput === filters.search) return;
-    const t = setTimeout(() => setParams({ q: searchInput.trim() || null, order: null }), 350);
+    if (searchInput.trim() === filters.search) return;
+    const t = setTimeout(() => {
+      lastCommittedQ.current = searchInput.trim();
+      setParams({ q: searchInput.trim() || null, order: null });
+    }, 350);
     return () => clearTimeout(t);
-  }, [searchInput]);
+  }, [searchInput, filters.search]);
+  // q تغيّر من خارج الكتابة (رابط، رجوع، تبويب): نظهره بالمربع كي لا يبقى بحث غير مطبّق ظاهراً
+  useEffect(() => {
+    if (filters.search !== lastCommittedQ.current) {
+      lastCommittedQ.current = filters.search;
+      setSearchInput(filters.search);
+    }
+  }, [filters.search]);
 
   const drivers = useQuery({
     queryKey: ordersKeys.drivers,

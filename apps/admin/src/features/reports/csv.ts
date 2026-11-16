@@ -9,9 +9,17 @@ export const BOM = String.fromCharCode(0xfeff);
 
 type Cell = string | number | null;
 
-function cell(v: Cell): string {
+/** نص يبدأ بأحد هذه يُفسَّر صيغة بـ Excel/LibreOffice (L1 مراجعة C، OWASP CSV injection). */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+/** يمنع تفسير نص كصيغة بإضافة ' قبله. الأرقام (number) لا تُمس: صافي ربح سالب يبقى رقماً. */
+export function csvText(v: string): string {
+  return FORMULA_START.test(v) ? `'${v}` : v;
+}
+
+export function cell(v: Cell): string {
   if (v === null) return '';
-  const s = String(v);
+  const s = typeof v === 'string' ? csvText(v) : String(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

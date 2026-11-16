@@ -105,6 +105,20 @@ test.describe.serial('ratings (admin)', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'المدى غير صحيح' })).toBeVisible();
   });
 
+  test('rapid clicks keep every filter in the URL (M2)', async () => {
+    await page.goto('/ratings');
+    await expect(page.getByTestId('rating-count')).not.toHaveText('…');
+    await page.getByRole('button', { name: '4', exact: true }).click();
+    await page.getByLabel('من').fill('2026-01-01');
+    await page.getByLabel('إلى').fill('2026-12-31');
+    await expect
+      .poll(() => {
+        const sp = new URL(page.url()).searchParams;
+        return [sp.get('f'), sp.get('from'), sp.get('to')].join('|');
+      })
+      .toBe('4|2026-01-01|2026-12-31');
+  });
+
   test('the order link opens that order', async () => {
     await page.goto('/ratings');
     await expect(page.getByTestId('rating-count')).not.toHaveText('…');

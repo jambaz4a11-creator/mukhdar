@@ -3,7 +3,7 @@
 --   التقييمات: r1 ★5 "ممتاز" 03-10 20:59Z (23:59 بغداد 10)، r2 ★4 بلا تعليق 03-10 21:00Z (00:00 بغداد 11)،
 --   r3 ★3 تعليق 03-11 06:00Z، r4 ★2 تعليق 03-11 07:00Z، r5 ★1 بلا تعليق 03-12 06:00Z،
 --   r6 ★5 تعليق 03-12 06:00Z (نفس وقت r5: يختبر ترتيب keyset بالتعادل).
-select plan(61);
+select plan(68);
 
 -- ================================================================ التجهيز
 select tests.remember('admin',  tests.new_user('admin'));
@@ -187,5 +187,30 @@ select throws_ok($$ select public.ratings_summary() $$, '42501', 'NOT_ALLOWED', 
 select tests.as_postgres();
 select is(has_function_privilege('authenticated', 'private.ratings_stats(timestamptz, timestamptz, int, int, boolean)', 'execute'), false,
   'the internal stats function is not callable by authenticated');
+
+-- ================================================================ مراجعة C (L2, L3, L4): migration 20261129000001
+select tests.remember('o7', tests.order_in('delivered', tests.id('cust'), tests.id('drv')));
+select tests.remember('o8', tests.order_in('delivered', tests.id('cust'), tests.id('drv')));
+select tests.as_user(tests.id('cust'));
+select public.rate_order(tests.id('o7'), 4, E'a\u202Eb\u200Bc\u0085d\u2028e\uFEFFf\u2066g\u2069');
+select public.rate_order(tests.id('o8'), 4, E'سطر1\r\nسطر2\rسطر3');
+select tests.as_postgres();
+select is((select comment from public.ratings where order_id = tests.id('o7')), 'abcdefg',
+  'L2: bidi overrides/isolates, zero-width, C1 and U+2028 are stripped from the comment');
+select is((select comment from public.ratings where order_id = tests.id('o8')), E'سطر1\nسطر2\nسطر3',
+  'L2: CR and CRLF are folded into LF');
+select tests.as_user(tests.id('admin'));
+select is((select customer_name is not null from public.ratings_list() where order_id = tests.id('o1')), true,
+  'L3: a live customer''s name is listed next to the comment');
+select tests.as_postgres();
+delete from public.profiles where id = tests.id('cust');
+select tests.as_user(tests.id('admin'));
+select is((select customer_name from public.ratings_list() where order_id = tests.id('o1')), null,
+  'L3: after the account is deleted the name is no longer returned');
+select is((select comment from public.ratings_list() where order_id = tests.id('o1')), 'ممتاز',
+  'L3: the comment itself stays listed');
+select tests.as_postgres();
+select is(to_regclass('public.ratings_created_idx')::text, null, 'L4: the redundant ratings_created_idx is gone');
+select is(to_regclass('public.ratings_keyset_idx')::text, 'ratings_keyset_idx', 'L4: the keyset index serves ratings queries');
 
 select * from finish();

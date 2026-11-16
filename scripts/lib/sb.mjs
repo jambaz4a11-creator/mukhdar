@@ -1,0 +1,165 @@
+// حارس أوامر Supabase CLI (H1، مراجعة C): يمنع الخلط بين التطوير والإنتاج.
+//
+// ملاحظة: كلمة "production" التي يطبعها الـ CLI v3 معناها "الفرع الافتراضي" لأي مشروع، وليست البيئة.
+// لذلك لا نعتمد عليها: نصنّف المشروع المربوط (supabase/.temp/linked-project.json) بقائمتين صريحتين.
+import fs from 'node:fs';
+import path from 'node:path';
+import { root, DEV_PROJECT_REFS } from './db.mjs';
+
+export const DEV_NAME = 'mukhdar-dev';
+export const PROD_NAME = 'mukhdar-prod';
+
+// ref مشروع الإنتاج (mukhdar-prod). مكانه محجوز: القيمة الحالية ليست ref صالحاً، فالحارس يرفض كل شيء
+// على الإنتاج إلى أن تُستبدل بالـ ref الحقيقي (20 حرفاً صغيراً) بنفس الـ commit الذي يُنشئ المشروع.
+export const PROD_PROJECT_REFS = ['REPLACE_WITH_MUKHDAR_PROD_REF'];
+
+const REF_RE = /^[a-z]{20}$/;
+export const isValidRef = (ref) => typeof ref === 'string' && REF_RE.test(ref);
+
+/** 'dev' | 'prod' | 'placeholder' | 'unknown' */
+export function classifyRef(ref) {
+  if (!ref) return 'unknown';
+  if (DEV_PROJECT_REFS.includes(ref)) return 'dev';
+  if (PROD_PROJECT_REFS.includes(ref)) return isValidRef(ref) ? 'prod' : 'placeholder';
+  return 'unknown';
+}
+
+// أوامر لا تحتاج مشروعاً مربوطاً ولا تغيّر شيئاً بالسحابة.
+const NO_PROJECT = new Set(['login', 'logout', 'help', 'completion', 'init']);
+const READ_ONLY = [
+  ['projects', 'list'],
+  ['branches', 'list'],
+  ['migration', 'list'],
+  ['functions', 'list'],
+  ['db', 'advisors'],
+  ['gen', 'types'],
+  ['secrets', 'list'],
+];
+
+/** الأوامر الفرعية الموضعية (بدون الخيارات). */
+export function positionals(args) {
+  const out = [];
+  for (const a of args) {
+    if (a === '--') break;
+    if (a.startsWith('-')) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+export function isReadOnly(args) {
+  if (args.includes('--dry-run')) return true;
+  if (args.some((a) => a === '--version' || a === '-v' || a === '--help' || a === '-h'))
+    return true;
+  const pos = positionals(args);
+  return READ_ONLY.some(([a, b]) => pos[0] === a && pos[1] === b);
+}
+
+/** كل ref صريح بالوسائط: --project-ref X، --project-ref=X، --remote=X، --remote X. */
+export function explicitRefs(args) {
+  const refs = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    const m = a.match(/^--(?:project-ref|remote)=(.+)$/);
+    if (m) refs.push(m[1]);
+    else if (
+      (a === '--project-ref' || a === '--remote') &&
+      args[i + 1] &&
+      !args[i + 1].startsWith('-')
+    ) {
+      refs.push(args[i + 1]);
+    }
+  }
+  return refs;
+}
+
+export function readLinked(rootDir = root) {
+  const p = path.join(rootDir, 'supabase', '.temp', 'linked-project.json');
+  if (!fs.existsSync(p)) return undefined;
+  try {
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return { ref: j.ref, name: j.name };
+  } catch {
+    return undefined;
+  }
+}
+
+export const bannerFor = (kind, ref, name) =>
+  kind === 'prod' ? `TARGET: *** PRODUCTION *** ${name} (${ref})` : `TARGET: DEV ${name} (${ref})`;
+
+/**
+ * قرار الحارس، دالة نقية.
+ * يرجع { action: 'refuse', reason } أو { action: 'run', banner, args, confirmRef?, kind }.
+ */
+export function plan(args, { linked, env = process.env } = {}) {
+  const pos = positionals(args);
+  const first = pos[0];
+  const refs = explicitRefs(args);
+
+  // الهدف: ref الربط، أو الـ ref الصريح لأمر link.
+  const ref = first === 'link' ? refs[0] : linked?.ref;
+
+  if (!ref) {
+    if (!first || NO_PROJECT.has(first) || (first === 'projects' && isReadOnly(args))) {
+      return { action: 'run', kind: 'none', args, banner: 'TARGET: none (no project needed)' };
+    }
+    return {
+      action: 'refuse',
+      reason:
+        first === 'link'
+          ? 'link needs --project-ref <ref>.'
+          : 'No linked project (supabase/.temp/linked-project.json). Link first: pnpm sb link --project-ref <ref>.',
+    };
+  }
+
+  const kind = classifyRef(ref);
+  if (kind === 'unknown') {
+    return {
+      action: 'refuse',
+      reason: `Project ${ref} is not in DEV_PROJECT_REFS or PROD_PROJECT_REFS (scripts/lib/db.mjs, scripts/lib/sb.mjs).`,
+    };
+  }
+  if (kind === 'placeholder') {
+    return {
+      action: 'refuse',
+      reason:
+        `PROD_PROJECT_REFS still holds a placeholder (${ref}). The production project (${PROD_NAME}) ` +
+        'is not registered: put its real ref in scripts/lib/sb.mjs first.',
+    };
+  }
+
+  // أي ref صريح بالوسائط لازم يطابق الهدف المصنَّف (لا نشر لمشروع غير المربوط).
+  for (const r of refs) {
+    if (r !== ref) {
+      return {
+        action: 'refuse',
+        reason: `Explicit project ${r} differs from the target ${ref}. Refusing to mix projects.`,
+      };
+    }
+  }
+
+  const name =
+    kind === 'prod' ? PROD_NAME : first === 'link' ? DEV_NAME : (linked?.name ?? DEV_NAME);
+  const banner = bannerFor(kind, ref, name);
+
+  if (kind === 'dev') return { action: 'run', kind, args, banner };
+
+  // إنتاج
+  if (isReadOnly(args)) return { action: 'run', kind, args, banner };
+  if (env.MUKHDAR_TARGET !== 'prod') {
+    return {
+      action: 'refuse',
+      kind,
+      banner,
+      reason: 'Production target: set MUKHDAR_TARGET=prod to run a non-read-only command on it.',
+    };
+  }
+  return {
+    action: 'run',
+    kind,
+    banner,
+    confirmRef: ref,
+    // لا --yes على الإنتاج: يبقى سؤال الـ CLI نفسه.
+    args: args.filter((a) => a !== '--yes' && a !== '-y'),
+  };
+}

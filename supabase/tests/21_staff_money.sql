@@ -2,7 +2,7 @@
 --   يرى: مبالغ البيع اللازمة للإيصال (إجمالي الطلب وأجرته وبنوده، سعر البيع، أجرة التوصيل والحد الأدنى).
 --   لا يرى: الكلفة، الربح، قيمة الهدر، كلفة حركات المخزون، التقارير، الإعدادات (تعديلاً).
 -- أي عمود مبالغ جديد يُفشل الاختبار الأول حتى يُصنَّف هنا (بيع للموظف أو للأدمن فقط).
-select plan(32);
+select plan(38);
 
 -- ---------------------------------------------------------------- 1) قائمة أعمدة المبالغ مثبّتة
 select set_eq(
@@ -25,7 +25,8 @@ select set_eq(
 -- ---------------------------------------------------------------- التجهيز
 select tests.remember('staff', tests.new_user('staff'));
 select tests.remember('p', tests.new_product(2000, 20, true, 1500));
-select tests.remember('o', tests.place(tests.new_user('customer'), jsonb_build_array(tests.item(tests.id('p'), 2))));
+select tests.remember('cust', tests.new_user('customer'));
+select tests.remember('o', tests.place(tests.id('cust'), jsonb_build_array(tests.item(tests.id('p'), 2))));
 select tests.remember('admin', tests.new_user('admin'));
 select tests.set_uid(tests.id('admin'));
 select public.set_order_status(tests.id('o'), 'preparing');
@@ -34,6 +35,8 @@ select public.set_order_status(tests.id('o'), 'ready');
 select public.set_order_status(tests.id('o'), 'out_for_delivery');
 select public.set_order_status(tests.id('o'), 'delivered');
 select public.adjust_stock(tests.id('p'), -1, 'waste', 'ذبلان');
+select tests.set_uid(tests.id('cust'));
+select public.rate_order(tests.id('o'), 4, 'جيد');
 select tests.as_postgres();
 
 -- ---------------------------------------------------------------- 2) مبالغ البيع: يراها (الإيصال)
@@ -90,8 +93,34 @@ select is(
   8, 'dashboard_today: all 7 money fields and the admin-only stuck-notifications count are null for staff');
 select ok((public.dashboard_today() ->> 'delivered_count')::int >= 1 and (public.dashboard_today() -> 'open') is not null,
   'dashboard_today: staff still gets the counts (delivered today, open orders)');
-select ok(public.dashboard_today()::text !~ '(cost|profit)_iqd"\s*:\s*[0-9-]',
+-- بنيوي (مراجعة C M3): أي مفتاح جديد بالـ JSON يُفشل الاختبار حتى يُصنَّف، وأي مفتاح مالي غير null للموظف يُفشله
+select set_eq(
+  $$ select jsonb_object_keys(public.dashboard_today())::text collate "default" $$,
+  $$ values ('day'), ('as_of'), ('delivered_count'), ('delivered_count_prev'), ('cancelled_count'),
+             ('cancelled_count_prev'), ('placed_count'), ('placed_count_prev'), ('open'), ('low_stock_count'),
+             ('low_stock_items'), ('sales_iqd'), ('sales_prev_iqd'), ('avg_order_iqd'), ('avg_order_prev_iqd'),
+             ('waste_cost_iqd'), ('net_profit_iqd'), ('net_profit_prev_iqd'), ('stuck_notifications') $$,
+  'dashboard_today: the key list is reviewed (a new key must be classified here: staff-safe or money)');
+select is(
+  (with recursive t(k, v) as (
+     select e.key, e.value from jsonb_each(public.dashboard_today()) e
+     union all
+     select e.key, e.value from t, jsonb_each(case when jsonb_typeof(t.v) = 'object' then t.v else '{}'::jsonb end) e)
+   select count(*)::int from t
+    where (k collate "C") ~ '(_iqd|cost|profit|revenue|sales|fee|waste|price|stuck)' and jsonb_typeof(v) <> 'null'),
+  0, 'dashboard_today: no money-like key (at any depth) carries a value for staff');
+select ok(public.dashboard_today()::text !~ '(cost|profit)_iqd"s*:s*[0-9-]',
   'dashboard_today: no cost or profit number in the staff payload');
+-- التقييمات (T26): بلا مبالغ، والمفاتيح مثبّتة
+select set_eq(
+  $$ select jsonb_object_keys(public.ratings_summary())::text collate "default" $$,
+  $$ values ('count'), ('avg'), ('distribution') $$,
+  'ratings_summary: reviewed key list (stars only, no money)');
+select isnt_empty($$ select 1 from public.ratings_list() $$, 'staff can list ratings');
+select is(
+  (select count(*)::int from public.ratings_list() r, jsonb_object_keys(to_jsonb(r)) k
+    where (k collate "C") ~ '(_iqd|cost|profit|revenue|sales|fee|waste|price|total|subtotal)'),
+  0, 'ratings_list: no money column in any row');
 select throws_ok(format($$ update public.app_settings set delivery_fee_iqd = 1000 where id = 1 $$), '42501', null,
   'no direct settings write');
 
@@ -113,6 +142,17 @@ select set_eq(
   $$ values ('report_daily'), ('report_drivers'), ('report_orders_placed'), ('report_summary'),
             ('report_top_products'), ('report_waste') $$,
   'the only authenticated RPCs that return cost, profit or waste are the report RPCs, refused to staff above');
+-- مراجعة C M3: دوال تُرجع jsonb/record/TABLE لا يراها فحص أسماء النتائج أعلاه (نصها لا يحوي _iqd).
+-- كل دالة جديدة من هذا النوع تُفشل الاختبار حتى تُصنَّف هنا (ومعها فحص بنيوي كما بـ dashboard_today).
+select set_eq(
+  $$ select p.proname::text collate "default" from pg_proc p
+      where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
+        and has_function_privilege('authenticated', p.oid, 'execute')
+        and pg_get_function_result(p.oid) ~ '^(jsonb?|record|setof record|TABLE\()' $$,
+  $$ values ('available_orders'), ('dashboard_today'), ('list_drivers'), ('place_order'), ('ratings_list'),
+            ('ratings_summary'), ('report_daily'), ('report_drivers'), ('report_orders_placed'),
+            ('report_summary'), ('report_top_products'), ('report_waste') $$,
+  'every authenticated RPC returning jsonb / record / TABLE is reviewed (a new one must be classified here)');
 select ok(not has_table_privilege('authenticated', 'public.daily_stats', 'insert, update, delete'),
   'daily_stats is not writable');
 select ok(not has_table_privilege('authenticated', 'public.product_costs', 'insert, update, delete'),

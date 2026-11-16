@@ -7,7 +7,7 @@
 | البيئة | اسم المشروع | ref | المنطقة | الخطة |
 |---|---|---|---|---|
 | تطوير | `mukhdar-dev` | `ghcohlrzvehtcettaaiu` | `ap-southeast-1` (سنغافورة) | مجانية |
-| إنتاج | لم يُنشأ بعد | - | **يجب** `eu-central-1` (فرانكفورت) | Pro |
+| إنتاج | `mukhdar-prod` (الاسم الإلزامي عند الإنشاء؛ لم يُنشأ بعد) | - (مكانه المحجوز `PROD_PROJECT_REFS` بـ `scripts/lib/sb.mjs`) | **يجب** `eu-central-1` (فرانكفورت) | Pro |
 
 - **مشروع التطوير بسنغافورة** لأنه أُنشئ هناك مسبقاً. هذا مقبول للتطوير فقط.
 - **مشروع الإنتاج يجب أن يُنشأ بمنطقة أوروبية: فرانكفورت (`eu-central-1`)**، لأنها أقرب للعراق وزمن الاستجابة منها أقل بكثير من سنغافورة. المنطقة لا تتغير بعد إنشاء المشروع، فانتبه لها وقت الإنشاء.
@@ -16,13 +16,17 @@
 ## 2) الأدوات (بدون Docker)
 
 نعمل على المشروع السحابي مباشرة، ولا نشغّل Supabase محلياً (توفيراً للموارد على ويندوز).
-الـ CLI مثبت كـ devDependency: `pnpm exec supabase ...`.
+الـ CLI مثبت كـ devDependency، ونستدعيه **فقط** عبر الحارس: `pnpm sb <أمر supabase>` (مثلاً `pnpm sb db push --remote --dry-run`). لا تستعمل `pnpm exec supabase` ولا `npx supabase` للعمل السحابي.
+
+> **حارس `pnpm sb` (مراجعة C، H1):** يقرأ المشروع المربوط (`supabase/.temp/linked-project.json`) ويصنّفه بقائمتين صريحتين (`DEV_PROJECT_REFS` بـ `scripts/lib/db.mjs`، `PROD_PROJECT_REFS` بـ `scripts/lib/sb.mjs`)، ويطبع أولاً لافتة ملونة: `TARGET: DEV mukhdar-dev (…)` أو `TARGET: *** PRODUCTION *** mukhdar-prod (…)`. أي ref خارج القائمتين **مرفوض دائماً**؛ وref الإنتاج الحالي **placeholder** فيُرفض كل شيء عليه إلى أن يُسجَّل الـ ref الحقيقي. على الإنتاج: الأوامر القارئة فقط (`--dry-run`، `migration list`، `functions list`، `db advisors`، `gen types`…) تعمل مباشرة؛ أي أمر يغيّر شيئاً يحتاج `MUKHDAR_TARGET=prod` **وكتابة الـ ref يدوياً** بطرفية حقيقية، ويُحذف `--yes` فيبقى سؤال الـ CLI نفسه. وأي `--project-ref`/`--remote=<ref>` يخالف المشروع المربوط يُرفض.
+>
+> **تنبيه:** كلمة `· production` التي يطبعها الـ CLI (مثلاً `Target: project mukhdar-dev (…) · production`) تعني "الفرع الافتراضي" لأي مشروع، **وليست البيئة**. لا تعتمد عليها؛ اعتمد على لافتة `pnpm sb`.
 
 ### تسجيل الدخول للـ CLI (مرة واحدة لكل جهاز)
 الدخول التفاعلي يحتاج terminal حقيقي، فشغّله من نافذة PowerShell عادية:
 ```powershell
 cd D:\Projects\Mukhdar\mukhdar
-pnpm exec supabase login
+pnpm sb login
 ```
 
 ### كلمة سر قاعدة البيانات
@@ -43,32 +47,33 @@ Dashboard ← Project Settings ← Database ← Reset database password، وحد
 
 ### الربط (مرة واحدة)
 ```bash
-pnpm exec supabase link --project-ref ghcohlrzvehtcettaaiu
+pnpm sb link --project-ref ghcohlrzvehtcettaaiu
 ```
+نسخة العمل هذه **مربوطة بـ mukhdar-dev دائماً ولا يُربط الإنتاج فيها أبداً**. الإنتاج له نسخة عمل منفصلة (§17 الخطوة 1).
 
 ## 3) تطبيق الـ migrations
 
 ```bash
-pnpm exec supabase db push --remote --dry-run   # يعرض ما سيُطبَّق
-pnpm exec supabase db push --remote --yes       # يطبّق
+pnpm sb db push --remote --dry-run   # يعرض ما سيُطبَّق
+pnpm sb db push --remote --yes       # يطبّق
 ```
 - انتبه: بدون `--remote` يحاول الاتصال بقاعدة محلية (Docker) ويفشل.
 - لا تعدّل migration مطبقة. أي تغيير = ملف جديد بـ `supabase/migrations/`.
 
-المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية)، `20261116000001_phone_pin_auth.sql` (الدخول بالهاتف + PIN: Send SMS hook يرفض، كل حساب برقم صالح، رقم فريد؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261117000001_signup_rate_limit.sql` (حدود معدل دالة `signup`؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع)، `20261118000001_set_default_address.sql` (تعيين العنوان الافتراضي بمعاملة واحدة، security invoker؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع)، `20261119000001_revoke_user_sessions.sql` (إبطال كل جلسات مستخدم لـ `admin-reset-pin`، service_role فقط؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع)، `20261120000001_staff_delivery_fallback.sql` (الموظف أيضاً ← بالطريق/تم التوصيل كإجراء احتياطي بدل السائق؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261121000001_catalog_stock.sql` (T18: كلفة الحركات، رصيد افتتاحي بالدفتر، هدر/تسويات/صافي ربح بـ daily_stats، حد النقص وإشعار admins_only، دوال المنتجات والمخزون وسحب الكتابة المباشرة؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261122000001_admin_settings_staff.sql` (T19)، `20261123000001_account_lifecycle.sql` (مراجعة T16-T19 جلسة A: الرمز المؤقت الإجباري، التعطيل يُخرج من الأجهزة، سائق بطلبات، `admin_audit`، نقل طلب بالطريق، الإلغاء بلا إرجاع؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261124000001_review_session_b.sql` (جلسة B: `pin_resets.kind`، `admin_rate_hit`، الإشعارات عالق/فاشل/مصروف، قيد العمارة 1..100 وصلاحيات العناوين، `address_usage`؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261126000001_reports.sql` (T20: دوال التقارير `report_*` للأدمن، فهرسا التقارير، ومنع الحذف الفعلي لمنتج له تاريخ L4(أ)؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع، على mukhdar-dev فقط)، `20261127000001_dashboard.sql` (T25: دالة `dashboard_today()` والفهرس الجزئي لـ `cancelled_at`؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع، على mukhdar-dev فقط)، `20261128000001_ratings.sql` (T26: `rate_order` مشدَّد و`ratings_summary` و`ratings_list` وشارة الإشعارات العالقة بالرئيسية؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع، على mukhdar-dev فقط).
+المطبق حالياً على `mukhdar-dev`: `20261110000001_init.sql`، `20261110000002_storage.sql` (T02)، `20261111000001_advisor_fixes.sql` (T03)، `20261111000002_review_fixes.sql` و`20261112000001_sequence_grants.sql` (مراجعة T01–T05)، `20261112000002_inactive_driver_orders.sql`، `20261112000003_push_dispatch.sql` (T07)، `20261112000004_delete_account.sql` (T08)، `20261114000001_address_wording.sql` (نص العنوان بالإشعارات: "وحدة A3 - عمارة 12"؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261115000001_order_status_ready.sql` و`20261115000002_ready_flow.sql` (حالة `ready` ومسار السائق؛ طُبّقتا 2026-11-14 بموافقة صاحب المشروع)، `20261115000003_push_reliability.sql` (موثوقية الإشعارات)، `20261115000004_hardening.sql` (push_tokens عبر الدالة فقط، قائمة وحدات البيع)، `20261115000005_deletion_safety.sql` (تسلسل القبول مع حذف الحساب، حفظ الحالة الأصلية)، `20261116000001_phone_pin_auth.sql` (الدخول بالهاتف + PIN: Send SMS hook يرفض، كل حساب برقم صالح، رقم فريد؛ طُبّقت 2026-11-14 بموافقة صاحب المشروع)، `20261117000001_signup_rate_limit.sql` (حدود معدل دالة `signup`؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع)، `20261118000001_set_default_address.sql` (تعيين العنوان الافتراضي بمعاملة واحدة، security invoker؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع)، `20261119000001_revoke_user_sessions.sql` (إبطال كل جلسات مستخدم لـ `admin-reset-pin`، service_role فقط؛ طُبّقت 2026-11-15 بموافقة صاحب المشروع)، `20261120000001_staff_delivery_fallback.sql` (الموظف أيضاً ← بالطريق/تم التوصيل كإجراء احتياطي بدل السائق؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261121000001_catalog_stock.sql` (T18: كلفة الحركات، رصيد افتتاحي بالدفتر، هدر/تسويات/صافي ربح بـ daily_stats، حد النقص وإشعار admins_only، دوال المنتجات والمخزون وسحب الكتابة المباشرة؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261122000001_admin_settings_staff.sql` (T19)، `20261123000001_account_lifecycle.sql` (مراجعة T16-T19 جلسة A: الرمز المؤقت الإجباري، التعطيل يُخرج من الأجهزة، سائق بطلبات، `admin_audit`، نقل طلب بالطريق، الإلغاء بلا إرجاع؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261124000001_review_session_b.sql` (جلسة B: `pin_resets.kind`، `admin_rate_hit`، الإشعارات عالق/فاشل/مصروف، قيد العمارة 1..100 وصلاحيات العناوين، `address_usage`؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع)، `20261126000001_reports.sql` (T20: دوال التقارير `report_*` للأدمن، فهرسا التقارير، ومنع الحذف الفعلي لمنتج له تاريخ L4(أ)؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع، على mukhdar-dev فقط)، `20261127000001_dashboard.sql` (T25: دالة `dashboard_today()` والفهرس الجزئي لـ `cancelled_at`؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع، على mukhdar-dev فقط)، `20261128000001_ratings.sql` (T26: `rate_order` مشدَّد و`ratings_summary` و`ratings_list` وشارة الإشعارات العالقة بالرئيسية؛ طُبّقت 2026-11-16 بموافقة صاحب المشروع، على mukhdar-dev فقط)، `20261129000001_ratings_privacy.sql` (مراجعة C جلسة D: إزالة محارف bidi وغير المرئية من تعليق التقييم، `ratings_list` بلا اسم زبون محذوف، حذف `ratings_created_idx`؛ طُبّقت 2026-11-17 بموافقة صاحب المشروع، على mukhdar-dev فقط).
 
 ## 4) توليد أنواع TypeScript
 
 بعد كل migration جديدة:
 ```bash
-pnpm exec supabase gen types typescript --remote > packages/shared/src/database.types.ts
+pnpm sb gen types typescript --remote > packages/shared/src/database.types.ts
 pnpm exec prettier --write packages/shared/src/database.types.ts
 ```
 
 ## 5) فحص Security Advisor
 
 ```bash
-pnpm exec supabase db advisors --remote
+pnpm sb db advisors --remote
 ```
 (أو من اللوحة: Advisors ← Security Advisor).
 
@@ -139,7 +144,7 @@ pnpm exec supabase db advisors --remote
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملفات: `supabase/tests/NN_*.sql` (24 ملفاً، 916 فحصاً بعد T20)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+الملفات: `supabase/tests/NN_*.sql` (27 ملفاً، 1036 فحصاً بعد جلسة D؛ `27_access_matrix.sql` مصفوفة الأدوار × دوال T20/T25/T26)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
 
 - كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
 - لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
@@ -183,7 +188,7 @@ pnpm db:test:remote --prelude=supabase/migrations/<new>.sql   # migration غير
 يفحص: طلب صحيح بمجموع محسوب من القاعدة (السعر المرسل من التطبيق يُتجاهل)، تكرار نفس مفتاح idempotency، رفض عنوان زبون آخر، رفض كمية أكبر من المخزون، منع الزبون من قراءة المخزون وسعر الشراء، ونقص المخزون فعلاً.
 
 ```bash
-pnpm exec supabase db query --remote -f supabase/scripts/smoke_place_order.sql --yes
+pnpm sb db query --remote -f supabase/scripts/smoke_place_order.sql --yes
 ```
 النجاح: يرجع صفاً واحداً `"result": "SMOKE OK"`. الفشل: خطأ يبدأ بـ `SMOKE FAIL` أو اسم الخطأ.
 
@@ -198,7 +203,7 @@ pnpm exec supabase db query --remote -f supabase/scripts/smoke_place_order.sql -
 - محلياً تُحمَّل تلقائياً مع `supabase start` / `db reset`.
 - على mukhdar-dev (قابلة للإعادة، لا تكرر ولا تغيّر ما عدّله الأدمن):
   ```bash
-  pnpm exec supabase db query --remote -f supabase/seed.sql --yes
+  pnpm sb db query --remote -f supabase/seed.sql --yes
   ```
 - الهيكل من قرار المالك (2026-11-14). `seed.sql` لا يحذف شيئاً ولا يعدّل منتجاً موجوداً؛ لتغيير الهيكل أو الكتالوج على `mukhdar-dev` انظر "إعادة بناء الكتالوج والعناوين" أدناه.
 
@@ -220,7 +225,7 @@ pnpm seed:reset -- --remote                 # يمسح بيانات العرض �
 بموافقة صاحب المشروع فقط. بالترتيب:
 1. `pnpm seed:reset -- --remote` (يحذف مستخدمي العرض وطلباتهم ويعكس أثرها).
 2. تأكد أنه لا توجد طلبات ولا عناوين لغير مستخدمي العرض، ثم امسح بمعاملة واحدة: `addresses` ← `buildings` ← `subsections` ← `sectors`، و`products` (تمتد للتكاليف والمخزون والحركات) ← `categories`، وصور `product-images/demo/`.
-3. `pnpm exec supabase db query --remote -f supabase/seed.sql --yes`، ثم `pnpm seed:demo -- --remote` (يرفع الصور أيضاً).
+3. `pnpm sb db query --remote -f supabase/seed.sql --yes`، ثم `pnpm seed:demo -- --remote` (يرفع الصور أيضاً).
 
 آخر تنفيذ: 2026-11-14 (وحدة نص كيلو + قطاعان A/B بـ 17 وحدة).
 
@@ -251,8 +256,8 @@ SUPABASE_SERVICE_ROLE_KEY=...   # Dashboard ← Project Settings ← API Keys �
 
 ### النشر (لكل بيئة، بموافقة صاحب المشروع)
 ```bash
-pnpm exec supabase db push --remote --yes                       # migration 20261112000003 (pg_net، pg_cron، السر بـ Vault)
-pnpm exec supabase functions deploy push-dispatch --remote=<ref> --use-api --no-verify-jwt --yes
+pnpm sb db push --remote --yes                       # migration 20261112000003 (pg_net، pg_cron، السر بـ Vault)
+pnpm sb functions deploy push-dispatch --remote=<ref> --use-api --no-verify-jwt --yes
 ```
 ثم رابط الدالة بـ Vault (مرة واحدة لكل بيئة؛ من SQL Editor أو اتصال القاعدة):
 ```sql
@@ -290,8 +295,8 @@ select status, return_message, start_time from cron.job_run_details
 يستدعيها التطبيق بـ JWT المستخدم (`supabase.functions.invoke('delete-account', { method: 'POST' })`). لا أسرار إضافية (`SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` محقونة).
 
 ```bash
-pnpm exec supabase db push --remote --yes          # migration 20261112000004
-pnpm exec supabase functions deploy delete-account --remote=<ref> --use-api --yes   # verify_jwt = true
+pnpm sb db push --remote --yes          # migration 20261112000004
+pnpm sb functions deploy delete-account --remote=<ref> --use-api --yes   # verify_jwt = true
 ```
 
 ### اختبار التكامل (مشروع التطوير فقط)
@@ -338,8 +343,8 @@ GOOGLE_SERVICES_JSON=                                     # T14، اختياري
 
 ### النشر (لكل بيئة، بموافقة صاحب المشروع)، بالترتيب
 ```bash
-pnpm exec supabase db push --remote --yes          # migration 20261117000001
-pnpm exec supabase functions deploy signup --remote=<ref> --use-api --no-verify-jwt --yes
+pnpm sb db push --remote --yes          # migration 20261117000001
+pnpm sb functions deploy signup --remote=<ref> --use-api --no-verify-jwt --yes
 pnpm it:signup                                     # التطوير فقط: يجب أن تنجح كل الفحوص
 ```
 ثم من اللوحة: Authentication ← Sign In / Providers ← **Allow new users to sign up: OFF** (§6 خطوة 3)، ثم:
@@ -392,9 +397,9 @@ select bucket, hits, window_start from private.signup_rate_limits
 ## 16) الإعدادات والموظفون: `admin-reset-pin` و`admin-create-user` (T19)
 ### النشر (لكل بيئة، بموافقة صاحب المشروع)، بالترتيب
 ```sh
-pnpm exec supabase db push --remote --yes          # migration 20261122000001 (update_app_settings، pin_resets، user_creations، add_buildings)
-pnpm exec supabase functions deploy admin-reset-pin --remote=<ref> --use-api --yes     # verify_jwt = true
-pnpm exec supabase functions deploy admin-create-user --remote=<ref> --use-api --yes   # verify_jwt = true
+pnpm sb db push --remote --yes          # migration 20261122000001 (update_app_settings، pin_resets، user_creations، add_buildings)
+pnpm sb functions deploy admin-reset-pin --remote=<ref> --use-api --yes     # verify_jwt = true
+pnpm sb functions deploy admin-create-user --remote=<ref> --use-api --yes   # verify_jwt = true
 ```
 لا أسرار جديدة: `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase. اللوحة تستدعي الدالتين بجلسة الأدمن (`functions.invoke`).
 
@@ -426,12 +431,12 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 - **طلب بالطريق والبضاعة ضاعت/تلفت:** إلغاء (أدمن) مع خانة "البضاعة طلعت مع السائق" ← تُسجَّل هدراً بكلفة الطلب.
 - **سجل التدقيق:** (يشمل منذ جلسة C تغيير اسم/رقم/تفعيل القطاع والوحدة والعمارة: `action = 'address'`، الجدول والمعرّف داخل before/after) `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
 
-## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعة الجلستين A وB، 2026-11-16)
+## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، 2026-11-17)
 
-> مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm exec supabase migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
+> مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
 > إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (جلسة C: migration `20261125000001` لـ H1/M1 والبنود Low، وإعادة نشر `admin-reset-pin`) مدرجة أدناه (الصفان 24 و25).
 
-### 1. الـ migrations بالترتيب (28 ملفاً)
+### 1. الـ migrations بالترتيب (29 ملفاً)
 | # | الملف |
 |---|---|
 | 1 | `20261110000001_init.sql` |
@@ -461,7 +466,8 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 | 25 | `20261125000002_address_audit.sql` |
 | 26 | `20261126000001_reports.sql` (T20: التقارير + L4(أ). لا Edge Function تعتمد عليها؛ اللوحة تحتاجها لصفحة التقارير، فطبّقها قبل نشر اللوحة) |
 | 27 | `20261127000001_dashboard.sql` (T25: `dashboard_today()` للأدمن والموظف، المال null للموظف من الدالة نفسها، وفهرس `orders(cancelled_at)` الجزئي. لا Edge Function تعتمد عليها؛ اللوحة تحتاجها للرئيسية، فطبّقها قبل نشر اللوحة) |
-| 28 | `20261128000001_ratings.sql` (T26: `rate_order` مشدَّد، `ratings_summary` و`ratings_list`، `report_summary` يستعمل نفس حساب التقييمات، و`dashboard_today` يرجع `stuck_notifications` للأدمن. لا Edge Function تعتمد عليها؛ اللوحة تحتاجها لشاشة التقييمات، فطبّقها قبل نشر اللوحة. تغيّر توقيع `rate_order` لا يمس تطبيق الزبون) |
+| 28 | `20261128000001_ratings.sql` (T26: `rate_order` مشدَّد، `ratings_summary` و`ratings_list`، `report_summary` يستعمل نفس حساب التقييمات، و`dashboard_today` يرجع `stuck_notifications` للأدمن. لا Edge Function تعتمد عليها؛ اللوحة تحتاجها لشاشة التقييمات، فطبّقها قبل نشر اللوحة. توقيع `rate_order` **لم يتغير** (`p_order_id, p_stars, p_comment` ← `void`)، لكن **سلوكه** تغيّر (أخطاء جديدة `COMMENT_TOO_LONG` و`PIN_CHANGE_REQUIRED` و`NOT_ALLOWED` للحساب المعطّل، وتعليق مقصوص) ولا يمس تطبيق الزبون) |
+| 29 | `20261129000001_ratings_privacy.sql` (مراجعة C جلسة D، L2–L4: `rate_order` يزيل محارف bidi والعرض الصفري وC1 ويحوّل CR إلى LF؛ `ratings_list` يُرجع `customer_name = null` لزبون محذوف؛ حذف `ratings_created_idx`. لا Edge Function تعتمد عليها؛ توقيعات الدوال لم تتغير) |
 
 **قاعدة إلزامية (2):** طبّق migration **`20261125000001`** قبل نشر **`admin-reset-pin`** بنسخته الحالية (الجلسة C)؛ الدالة نفسها تعمل بدونها، لكن `record_pin_reset` الجديدة هي التي تحذف رموز الإشعارات (H1)، فلا يكتمل قطع الجهاز الضائع بغيرها. وهي تحذف `admin_actions_last_hour` (غير مستعملة).
 
@@ -473,16 +479,22 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
 ```
 
 ### 2. الترتيب الكامل
-1. أنشئ المشروع بمنطقة **`eu-central-1`** (§1)، ثم اربطه: `pnpm exec supabase link --project-ref <prod-ref>`. (سكربتات التطوير `db:test:remote` و`seed:*` ترفض المشروع المربوط إن لم يكن mukhdar-dev، وهذا مقصود؛ أعد ربط التطوير بعد الانتهاء.)
-2. `pnpm exec supabase db push --remote --dry-run` ← يجب أن يعرض الـ 28 ملفاً بالترتيب أعلاه ← `pnpm exec supabase db push --remote --yes`.
+1. أنشئ المشروع بمنطقة **`eu-central-1`** (§1) **باسم `mukhdar-prod`**. ثم، بنفس الـ commit، ضع الـ ref الحقيقي مكان الـ placeholder في `PROD_PROJECT_REFS` (`scripts/lib/sb.mjs`) (إلى ذلك الحين يرفض `pnpm sb` كل شيء على الإنتاج). **لا تربط الإنتاج بنسخة العمل اليومية** (المربوطة بـ mukhdar-dev): أنشئ نسخة منفصلة للإنتاج، واربطها هناك فقط:
+   ```bash
+   git worktree add ../mukhdar-prod main      # أو clone منفصل
+   cd ../mukhdar-prod && pnpm install
+   pnpm sb link --project-ref <prod-ref>      # يعرض لافتة PRODUCTION
+   ```
+   كل أوامر الإنتاج بالخطوات التالية تُشغَّل من `../mukhdar-prod` فقط، بـ `MUKHDAR_TARGET=prod pnpm sb …`، وتكتب الـ ref عند السؤال. لا حاجة لـ "إعادة ربط التطوير": نسخة التطوير لم تُمس. (سكربتات `db:test:remote` و`seed:*` و`db:concurrency` ترفض أي مشروع غير mukhdar-dev، وهذا مقصود.)
+2. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 29 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد).
 3. إعدادات Auth من اللوحة: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7. **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
 4. الدوال، بالترتيب (كلها بعد الخطوة 2، فالقاعدة أعلاه محققة تلقائياً):
    ```bash
-   pnpm exec supabase functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt --yes
-   pnpm exec supabase functions deploy delete-account    --remote=<prod-ref> --use-api --yes   # verify_jwt = true
-   pnpm exec supabase functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt --yes
-   pnpm exec supabase functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261125000001 (يحتوي إعادة المحاولة وRESET_INCOMPLETE، جلسة C)
-   pnpm exec supabase functions deploy admin-create-user --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261124000001
+   pnpm sb functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt
+   pnpm sb functions deploy delete-account    --remote=<prod-ref> --use-api   # verify_jwt = true
+   pnpm sb functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt
+   pnpm sb functions deploy admin-reset-pin   --remote=<prod-ref> --use-api   # verify_jwt = true، بعد 20261125000001 (يحتوي إعادة المحاولة وRESET_INCOMPLETE، جلسة C)
+   pnpm sb functions deploy admin-create-user --remote=<prod-ref> --use-api   # verify_jwt = true، بعد 20261124000001
    ```
    ثم `push_dispatch_url` بـ Vault (§11).
 5. §6 الخطوة 3: **Allow new users to sign up: OFF**، وفحص يدوي: حساب تجريبي من التطبيق ثم احذفه (§14).

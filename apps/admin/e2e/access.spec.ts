@@ -44,6 +44,35 @@ test.describe('anonymous', () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  test('submitting before hydration never puts the phone or PIN in the URL (M1)', async ({
+    page,
+  }) => {
+    // نؤخّر ملفات JS كي تبقى الصفحة بلا hydration، ونرسل بالزر وبـ Enter.
+    await page.route('**/_next/static/**/*.js', async (route) => {
+      await new Promise((r) => setTimeout(r, 2500));
+      await route.continue();
+    });
+    await page.goto('/login', { waitUntil: 'commit' });
+    const phone = page.getByLabel('رقم الهاتف');
+    const pin = page.getByLabel('رمز الدخول (PIN)');
+    await phone.fill(ACCOUNTS.admin);
+    await pin.fill('135792');
+    const form = page.locator('form');
+    await expect(form).toHaveAttribute('data-ready', 'false');
+    await expect(page.getByRole('button', { name: 'دخول' })).toBeDisabled();
+    await pin.press('Enter'); // إرسال ضمني: يُمنع لأن زر الإرسال معطّل
+    await page.getByRole('button', { name: 'دخول' }).click({ force: true });
+    await page.waitForTimeout(500);
+    const url = page.url();
+    expect(url).not.toContain(ACCOUNTS.admin);
+    expect(url).not.toContain('135792');
+    expect(url).not.toMatch(/[?&](phone|pin)=/);
+    // بعد التهيئة يعمل النموذج عادياً
+    await expect(page.locator('form[data-ready="true"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'دخول' })).toBeEnabled();
+    expect(page.url()).not.toContain('135792');
+  });
+
   test('invalid phone is caught before calling Supabase', async ({ page }) => {
     await signIn(page, '12345');
     await expect(page.getByTestId('login-error')).toContainText('رقم الهاتف غير صحيح');

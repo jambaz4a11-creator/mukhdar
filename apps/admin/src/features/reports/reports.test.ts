@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseSummary, type ReportSummary, type WasteRow, type DailyRow } from './api';
 import { chartGeometry, labelEvery } from './chart';
-import { BOM, dailyCsv, toCsv, wasteCsv } from './csv';
+import { BOM, csvText, dailyCsv, toCsv, wasteCsv } from './csv';
 import { addDays, percent, presetRange, rangeDays, rangeError, rangeLabel } from './range';
 
 const summary: ReportSummary = {
@@ -117,6 +117,32 @@ describe('CSV', () => {
     expect(lines).toHaveLength(3);
     expect(lines[1]).toBe('2020-03-10,2,1,0,7000,1000,4500,2500,0,0,2500');
     expect(lines[2]).toBe('المجموع,5,2,2,10000,2000,6500,3500,9250,1000,-6750');
+  });
+  it('guards text cells against spreadsheet formulas but never touches numbers (L1)', () => {
+    expect(csvText('=1+1')).toBe("'=1+1");
+    expect(csvText('-x')).toBe("'-x");
+    expect(csvText('+1')).toBe("'+1");
+    expect(csvText('@SUM(A1)')).toBe("'@SUM(A1)");
+    expect(csvText('\tx')).toBe("'\tx");
+    expect(csvText('\rx')).toBe("'\rx");
+    expect(csvText('طماطم')).toBe('طماطم');
+    expect(csvText('a=b')).toBe('a=b');
+    expect(toCsv([[-5000, 0, 12.5, '=HYPERLINK("http://x","y")']])).toBe(
+      `${BOM}-5000,0,12.5,"'=HYPERLINK(""http://x"",""y"")"\r\n`,
+    );
+    const waste = [
+      {
+        product_id: 'p',
+        name: '=cmd|x',
+        unit: 'half_kg',
+        waste_qty: 2,
+        waste_cost_iqd: 500,
+        shortage_qty: 0,
+        shortage_cost_iqd: 0,
+        total_cost_iqd: 500,
+      },
+    ] as unknown as Parameters<typeof wasteCsv>[0];
+    expect(wasteCsv(waste)).toContain("\r\n'=cmd|x,");
   });
   it('escapes quotes and newlines', () => {
     expect(toCsv([['a"b', 'c\nd', null]])).toBe(`${BOM}"a""b","c\nd",\r\n`);

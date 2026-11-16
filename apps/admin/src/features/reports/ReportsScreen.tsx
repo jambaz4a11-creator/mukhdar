@@ -583,7 +583,9 @@ function Comments({ data }: { data: ReportData }) {
               )}
               <span className="num">{baghdadToday(new Date(c.created_at))}</span>
             </span>
-            <span className="whitespace-pre-wrap text-sm">{c.comment}</span>
+            <span className="whitespace-pre-wrap text-sm">
+              <bdi>{c.comment}</bdi>
+            </span>
           </li>
         ))}
       </ul>

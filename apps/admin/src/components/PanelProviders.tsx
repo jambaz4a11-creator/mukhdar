@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 import { ordersKeys } from '@/features/orders/api';
+import { maxWaitDebounce } from '@/lib/maxWaitDebounce';
 import { playNewOrderSound, unlockAudio } from '@/lib/sound';
 import type { MukhdarClient } from '@mukhdar/shared';
 import type { PanelRole } from '@/lib/access';
@@ -16,6 +17,9 @@ interface PanelContextValue {
   newOrderIds: ReadonlySet<string>;
   realtimeStatus: 'connecting' | 'live' | 'offline';
 }
+
+const REFRESH_WAIT_MS = 250;
+const REFRESH_MAX_WAIT_MS = 2000;
 
 const PanelContext = createContext<PanelContextValue | null>(null);
 
@@ -56,15 +60,13 @@ function RealtimeBridge({ children, role }: { children: React.ReactNode; role: P
   }, []);
 
   useEffect(() => {
-    let debounce: ReturnType<typeof setTimeout> | undefined;
-    const invalidate = () => {
-      clearTimeout(debounce);
-      // دفعة تحديثات (مثلاً عدة طلبات) ← إعادة جلب واحدة
-      debounce = setTimeout(
-        () => void queryClient.invalidateQueries({ queryKey: ordersKeys.all }),
-        250,
-      );
-    };
+    // دفعة تحديثات ← إعادة جلب واحدة؛ لكن تحت سيل مستمر (ذروة) لا ننتظر الهدوء: سقف انتظار 2 ثانية (M4).
+    // الإبطال يطال الاستعلامات النشطة فقط (refetchType الافتراضي 'active')، ومنها الرئيسية (تحت ordersKeys.all).
+    const invalidate = maxWaitDebounce(
+      () => void queryClient.invalidateQueries({ queryKey: ordersKeys.all }),
+      REFRESH_WAIT_MS,
+      REFRESH_MAX_WAIT_MS,
+    );
     const channel = supabase
       .channel('panel-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
@@ -84,7 +86,7 @@ function RealtimeBridge({ children, role }: { children: React.ReactNode; role: P
         }
       });
     return () => {
-      clearTimeout(debounce);
+      invalidate.cancel();
       void supabase.removeChannel(channel);
     };
   }, [supabase, queryClient]);

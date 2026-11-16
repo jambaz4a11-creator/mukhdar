@@ -3,6 +3,8 @@ import { ACCOUNTS, PIN } from './accounts';
 
 export async function signIn(page: Page, phone: string, pin = PIN) {
   await page.goto('/login');
+  // لا نكتب قبل تهيئة الصفحة (M1): قبلها لا يوجد onSubmit.
+  await expect(page.locator('form[data-ready="true"]')).toBeVisible();
   await page.getByLabel('رقم الهاتف').fill(phone);
   await page.getByLabel('رمز الدخول (PIN)').fill(pin);
   await page.getByRole('button', { name: 'دخول' }).click();

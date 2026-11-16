@@ -8,6 +8,8 @@
 // كل شيء داخل BEGIN ... ROLLBACK: يولّد سنة من البيانات (طلبات مسلّمة وملغاة ومعلّقة، 4 بنود لكل طلب
 // بكلفتها، حركات هدر وجرد، سائقون)، يعيد بناء daily_stats ويحدّث الإحصاءات، ثم يقيس كل دالة تقارير
 // بدور أدمن (EXPLAIN ANALYZE: وقت التنفيذ بالخادم، بلا زمن الشبكة). لا يبقى شيء بقاعدة البيانات.
+// مراجعة C (L5): يغطي أيضاً الرئيسية (dashboard_today) والتقييمات (ratings_summary كل المدة وشهر، وratings_list
+// الصفحة الأولى والعاشرة) بحدود 300/300/100ms، وتعليقات صفحة التقارير (ratings_list) تدخل مجموع الصفحة.
 // الحدود: كل دالة لمدى شهر < 500ms، ومجموع ما تطلبه الصفحة لشهر < 1000ms (القبول)، وكل دالة لسنة < 2000ms.
 //   --explain يطبع خطة استعلام أكثر المنتجات مبيعاً (تشخيص).
 import fs from 'node:fs';
@@ -26,6 +28,9 @@ const prelude = preludeArg
 const MONTH_MS = 500;
 const PAGE_MS = 1000;
 const YEAR_MS = 2000;
+const HOME_MS = 300;
+const RATINGS_SUMMARY_MS = 300;
+const RATINGS_PAGE_MS = 100;
 
 try {
   assertSafeTarget(target);
@@ -113,6 +118,11 @@ try {
        join (select id, price_iqd, row_number() over (order by id) as n from perf_products) p on p.n = 1 + g % 60`,
     [Math.floor(ORDERS / 5)],
   );
+  // تقييمات لـ 60% من المسلّمة (دون زبون: customer_id اختياري، والتعليق لثلثها)
+  await q(`insert into public.ratings (order_id, stars, comment, created_at)
+           select o.id, 1 + (o.g * 7) % 5, case when o.g % 3 = 0 then 'تعليق ' || o.g end,
+                  o.created_at + interval '45 minutes' + random() * interval '2 hours'
+             from perf_orders o where o.status = 'delivered' and o.g % 10 < 6`);
   await q(
     `select private.rebuild_daily_stats(public.baghdad_today() - 367, public.baghdad_today())`,
   );
@@ -163,6 +173,13 @@ try {
     ['report_waste', 'select * from public.report_waste($1, $2)'],
     ['report_orders_placed', 'select * from public.report_orders_placed($1, $2)'],
   ];
+  // تعليقات صفحة التقارير: نفس نداء الواجهة (آخر 20 تعليقاً بالمدى)
+  const pageExtra = [
+    [
+      'ratings_list (report comments)',
+      'select * from public.ratings_list($1, $2, 1, 5, true, null, null, 20)',
+    ],
+  ];
   const today = (await q(`select public.baghdad_today()::text as d`)).rows[0].d;
   const minus = (days) => {
     const d = new Date(`${today}T12:00:00Z`);
@@ -191,6 +208,19 @@ try {
       );
     }
     if (label === 'month') {
+      for (const [name, sql] of pageExtra) {
+        await q(sql, [from, to]);
+        const plan = (await q(`explain (analyze, format json) ${sql}`, [from, to])).rows[0][
+          'QUERY PLAN'
+        ];
+        const ms = plan[0]['Execution Time'];
+        pageTotal += ms;
+        const ok = ms < RATINGS_PAGE_MS;
+        if (!ok) failures++;
+        console.log(
+          `  ${ok ? 'ok  ' : 'FAIL'} ${name.padEnd(22)} ${ms.toFixed(1).padStart(8)} ms (limit ${RATINGS_PAGE_MS})`,
+        );
+      }
       const ok = pageTotal < PAGE_MS;
       if (!ok) failures++;
       console.log(
@@ -198,6 +228,48 @@ try {
       );
     }
   }
+
+  // الرئيسية والتقييمات (L5): من الأدمن نفسه
+  const timed = async (name, sql, params, limit) => {
+    await q(sql, params);
+    const plan = (await q(`explain (analyze, format json) ${sql}`, params)).rows[0]['QUERY PLAN'];
+    const ms = plan[0]['Execution Time'];
+    const ok = ms < limit;
+    if (!ok) failures++;
+    console.log(
+      `  ${ok ? 'ok  ' : 'FAIL'} ${name.padEnd(22)} ${ms.toFixed(1).padStart(8)} ms (limit ${limit})`,
+    );
+  };
+  console.log('home and ratings:');
+  await timed('dashboard_today', 'select public.dashboard_today()', [], HOME_MS);
+  await timed('ratings_summary all', 'select public.ratings_summary()', [], RATINGS_SUMMARY_MS);
+  await timed(
+    'ratings_summary month',
+    'select public.ratings_summary($1, $2)',
+    [minus(30), today],
+    RATINGS_SUMMARY_MS,
+  );
+  await timed('ratings_list page 1', 'select * from public.ratings_list()', [], RATINGS_PAGE_MS);
+  // الصفحة العاشرة: نمشي 9 صفحات بالمؤشر (صفحات 50) ثم نقيس العاشرة
+  let c = null;
+  let o = null;
+  for (let i = 0; i < 9; i++) {
+    const row = (
+      await q(
+        `select created_at::text as c, order_id::text as o from public.ratings_list(null, null, 1, 5, false, $1::timestamptz, $2::uuid, 50) offset 49 limit 1`,
+        [c, o],
+      )
+    ).rows[0];
+    if (!row) break;
+    c = row.c;
+    o = row.o;
+  }
+  await timed(
+    'ratings_list page 10',
+    'select * from public.ratings_list(null, null, 1, 5, false, $1::timestamptz, $2::uuid, 50)',
+    [c, o],
+    RATINGS_PAGE_MS,
+  );
 } catch (err) {
   console.error(`error: ${err.message}`);
   failures++;

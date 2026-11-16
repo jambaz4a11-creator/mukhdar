@@ -203,7 +203,12 @@ test.describe.serial('home (staff)', () => {
     client = await signedInClient(ACCOUNTS.staff);
     page.on('response', async (res) => {
       if (res.url().includes('/rpc/dashboard_today') && res.ok()) {
-        payloads.push((await res.json()) as Record<string, unknown>);
+        // الجسم يضيع إن انتقلت الصفحة أثناء الاستجابة (goto بعد الدخول): نتجاهل تلك الاستجابة
+        try {
+          payloads.push((await res.json()) as Record<string, unknown>);
+        } catch {
+          /* navigated away */
+        }
       }
     });
   });
