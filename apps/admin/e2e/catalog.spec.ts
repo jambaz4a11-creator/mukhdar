@@ -62,6 +62,11 @@ test.describe.serial('catalog (admin, read)', () => {
   test('daily waste: cost before saving, invalid kilo steps block saving', async () => {
     await page.goto('/waste');
     await expect(page.getByRole('heading', { level: 1, name: 'هدر اليوم' })).toBeVisible();
+    // الهدر لليوم فقط: تسمية "اليوم" بتاريخ بغداد، بلا حقل تاريخ قابل للتغيير
+    const baghdadDay = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
+    await expect(page.getByTestId('waste-day')).toContainText('اليوم');
+    await expect(page.getByTestId('waste-day')).toContainText(baghdadDay);
+    await expect(page.locator('input[type="date"]')).toHaveCount(0);
     const rows = page.getByTestId('waste-table').locator('tbody tr[data-product]');
     await expect(rows.first()).toBeVisible();
     // أول منتج بالكيلو له رصيد (عمود الرصيد ليس "0 كيلو")

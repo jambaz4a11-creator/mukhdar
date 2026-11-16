@@ -90,7 +90,7 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 | Home (الرئيسية) | today cards with change vs yesterday, open orders by status, low-stock count, today's orders table (SPEC-admin §2.0) |
 | Orders (Main) | status tabs with counts, table, side panel with details, print (§2.1) |
 | Products & stock | categories section (image cards: image, name, product count, edit; "+ قسم جديد"), products table with price and cost **per kilo**, stock in kilos, "(قليل)" under the threshold, "نفد" at 0, "غير محدد" for a missing cost (§2.2, §2.3) |
-| Daily Waste (هدر اليوم) | date, one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
+| Daily Waste (هدر اليوم) | read-only "today" label (Baghdad date, no date input), one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
 | Ratings (التقييمات) | average, count, star distribution, filtered list (§2.8) |
 | Reports (التقارير والأرباح) | range picker, cards, daily chart, waste and top products in kilos, CSV (§2.5) |
 | Settings & staff | fee, minimum order, store open/closed, staff and drivers, PIN reset (§2.6, §2.7) |

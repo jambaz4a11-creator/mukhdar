@@ -1,7 +1,7 @@
 'use client';
 // هدر اليوم (أدمن، SPEC-admin §2.3، تصميم "Daily Waste"): كل المنتجات النشطة بحقل كمية (بالكيلو بخطوة 0.5
 // أو بالوحدة)، كلفة الهدر قبل الحفظ، وحفظ واحد بمعاملة واحدة (adjust_stock_bulk). الهدر يُسجَّل لليوم
-// الحالي (بغداد) فقط: الحركة تأخذ وقت الحفظ، فحقل التاريخ للعرض.
+// الحالي (بغداد) فقط: الحركة تأخذ وقت الحفظ، فالتاريخ تسمية "اليوم" للقراءة فقط (لا حقل تاريخ).
 import { adminUnitLabel, errorMessage, formatAdminQuantity, formatIQD } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -72,16 +72,16 @@ export function WasteScreen() {
             اكتب كمية التالف لكل منتج، وبعدين احفظ مرة وحدة بآخر اليوم
           </span>
         </div>
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          التاريخ
-          <input
-            type="date"
-            value={today}
-            readOnly
-            aria-readonly="true"
-            className={`${inputClass} w-auto font-normal`}
-          />
-        </label>
+        <p
+          className="m-0 flex items-center gap-2 rounded-control border border-border bg-surface px-3 py-2 text-sm"
+          data-testid="waste-day"
+        >
+          <span className="font-semibold">اليوم</span>
+          <span className="text-text-muted">{WEEKDAY.format(new Date(`${today}T12:00:00Z`))}</span>
+          <span className="num" dir="ltr">
+            {today}
+          </span>
+        </p>
       </header>
 
       <div className="flex flex-wrap items-start gap-4">
