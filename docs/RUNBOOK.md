@@ -142,6 +142,9 @@ pnpm sb db advisors --remote
    - **آخر ملاذ بلا جهاز المالك:** لا SQL بنص الرمز. من جهاز المالك فقط، بنفس السكربت. (قديماً: `update auth.users set encrypted_password = crypt(...)` بـ SQL Editor؛ أُلغي لأنه يترك الرمز بسجل الاستعلامات ولا يدقّق ولا يبطل الجلسات إلا بسطر ثانٍ.)
 4. نسيان رمز زبون أو موظف أو سائق: من لوحة الأدمن، "إعادة ضبط رمز الدخول" (`admin-reset-pin`، T19).
 
+## 7b) اختبار الحمل (T22)
+`pnpm load:run` (كامل ~55 دقيقة؛ `-- --smoke` للفحص السريع) و`pnpm load:cleanup` عند انقطاعه. على mukhdar-dev فقط، ببيانات مؤقتة تُحذف وتُثبت بلقطة قبل/بعد. التفاصيل: `scripts/load/README.md`، النتائج: `docs/reviews/load-test-T22.md`.
+
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
 الملفات: `supabase/tests/NN_*.sql` (27 ملفاً، 1036 فحصاً بعد جلسة D؛ `27_access_matrix.sql` مصفوفة الأدوار × دوال T20/T25/T26)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
