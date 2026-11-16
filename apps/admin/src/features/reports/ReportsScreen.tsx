@@ -38,6 +38,8 @@ export function ReportsScreen() {
     queryKey: reportKeys.range(range),
     queryFn: () => fetchReport(supabase, range),
     placeholderData: keepPreviousData,
+    // أرقام مالية: كل تغيير مدى يعيد الطلب (القديم يبقى ظاهراً حتى يصل الجديد)
+    staleTime: 0,
   });
   const data = report.data;
 

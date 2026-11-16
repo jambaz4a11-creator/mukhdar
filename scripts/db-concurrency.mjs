@@ -214,7 +214,8 @@ try {
   await q(`select public.set_order_status($1, 'preparing')`, [raceOrder]);
   await q(`select public.set_order_status($1, 'ready')`, [raceOrder]);
   await q('commit');
-  const demotedDriver = drivers[1];
+  // سائق لم يربح سباق القبول أعلاه (من عنده طلب لا يُخفَّض: DRIVER_HAS_ORDERS)
+  const demotedDriver = drivers.find((d) => d !== assigned[0].driver_id);
   const adminConn = await newClient();
   const driverConn = await newClient();
   const as = async (c, uid) => {
