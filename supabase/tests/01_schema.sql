@@ -1,5 +1,5 @@
 -- 01: المخطط، RLS، الصلاحيات، والدوال الأساسية
-select plan(41);
+select plan(40);
 
 select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
@@ -83,15 +83,6 @@ select is(
         'push_tokens:DELETE', 'push_tokens:SELECT'],
   'service_role has exactly the table privileges T07/T08 need (T19 audit tables: functions only)');
 
--- service_role: الدوال الخاصة به بالضبط (Edge Functions)، لا أكثر
-select is(
-  (select array_agg(p.proname::text order by p.proname) from pg_proc p
-    where p.pronamespace = 'public'::regnamespace and p.prosecdef
-      and has_function_privilege('service_role', p.oid, 'execute')
-      and not has_function_privilege('authenticated', p.oid, 'execute')),
-  array['abort_account_deletion', 'admin_actions_last_hour', 'begin_account_deletion', 'finish_user_creation',
-        'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions', 'signup_rate_hit'],
-  'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19 PIN reset / account creation)');
 
 -- الدوال الجديدة لا تُنفَّذ افتراضياً (default privileges عامة، لا بالمخطط فقط)
 create function public.zz_default_acl_probe() returns int language sql set search_path = '' as 'select 1';

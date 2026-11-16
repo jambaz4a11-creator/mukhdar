@@ -44,7 +44,8 @@ export function SettingsScreen() {
       <h1 className="m-0 text-[26px] font-bold">الإعدادات والموظفون</h1>
       <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
         {settings.data ? (
-          <SettingsForm key={settings.data.updated_at} initial={settings.data} />
+          // بلا key: الحفظ يعيد الجلب، والنموذج يبقى (ورسالة "انحفظت" معه)
+          <SettingsForm initial={settings.data} />
         ) : (
           <section className={cardClass} aria-label="إعدادات المحل">
             <h2 className="m-0 text-[17px] font-bold">إعدادات المحل</h2>

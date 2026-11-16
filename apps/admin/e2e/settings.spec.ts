@@ -63,7 +63,8 @@ test.describe.serial('settings, staff, addresses (admin, read / refused)', () =>
     await me.getByLabel(/^الدور لـ/).selectOption('staff');
     await expect(me.getByTestId('role-error')).toContainText('لا يمكنك تغيير دورك');
     await expect(me.getByRole('combobox')).toHaveValue('admin');
-    await me.getByLabel(/مفعّل$/).uncheck();
+    // الخانة ترجع لحالة الخادم بعد الرفض، فـ click لا uncheck (uncheck يتوقع تغيّر الحالة)
+    await me.getByRole('checkbox').click();
     await expect(me.getByTestId('role-error')).toContainText('لا يمكنك تغيير دورك');
     await expect(me.getByRole('checkbox')).toBeChecked();
   });
