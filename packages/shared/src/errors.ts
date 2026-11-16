@@ -59,6 +59,10 @@ export const ERROR_MESSAGES = {
   INVALID_BUILDINGS: 'أرقام العمارات غير صحيحة (من 1 إلى 9999، حتى 500 بالمرة)',
   INVALID_ROLE: 'الدور غير مسموح (موظف أو سائق فقط)',
   INVALID_REQUEST: 'بيانات الطلب غير صحيحة',
+  // مراجعة T16-T19 (جلسة A)
+  DRIVER_HAS_ORDERS: 'السائق عنده طلبات لم تنتهِ: انقلها لسائق آخر أو أكملها أولاً',
+  LAST_ADMIN: 'لازم يبقى أدمن واحد نشط على الأقل',
+  PIN_CHANGE_REQUIRED: 'رمزك مؤقت: غيّره أولاً من "تغيير الرمز"',
   // Edge Functions admin-reset-pin وadmin-create-user (T19)
   TOO_MANY_RESETS: 'وصلت حد إعادة الضبط (20 بالساعة)، انتظر قليلاً',
 } as const satisfies Record<string, string>;

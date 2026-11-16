@@ -67,6 +67,7 @@ test.describe.serial('admin', () => {
       /التقييمات/,
       /التقارير والأرباح/,
       /الإعدادات والموظفون/,
+      /تغيير الرمز/, // أسفل القائمة (مراجعة T16-T19)
     ]);
   });
 
@@ -101,7 +102,13 @@ test.describe.serial('staff', () => {
 
   test('lands on / with home, orders, stock and ratings only', async () => {
     await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
-    await expect(sidebarLinks(page)).toHaveText([/الرئيسية/, /الطلبات/, /المخزون/, /التقييمات/]);
+    await expect(sidebarLinks(page)).toHaveText([
+      /الرئيسية/,
+      /الطلبات/,
+      /المخزون/,
+      /التقييمات/,
+      /تغيير الرمز/,
+    ]);
   });
 
   test('reaches orders, stock and ratings', async () => {

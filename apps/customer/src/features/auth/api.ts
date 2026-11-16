@@ -9,7 +9,7 @@ import {
   type PhonePinCredentials,
 } from '@mukhdar/shared';
 import { router } from 'expo-router';
-import { NAME } from './redirect';
+import { CHANGE_PIN, NAME } from './redirect';
 
 export type Outcome = { ok: true; userId: string } | { ok: false; error: AuthError };
 
@@ -51,19 +51,43 @@ export async function fetchFullName(client: MukhdarClient, userId: string): Prom
   return name ? name : null;
 }
 
-/** بعد الدخول: الاسم فارغ ← شاشة الاسم، وإلا الرجوع لمكان المستخدم. */
+/** الاسم وعلامة الرمز المؤقت (profiles.must_change_pin) بعد الدخول. */
+export async function fetchSignInProfile(
+  client: MukhdarClient,
+  userId: string,
+): Promise<{ name: string | null; mustChangePin: boolean }> {
+  const { data, error } = await client
+    .from('profiles')
+    .select('full_name, must_change_pin')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const row = data as { full_name: string | null; must_change_pin?: boolean } | null;
+  const name = row?.full_name?.trim();
+  return { name: name ? name : null, mustChangePin: row?.must_change_pin === true };
+}
+
+/**
+ * بعد الدخول: رمز مؤقت (أعاد المتجر ضبطه) ← تغيير الرمز إجبارياً أولاً (الخادم يرفض الطلبات حتى يُغيَّر)؛
+ * ثم الاسم فارغ ← شاشة الاسم؛ وإلا الرجوع لمكان المستخدم.
+ */
 export async function goAfterAuth(
   client: MukhdarClient,
   userId: string,
   redirect: string,
 ): Promise<void> {
-  let name: string | null = 'unknown';
+  let profile: { name: string | null; mustChangePin: boolean } = {
+    name: 'unknown',
+    mustChangePin: false,
+  };
   try {
-    name = await fetchFullName(client, userId);
+    profile = await fetchSignInProfile(client, userId);
   } catch {
-    // تعذّرت القراءة: لا نوقف المستخدم؛ الاسم يُطلب لاحقاً من "حسابي"
+    // تعذّرت القراءة: لا نوقف المستخدم؛ الاسم يُطلب لاحقاً من "حسابي"، والخادم يرفض الطلب برمز مؤقت
   }
-  if (name === null) router.replace({ pathname: NAME, params: { redirect } });
+  if (profile.mustChangePin) {
+    router.replace({ pathname: CHANGE_PIN, params: { forced: '1', redirect } });
+  } else if (profile.name === null) router.replace({ pathname: NAME, params: { redirect } });
   else router.replace(redirect);
 }
 

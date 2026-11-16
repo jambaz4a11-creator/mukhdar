@@ -21,7 +21,9 @@ export function orderActions(status: OrderStatus, role: PanelRole): OrderAction[
   const actions: OrderAction[] = [];
   if (status === 'pending') actions.push('start_preparing');
   if (status === 'preparing') actions.push('mark_ready');
-  if (status === 'preparing' || status === 'ready') actions.push('assign_driver');
+  // out_for_delivery: نقل الطلب لسائق نشط آخر (قرار المالك 2026-11-16، يُسجَّل بـ admin_audit)
+  if (status === 'preparing' || status === 'ready' || status === 'out_for_delivery')
+    actions.push('assign_driver');
   // احتياطي (2026-11-16): بدل السائق إن كان تطبيقه معطّلاً أو نسي (SPEC-admin §2.1)
   if (status === 'ready') actions.push('mark_out_for_delivery');
   if (status === 'out_for_delivery') actions.push('mark_delivered');
@@ -58,6 +60,11 @@ export function actionBlocked(
 
 /** الإجراءات الاحتياطية تحتاج تأكيداً (التسليم يثبت المبيعات ويحدّث الإحصاءات). */
 export const CONFIRM_ACTIONS: readonly OrderAction[] = ['mark_out_for_delivery', 'mark_delivered'];
+
+/** الإلغاء بلا إرجاع للمخزون (هدر "cancelled after dispatch"): للأدمن ولطلب بالطريق فقط. */
+export function canCancelWithoutReturn(status: OrderStatus, role: PanelRole): boolean {
+  return role === 'admin' && status === 'out_for_delivery';
+}
 
 export const CANCEL_REASON_MAX = 300;
 

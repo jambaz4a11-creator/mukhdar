@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@mukhdar/shared';
 import { NextResponse, type NextRequest } from 'next/server';
 import {
+  CHANGE_PIN_PATH,
   LOGIN_PATH,
   NOT_AUTHORIZED_PATH,
   canAccess,
@@ -55,6 +56,10 @@ export async function proxy(request: NextRequest) {
     return withCookies(
       NextResponse.rewrite(new URL(NOT_AUTHORIZED_PATH, request.url), { status: 403 }),
     );
+  }
+  // رمز مؤقت: كل صفحة ← تغيير الرمز (الخادم يرفض دوال الدور أصلاً حتى يُغيَّر)
+  if (user.mustChangePin && pathname !== CHANGE_PIN_PATH) {
+    return withCookies(NextResponse.redirect(new URL(CHANGE_PIN_PATH, request.url)));
   }
   if (isKnownPanelPath(pathname) && !canAccess(user.role, pathname)) {
     return withCookies(

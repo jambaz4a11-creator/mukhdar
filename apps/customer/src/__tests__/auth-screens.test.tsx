@@ -52,6 +52,8 @@ interface FakeOptions {
   signIn?: () => { data: unknown; error: unknown };
   invoke?: () => { data: unknown; error: unknown };
   fullName?: string | null;
+  /** profiles.must_change_pin (رمز مؤقت من المتجر) */
+  mustChangePin?: boolean;
   /** عناوين الزبون (شاشة الاسم تفحص وجود عنوان). الافتراضي: عنوان واحد. */
   addresses?: unknown[];
 }
@@ -61,7 +63,10 @@ function setup(opts: FakeOptions = {}) {
     if (call.table === 'profiles' && opArgs(call, 'update')) return { data: null, error: null };
     if (call.table === 'addresses') return { data: opts.addresses ?? [{ id: 'a1' }], error: null };
     if (call.table === 'profiles')
-      return { data: { full_name: opts.fullName ?? null }, error: null };
+      return {
+        data: { full_name: opts.fullName ?? null, must_change_pin: opts.mustChangePin ?? false },
+        error: null,
+      };
     return { data: null, error: null };
   });
   const auth = {
@@ -171,6 +176,22 @@ describe('sign in', () => {
     await type('pin-input', '482915');
     await fireEvent.press(screen.getByTestId('sign-in-submit'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/orders'));
+  });
+
+  it('temporary PIN (reset by the shop) → forced change-PIN screen first, carrying the redirect', async () => {
+    mockParams = { redirect: '/orders' };
+    setup({ fullName: 'أحمد', mustChangePin: true });
+    await renderScreen(<SignInScreen />);
+    await type('phone-input', '07701234567');
+    await type('pin-input', '482915');
+    await fireEvent.press(screen.getByTestId('sign-in-submit'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith({
+        pathname: '/account/pin',
+        params: { forced: '1', redirect: '/orders' },
+      }),
+    );
+    expect(mockReplace).not.toHaveBeenCalledWith('/orders');
   });
 
   it('first time (no name) → name screen, carrying the redirect', async () => {

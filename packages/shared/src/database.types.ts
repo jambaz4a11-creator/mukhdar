@@ -77,6 +77,45 @@ export type Database = {
           },
         ];
       };
+      admin_audit: {
+        Row: {
+          action: string;
+          actor: string | null;
+          after: NonNullable<Json>;
+          before: NonNullable<Json>;
+          created_at: string;
+          id: number;
+          target_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          action: string;
+          actor?: string | null;
+          after?: NonNullable<Json>;
+          before?: NonNullable<Json>;
+          created_at?: string;
+          id?: never;
+          target_id?: string | null;
+        };
+        Update: {
+          action?: string;
+          actor?: string | null;
+          after?: NonNullable<Json>;
+          before?: NonNullable<Json>;
+          created_at?: string;
+          id?: never;
+          target_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'admin_audit_actor_fkey';
+            columns: ['actor'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       app_settings: {
         Row: {
           closed_message: string | null;
@@ -736,6 +775,7 @@ export type Database = {
           full_name: string | null;
           id: string;
           is_active: boolean;
+          must_change_pin: boolean;
           phone: string | null;
           role: Database['public']['Enums']['user_role'];
           updated_at: string;
@@ -746,6 +786,7 @@ export type Database = {
           full_name?: string | null;
           id: string;
           is_active?: boolean;
+          must_change_pin?: boolean;
           phone?: string | null;
           role?: Database['public']['Enums']['user_role'];
           updated_at?: string;
@@ -755,6 +796,7 @@ export type Database = {
           full_name?: string | null;
           id?: string;
           is_active?: boolean;
+          must_change_pin?: boolean;
           phone?: string | null;
           role?: Database['public']['Enums']['user_role'];
           updated_at?: string;
@@ -1206,6 +1248,7 @@ export type Database = {
         Args: {
           p_order_id: string;
           p_reason?: string;
+          p_return_stock?: boolean;
           p_status: Database['public']['Enums']['order_status'];
         };
         Returns: {

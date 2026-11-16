@@ -7,10 +7,47 @@ of the repo. Expected screens and UX are described in [SPEC-driver.md](SPEC-driv
 Source of truth for everything below: `supabase/migrations/` (functions `available_orders`,
 `accept_order`, `set_order_status`, `register_push_token`, and the RLS policies). The behaviour is
 covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `05_driver.sql`,
-`08_roles.sql`). If the code and this document disagree, the code wins and this document is a bug.
+`08_roles.sql`, `20_account_lifecycle.sql`). If the code and this document disagree, the code wins and this document is a bug.
 
 > Changes to this contract (function signatures, error codes, policies, push payloads) must be agreed
 > with the driver app developer first and land as a **new** migration.
+
+---
+
+## Changes for the driver app (2026-11-16)
+
+Short version to send to the driver-app developer. Backend migration `20261123000001` (applied to
+the development project). Details are in the sections linked below.
+
+1. **Admin-created driver accounts (§2).** Besides self sign-up (`signup` + admin promotion), the
+   admin can now create a driver account directly from the panel with a **temporary PIN**, sent to
+   the driver over WhatsApp. The driver signs in normally with phone + that PIN.
+2. **Forced PIN change on first sign-in (§2).** Accounts created by the admin, and any account whose
+   PIN the admin resets, have `profiles.must_change_pin = true`. While it is true, **every driver
+   function refuses** (`available_orders` / `accept_order` → `NOT_ALLOWED`, `set_order_status` →
+   `NOT_AUTHENTICATED`) and the driver reads no orders. Read the flag right after sign-in; if true,
+   show a "choose a new PIN" screen (no way around it, plus Sign out):
+   `signInWithPassword` with the temporary PIN → `updateUser({ password: newPin })` →
+   `signOut({ scope: 'others' })`. The server clears the flag by itself when the password really
+   changes; re-read the profile and continue. Reject a new PIN equal to the temporary one.
+3. **PIN reset signs the driver out (§2).** When the admin resets a driver's PIN, all their sessions
+   are revoked: the next token refresh fails (HTTP 400). Sign out locally and show the sign-in
+   screen. The old access token keeps working for at most 1 hour, but the server already refuses
+   driver functions while the flag above is set.
+4. **Deactivated or demoted driver (§2).** Deactivation or a role change by the admin now also
+   **revokes all sessions** (same handling as 3). Before the refresh fails, driver functions return
+   `NOT_ALLOWED` / `NOT_AUTHENTICATED` and order reads return nothing: re-read the profile and show
+   "account not active". The admin **cannot** deactivate or demote a driver who still holds an order
+   in `preparing`/`ready`/`out_for_delivery`; such orders are moved to another driver first.
+5. **An order can be moved to another driver while `out_for_delivery` (§3.3, §5, §6, §7).**
+   Staff/admin may now reassign an order that is already on the way (driver unreachable, vehicle broke
+   down).
+   - The previous driver gets the existing `unassigned` push and loses access to the order (it
+     disappears from reads; no Realtime event).
+   - The new driver gets the `assigned` push, titled `نُقل لك طلب بالطريق #<number>`, and the order is
+     **already `out_for_delivery`**: show it in current orders with "Delivered" as the next step.
+6. **`set_order_status` has a new optional 4th parameter `p_return_stock` (admin only, §3.3).**
+   Drivers must not send it. Calls with three named arguments keep working unchanged.
 
 ---
 
@@ -82,15 +119,30 @@ own session; RLS and the functions enforce what a driver may see and do.
    account is not a driver.** The admin activates it from the admin panel
    (`set_user_role(user, 'driver', true)`). Staff accounts work the same way (sign up in the customer
    app, then the admin sets the role `staff`).
+   **Or (2026-11-16) the admin creates the account** in the panel (Edge Function `admin-create-user`):
+   it is a driver from the start, with a **temporary PIN** the admin sends over WhatsApp. The driver
+   signs in with phone + that PIN and must change it first (point 3).
 3. After sign-in (and on every app start / resume), read your own profile:
    ```ts
    const { data } = await supabase.from('profiles')
-     .select('id, role, full_name, phone, is_active').eq('id', user.id).single();
+     .select('id, role, full_name, phone, is_active, must_change_pin').eq('id', user.id).single();
    ```
-   If `role !== 'driver'` or `is_active === false`, show "account not activated as a driver, contact
-   the administration" with **Refresh** and **Sign out**. Do not call the driver functions.
+   - `must_change_pin === true` (temporary PIN from the admin: new account or PIN reset): show the
+     **change PIN** screen first, with no way to skip it (only Sign out). Flow: `signInWithPassword`
+     with the current (temporary) PIN → check the new PIN with the rules above and that it differs from
+     the temporary one → `updateUser({ password: newPin })` → `signOut({ scope: 'others' })` → re-read
+     the profile. **The server clears the flag itself** when the password really changes (a database
+     trigger); there is no call to make. While the flag is set, every driver function refuses
+     (`NOT_ALLOWED` / `NOT_AUTHENTICATED`) and order reads return nothing.
+   - If `role !== 'driver'` or `is_active === false`, show "account not activated as a driver, contact
+     the administration" with **Refresh** and **Sign out**. Do not call the driver functions.
 4. A deactivated or demoted driver is rejected by every driver function (`NOT_ALLOWED` /
    `NOT_AUTHENTICATED`) even with a valid session, so handle those errors by re-checking the profile.
+   **Since 2026-11-16 deactivation or a role change also revokes every session** (as does a PIN reset
+   by the admin): the next token refresh fails (HTTP 400). On a refresh failure, sign out locally and
+   show the sign-in screen. The admin cannot deactivate or demote a driver who still holds an order in
+   `preparing`/`ready`/`out_for_delivery` (the orders are moved to another driver first), so a driver
+   never loses access in the middle of a delivery without first receiving the `unassigned` push.
 5. The driver may update only `profiles.full_name` (`update ... set full_name`); role, phone and
    `is_active` are not writable.
 
@@ -134,7 +186,10 @@ After success the driver can read the full order (section 4).
 | `NOT_ALLOWED` | 42501 | caller is not an active driver |
 | `ORDER_NOT_AVAILABLE` | P0001 | not `ready` (still `pending`/`preparing`, out for delivery, delivered, cancelled), already taken by another driver, or not found. Show "taken by another driver" and refresh the list |
 
-### 3.3 `set_order_status(p_order_id uuid, p_status order_status, p_reason text default null)` → `orders` row
+### 3.3 `set_order_status(p_order_id uuid, p_status order_status, p_reason text default null, p_return_stock boolean default true)` → `orders` row
+
+`p_return_stock` (2026-11-16) is for the admin panel only (cancel an order on the way without putting
+the goods back in stock). **Drivers never send it**; calls with the three named arguments are unchanged.
 
 The only way to change status. A driver may do exactly two transitions, and only on orders
 assigned to them:
@@ -259,7 +314,7 @@ Limits to design around:
   screen is open.
 - **Cancellation** (by the customer while `pending`, or by staff/admin) arrives as an UPDATE with
   status `cancelled`, and you also get a push (`type: cancelled`, section 6).
-- **Reassignment away from you** does **not** arrive over Realtime (the row is no longer visible to
+- **Reassignment away from you** (also possible while `out_for_delivery` since 2026-11-16) does **not** arrive over Realtime (the row is no longer visible to
   you); you get a push (`type: unassigned`). Still re-fetch current orders on app resume, on reconnect,
   and periodically (e.g. 30 s), since pushes can be delayed or lost; treat an order that disappears or
   turns `cancelled` as removed.
@@ -277,7 +332,7 @@ minute). Notifications a driver receives:
 |---|---|---|---|
 | staff/admin marks an unassigned order `ready` | **all active drivers** | `طلب جديد #<number>` (body: unit and building) | `{ "order_id": "uuid", "type": "new_order" }` → open "available orders" |
 | staff/admin marks `ready` an order already assigned to you | that driver | `الطلب #<number> جاهز للاستلام` | `{ "order_id": "uuid", "type": "ready" }` → open the order |
-| staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order |
+| staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>`; if the order is already on the way (moved from another driver): `نُقل لك طلب بالطريق #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order (check its status) |
 | staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
 | an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = reason if given) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
 
@@ -316,6 +371,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 | `preparing → ready` | staff/admin | push "new order" to all active drivers (or "ready" to the pre-assigned driver) and to the customer |
 | driver takes it (status unchanged) | driver | `accept_order`, only while `ready` and unassigned |
 | or assigned manually | staff/admin | `assign_driver` from `preparing` or `ready`; push "assigned" to that driver. A pre-assigned `preparing` order shows the button disabled ("waiting for preparation") |
+| moved to another driver while on the way (2026-11-16) | staff/admin | `assign_driver` on an `out_for_delivery` order: status stays `out_for_delivery`; the previous driver gets `unassigned` and loses the order, the new driver gets `assigned` (title `نُقل لك طلب بالطريق #<number>`) and continues with "delivered" |
 | `ready → out_for_delivery` | **assigned driver** (fallback: staff/admin) | `set_order_status` (requires a driver assigned) |
 | `out_for_delivery → delivered` | **assigned driver** (fallback: staff/admin) | `set_order_status`; collect `total_iqd` in cash |
 | `→ cancelled` | customer (`pending` only), staff (`pending`/`preparing`/`ready`), admin (also `out_for_delivery`) | drivers cannot cancel; "problem with order" = call the administration |

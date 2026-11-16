@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ACCOUNTS, PIN } from './accounts';
-import { pageAs } from './helpers';
+import { pageAs, signIn } from './helpers';
 import { ALLOW_WRITES, signedInClient } from './supabase';
 
 // T19: الإعدادات والموظفون والعناوين. القراءة (ومحاولات تُرفض بلا كتابة) تعمل على أي بيانات seed؛
@@ -171,15 +171,63 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     await dialog.getByRole('button', { name: 'تم، أغلق' }).click();
     await expect(page.getByTestId('pin-value')).toHaveCount(0);
 
-    await signedInClient(RESET_CUSTOMER, pin); // يرمي إن فشل
+    const customer = await signedInClient(RESET_CUSTOMER, pin); // يرمي إن فشل
     await expect(signedInClient(RESET_CUSTOMER, PIN)).rejects.toThrow();
 
-    // إرجاع رمز العرض (يدوياً) حتى يبقى الحساب صالحاً للتشغيل التالي
-    await page.getByTestId('search-result').getByRole('button', { name: 'تصفير الرمز' }).click();
-    await dialog.getByLabel('الرمز (6 أرقام)').fill(PIN);
-    await dialog.getByRole('button', { name: 'ضبط الرمز الجديد' }).click();
-    await expect(dialog.getByTestId('pin-value')).toHaveText(PIN);
+    // رمز مؤقت: الطلب يُرفض حتى يغيّره (مراجعة T16-T19، must_change_pin)
+    const flagged = await customer.from('profiles').select('must_change_pin').single();
+    expect(flagged.data?.must_change_pin).toBe(true);
+    const { error: blocked } = await customer.rpc('place_order', {
+      p_address_id: crypto.randomUUID(),
+      p_items: [],
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    expect(blocked?.message).toBe('PIN_CHANGE_REQUIRED');
+
+    // الزبون يغيّر رمزه (يرجع رمز العرض للتشغيل التالي) ← العلامة تُمسح
+    const { error: changeError } = await customer.auth.updateUser({ password: PIN });
+    expect(changeError).toBeNull();
+    const cleared = await customer.from('profiles').select('must_change_pin').single();
+    expect(cleared.data?.must_change_pin).toBe(false);
+    await signedInClient(RESET_CUSTOMER, PIN);
+  });
+
+  test('a new staff member must change the temporary PIN before using the panel', async ({
+    browser,
+  }) => {
+    const phone = `0791${String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0')}`;
+    await page.goto('/staff');
+    await page.getByRole('button', { name: '+ إضافة موظف أو سائق' }).click();
+    const dialog = page.getByTestId('create-user-dialog');
+    await dialog.getByLabel('رقم الهاتف').fill(phone);
+    await dialog.getByLabel('الاسم').fill('موظف Playwright');
+    await dialog.getByLabel('موظف', { exact: true }).check();
+    await dialog.getByRole('button', { name: 'رمز عشوائي' }).click();
+    await dialog.getByRole('button', { name: 'إنشاء الحساب' }).click();
+    const temp = (await dialog.getByTestId('pin-value').innerText()).trim();
     await dialog.getByRole('button', { name: 'تم، أغلق' }).click();
+    await expect(userLine(page, phone).first().getByTestId('temp-pin')).toBeVisible();
+
+    const context = await browser.newContext();
+    const staff = await context.newPage();
+    await signIn(staff, phone, temp);
+    await staff.waitForURL((u) => u.pathname === '/change-pin');
+    await expect(staff.getByTestId('pin-forced')).toBeVisible();
+    await staff.goto('/orders'); // أي صفحة ← تغيير الرمز
+    await staff.waitForURL((u) => u.pathname === '/change-pin');
+
+    const fresh = temp === '583926' ? '692817' : '583926';
+    await staff.getByLabel('الرمز المؤقت').fill(temp);
+    await staff.getByLabel('الرمز الجديد', { exact: true }).fill(fresh);
+    await staff.getByLabel('أعد كتابة الرمز الجديد').fill(fresh);
+    await staff.getByRole('button', { name: 'تغيير الرمز' }).click();
+    await staff.waitForURL((u) => u.pathname === '/');
+    await staff.goto('/orders');
+    await expect(staff).toHaveURL(/\/orders$/);
+    await context.close();
+
+    await page.reload();
+    await expect(userLine(page, phone).first().getByTestId('temp-pin')).toHaveCount(0);
   });
 
   test('create a driver: PIN shown once, signs in, listed; the same phone → "registered"', async () => {

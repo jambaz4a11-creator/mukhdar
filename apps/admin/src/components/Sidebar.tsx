@@ -93,6 +93,12 @@ export function Sidebar({ items, role, name, pendingOrders }: Props) {
             <span className="font-semibold">{name ?? 'بدون اسم'}</span>
             <span className="text-text-muted"> · {role === 'admin' ? 'مدير' : 'موظف'}</span>
           </span>
+          <Link
+            href="/change-pin"
+            className="flex min-h-11 items-center rounded-control px-3 text-[15px] text-text no-underline hover:bg-primary-soft"
+          >
+            تغيير الرمز
+          </Link>
           <form action={signOut}>
             <button
               type="submit"

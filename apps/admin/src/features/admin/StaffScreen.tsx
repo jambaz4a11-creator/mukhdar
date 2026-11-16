@@ -3,7 +3,7 @@
 // تصفير الرمز)، تغيير الدور والتفعيل (set_user_role؛ الأدمن لا يخفّض نفسه ولا يعطّلها: رفض
 // CANNOT_DEMOTE_SELF من قاعدة البيانات يظهر كرسالة)، إضافة موظف أو سائق (admin-create-user)،
 // وتصفير الرمز (admin-reset-pin؛ لا لحساب أدمن).
-import { errorMessage } from '@mukhdar/shared';
+import { errorMessage, parseBackendError } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
@@ -228,6 +228,15 @@ function UserLine({
         </span>
       </span>
       <RoleBadge role={user.role} inactive={!user.is_active} />
+      {user.must_change_pin && (
+        <span
+          className="rounded-full bg-warning-soft px-2 py-0.5 text-[12px] font-semibold"
+          title="ما غيّر الرمز المؤقت بعد: ما يقدر يشتغل لحد ما يغيّره"
+          data-testid="temp-pin"
+        >
+          رمز مؤقت
+        </span>
+      )}
       <label className="flex items-center gap-1.5 text-[13px]">
         <span className="sr-only">الدور لـ{name}</span>
         <select
@@ -265,9 +274,17 @@ function UserLine({
       )}
       {change.error && (
         <span role="alert" className="basis-full text-[13px] text-danger" data-testid="role-error">
-          {errorMessage(change.error)}
+          {roleErrorText(change.error)}
         </span>
       )}
     </div>
   );
+}
+
+/** رسالة رفض تغيير الدور؛ سائق عنده طلبات ← مع أرقامها ("#12، #15") من detail. */
+export function roleErrorText(error: unknown): string {
+  const e = parseBackendError(error);
+  return e.code === 'DRIVER_HAS_ORDERS' && e.detail
+    ? `${e.message}. الطلبات: ${e.detail}`
+    : e.message;
 }

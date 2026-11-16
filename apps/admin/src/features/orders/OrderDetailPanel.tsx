@@ -11,6 +11,7 @@ import {
   CANCEL_REASON_MAX,
   actionBlocked,
   orderActions,
+  canCancelWithoutReturn,
   validateCancelReason,
 } from './actions';
 import {
@@ -59,6 +60,7 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
+  const [keepStock, setKeepStock] = useState(false);
   const [driverId, setDriverId] = useState('');
 
   const done = async () => {
@@ -66,11 +68,19 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
     await queryClient.invalidateQueries({ queryKey: ordersKeys.all });
   };
   const statusMutation = useMutation({
-    mutationFn: ({ status, why }: { status: Parameters<typeof setOrderStatus>[2]; why?: string }) =>
-      setOrderStatus(supabase, orderId, status, why),
+    mutationFn: ({
+      status,
+      why,
+      returnStock = true,
+    }: {
+      status: Parameters<typeof setOrderStatus>[2];
+      why?: string;
+      returnStock?: boolean;
+    }) => setOrderStatus(supabase, orderId, status, why, returnStock),
     onSuccess: async () => {
       setCancelling(false);
       setReason('');
+      setKeepStock(false);
       await done();
     },
     onError: (e) => setError(errorMessage(e)),
@@ -247,7 +257,11 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
         {actions.includes('assign_driver') && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="assign-driver" className="text-[13px] font-semibold">
-              {order.driver_id ? 'تغيير السائق' : 'تعيين سائق'}
+              {order.status === 'out_for_delivery'
+                ? 'نقل الطلب لسائق آخر'
+                : order.driver_id
+                  ? 'تغيير السائق'
+                  : 'تعيين سائق'}
               {!order.driver_id && order.status === 'ready' && (
                 <span className="font-normal text-text-muted"> (أو أول سائق يقبل)</span>
               )}
@@ -331,7 +345,11 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
             onSubmit={(e) => {
               e.preventDefault();
               if (validateCancelReason(reason)) return;
-              statusMutation.mutate({ status: 'cancelled', why: reason.trim() });
+              statusMutation.mutate({
+                status: 'cancelled',
+                why: reason.trim(),
+                returnStock: !(keepStock && canCancelWithoutReturn(order.status, role)),
+              });
             }}
           >
             <label htmlFor="cancel-reason" className="text-sm font-semibold">
@@ -345,6 +363,22 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
               rows={2}
               className="rounded-input border border-border p-2 text-sm"
             />
+            {canCancelWithoutReturn(order.status, role) && (
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={keepStock}
+                  onChange={(e) => setKeepStock(e.target.checked)}
+                  className="mt-1 size-4 accent-danger"
+                />
+                <span>
+                  البضاعة طلعت مع السائق: لا ترجع للمخزون
+                  <span className="block text-xs text-text-muted">
+                    تُسجَّل هدراً بكلفتها (أُلغي بعد خروجه)، فيبقى صافي الربح صحيحاً.
+                  </span>
+                </span>
+              </label>
+            )}
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -358,6 +392,7 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
                 onClick={() => {
                   setCancelling(false);
                   setReason('');
+                  setKeepStock(false);
                 }}
                 className="h-11 flex-1 rounded-control border border-border text-sm"
               >

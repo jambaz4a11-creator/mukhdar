@@ -51,10 +51,11 @@ jest.mock('expo-router', () => ({
     navigate: (...a: unknown[]) => mockRouter.navigate(...a),
     canGoBack: () => mockRouter.canGoBack(),
   },
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockSearchParams,
   usePathname: () => '/account',
 }));
 
+let mockSearchParams: Record<string, string> = {};
 const SESSION = { user: { id: 'u1', phone: '9647701234567' }, access_token: 't' };
 
 /** خطأ FunctionsHttpError كما يرجعه supabase-js: الجسم بـ context (Response). */
@@ -391,6 +392,18 @@ describe('change PIN', () => {
     expect(auth.signOut).toHaveBeenCalledTimes(1);
     expect(useAuth.getState().session).not.toBeNull();
     expect(screen.getByTestId('pin-current').props.value).toBe('');
+  });
+
+  it('forced (temporary PIN): no back button; after the change the sign-in flow continues', async () => {
+    mockSearchParams = { forced: '1', redirect: '/orders' };
+    const { auth } = setup();
+    await renderUi(<ChangePinScreen />);
+    expect(screen.getByTestId('pin-forced')).toHaveTextContent(ar.account.pinForcedHint);
+    expect(screen.queryByText(ar.account.back)).toBeNull();
+    await fill('482915', '739164');
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/orders'));
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: '739164' });
+    mockSearchParams = {};
   });
 
   it('same PIN as the current one is rejected', async () => {

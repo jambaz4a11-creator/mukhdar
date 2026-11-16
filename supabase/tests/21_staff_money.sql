@@ -1,0 +1,94 @@
+-- 21: ماذا يرى الموظف من المبالغ (قرار المالك 2026-11-16، مراجعة T16-T19 M2).
+--   يرى: مبالغ البيع اللازمة للإيصال (إجمالي الطلب وأجرته وبنوده، سعر البيع، أجرة التوصيل والحد الأدنى).
+--   لا يرى: الكلفة، الربح، قيمة الهدر، كلفة حركات المخزون، التقارير، الإعدادات (تعديلاً).
+-- أي عمود مبالغ جديد يُفشل الاختبار الأول حتى يُصنَّف هنا (بيع للموظف أو للأدمن فقط).
+select plan(23);
+
+-- ---------------------------------------------------------------- 1) قائمة أعمدة المبالغ مثبّتة
+select set_eq(
+  $$ select (table_name::text || '.' || column_name::text) collate "default"
+       from information_schema.columns
+      where table_schema = 'public' and (column_name::text collate "C") ~ '(_iqd|cost|profit|revenue|price|fees?)' $$,
+  $$ values
+     ('app_settings.delivery_fee_iqd'), ('app_settings.min_order_iqd'),
+     ('daily_stats.adjust_loss_iqd'), ('daily_stats.cost_iqd'), ('daily_stats.delivery_fees_iqd'),
+     ('daily_stats.gross_profit_iqd'), ('daily_stats.net_profit_iqd'), ('daily_stats.revenue_iqd'),
+     ('daily_stats.waste_cost_iqd'),
+     ('inventory_movements.unit_cost_iqd'),
+     ('order_item_costs.cost_snapshot_iqd'),
+     ('order_items.line_total_iqd'), ('order_items.price_snapshot_iqd'),
+     ('orders.delivery_fee_iqd'), ('orders.subtotal_iqd'), ('orders.total_iqd'),
+     ('product_costs.cost_iqd'),
+     ('products.price_iqd') $$,
+  'every money column is classified below (new column = decide staff or admin-only)');
+
+-- ---------------------------------------------------------------- التجهيز
+select tests.remember('staff', tests.new_user('staff'));
+select tests.remember('p', tests.new_product(2000, 20, true, 1500));
+select tests.remember('o', tests.place(tests.new_user('customer'), jsonb_build_array(tests.item(tests.id('p'), 2))));
+select tests.remember('admin', tests.new_user('admin'));
+select tests.set_uid(tests.id('admin'));
+select public.set_order_status(tests.id('o'), 'preparing');
+select public.assign_driver(tests.id('o'), tests.new_user('driver'));
+select public.set_order_status(tests.id('o'), 'ready');
+select public.set_order_status(tests.id('o'), 'out_for_delivery');
+select public.set_order_status(tests.id('o'), 'delivered');
+select public.adjust_stock(tests.id('p'), -1, 'waste', 'ذبلان');
+select tests.as_postgres();
+
+-- ---------------------------------------------------------------- 2) مبالغ البيع: يراها (الإيصال)
+select tests.as_user(tests.id('staff'));
+select isnt_empty(format($$ select 1 from public.orders where id = %L and subtotal_iqd > 0 and total_iqd > 0
+  and delivery_fee_iqd is not null $$, tests.id('o')), 'staff reads orders.subtotal/total/delivery_fee');
+select isnt_empty(format($$ select 1 from public.order_items where order_id = %L and price_snapshot_iqd = 2000
+  and line_total_iqd = 4000 $$, tests.id('o')), 'staff reads item prices and line totals');
+select isnt_empty(format($$ select 1 from public.products where id = %L and price_iqd = 2000 $$, tests.id('p')),
+  'staff reads the sale price');
+select isnt_empty($$ select 1 from public.app_settings where delivery_fee_iqd is not null and min_order_iqd is not null $$,
+  'staff reads delivery fee and minimum (public, customers see them too)');
+
+-- ---------------------------------------------------------------- 3) الكلفة والربح والهدر: لا
+select is_empty($$ select 1 from public.product_costs $$, 'no product_costs (cost)');
+select is_empty($$ select 1 from public.order_item_costs $$, 'no order_item_costs (cost at sale)');
+select is_empty($$ select 1 from public.inventory_movements $$, 'no inventory_movements (unit cost, waste value)');
+select is_empty($$ select 1 from public.daily_stats $$, 'no daily_stats (revenue, profit, waste cost: reports)');
+select is_empty($$ select 1 from public.admin_audit $$, 'no admin_audit (settings history)');
+
+-- ---------------------------------------------------------------- 4) دوال المبالغ والإعدادات: لا
+select throws_ok($$ select public.update_app_settings('{"delivery_fee_iqd": 1000}') $$, '42501', 'NOT_ALLOWED',
+  'no update_app_settings');
+select throws_ok($$ select public.stuck_notifications_count() $$, '42501', 'NOT_ALLOWED', 'no stuck_notifications_count');
+select throws_ok($$ select public.recompute_daily_stats(current_date, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no recompute_daily_stats');
+select throws_ok(format($$ select public.adjust_stock(%L, -1, 'waste') $$, tests.id('p')), '42501', 'NOT_ALLOWED',
+  'no waste entry (adjust_stock)');
+select throws_ok(format($$ select public.adjust_stock(%L, 5, 'purchase', null, 1500) $$, tests.id('p')), '42501', 'NOT_ALLOWED',
+  'no purchase entry (purchase cost)');
+select throws_ok(format($$ select public.admin_save_product(jsonb_build_object('id', %L::text, 'cost_iqd', 1000)) $$, tests.id('p')),
+  '42501', 'NOT_ALLOWED', 'no admin_save_product (cost)');
+select throws_ok(format($$ select public.set_product_price(%L, 2500) $$, tests.id('p')), '42501', 'NOT_ALLOWED',
+  'no set_product_price');
+select throws_ok($$ select * from public.available_orders() $$, '42501', 'NOT_ALLOWED', 'available_orders is for drivers');
+select throws_ok(format($$ update public.app_settings set delivery_fee_iqd = 1000 where id = 1 $$), '42501', null,
+  'no direct settings write');
+
+-- ---------------------------------------------------------------- 5) RPCs executable by authenticated that return money
+select tests.as_postgres();
+select set_eq(
+  $$ select p.proname::text collate "default" from pg_proc p
+      where p.pronamespace = 'public'::regnamespace
+        and has_function_privilege('authenticated', p.oid, 'execute')
+        and (pg_get_function_result(p.oid) ~ '(_iqd|cost|profit|revenue|price)'
+             or pg_get_function_result(p.oid) in ('orders', 'app_settings', 'daily_stats', 'products')) $$,
+  $$ values ('accept_order'), ('assign_driver'), ('available_orders'), ('set_order_status'), ('update_app_settings') $$,
+  'RPCs returning money-bearing rows: order rows (sale amounts) and settings (admin only); none returns cost');
+select ok(not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace
+            and has_function_privilege('authenticated', p.oid, 'execute')
+            and pg_get_function_result(p.oid) ~ '(cost|profit|revenue|waste)'),
+  'no authenticated RPC returns cost, profit, revenue or waste');
+select ok(not has_table_privilege('authenticated', 'public.daily_stats', 'insert, update, delete'),
+  'daily_stats is not writable');
+select ok(not has_table_privilege('authenticated', 'public.product_costs', 'insert, update, delete'),
+  'product_costs is not writable directly');
+
+select * from finish();

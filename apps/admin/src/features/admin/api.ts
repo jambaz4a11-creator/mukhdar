@@ -53,9 +53,10 @@ export interface UserRow {
   phone: string | null;
   full_name: string | null;
   is_active: boolean;
+  must_change_pin: boolean;
 }
 
-const USER_COLUMNS = 'id, role, phone, full_name, is_active';
+const USER_COLUMNS = 'id, role, phone, full_name, is_active, must_change_pin';
 const ROLE_ORDER: Record<UserRole, number> = { admin: 0, staff: 1, driver: 2, customer: 3 };
 
 /** كل من دوره غير customer (أعدادهم صغيرة: حد 500). */

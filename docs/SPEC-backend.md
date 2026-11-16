@@ -26,13 +26,14 @@
 `customer` (افتراضي عند التسجيل) · `driver` · `staff` · `admin`.
 - الدور يُخزَّن في `profiles.role` ولا يتغير إلا عبر `set_user_role()` (أدمن فقط).
 - العمود محمي بصلاحيات على مستوى العمود: المستخدم يعدّل `full_name` فقط.
-- الأدمن لا يقدر يخفّض دوره أو يعطّل نفسه (`CANNOT_DEMOTE_SELF`).
+- الأدمن لا يقدر يخفّض دوره أو يعطّل نفسه (`CANNOT_DEMOTE_SELF`)، ولا يُزال آخر أدمن نشط (`LAST_ADMIN`).
 - حساب معطّل (`is_active = false`) يُعامل كأنه بلا دور.
+- **رمز مؤقت (`profiles.must_change_pin`، migration `20261123000001`):** يُضبط بعد `admin-create-user` و`admin-reset-pin` (داخل `finish_user_creation` و`record_pin_reset`)، ويُمسح تلقائياً حين تتغير كلمة السر فعلاً (trigger `on_auth_user_password_changed` على `auth.users.encrypted_password`؛ استدعاء من التطبيق لا يمسحه). أثناءه `current_user_role()` = null: كل دالة وسياسة مبنية على الدور ترفض كأن الحساب بلا دور، و`place_order` ترفض `PIN_CHANGE_REQUIRED`. يبقى: قراءة الملف الشخصي (لمعرفة العلامة)، صفوف الزبون نفسه، تغيير الرمز (GoTrue `updateUser`)، وحذف الحساب. **افتراض:** تغيير الرمز لنفس الرمز المؤقت يمسح العلامة أيضاً (الـ hash يتغير مع كل ملح)؛ التطبيقات ترفض الجديد = الحالي.
 
 ## 4) نموذج البيانات (ملخص)
 | الجدول | الغرض | من يقرأ | من يكتب |
 |---|---|---|---|
-| `profiles` | دور، هاتف، اسم | صاحبه + أدمن | trigger عند التسجيل؛ الاسم من صاحبه |
+| `profiles` | دور، هاتف، اسم، `must_change_pin` (§3) | صاحبه + أدمن | trigger عند التسجيل؛ الاسم من صاحبه؛ الدور والتفعيل `set_user_role` |
 | `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن عبر `update_app_settings` فقط (T19؛ لا update مباشر) |
 | `sectors` / `subsections` / `buildings` | العنوان الهرمي: قطاع ← وحدة ← عمارة (قطاعان A وB، 17 وحدة، 1700 عمارة؛ رقم العمارة فريد داخل الوحدة فقط) | الجميع (النشط) | أدمن (RLS؛ العمارات بالجملة `add_buildings`، T19) |
 | `addresses` | عناوين الزبون (عمارة + شقة نصاً)، عنوان افتراضي واحد | صاحبها + أدمن | صاحبها (أعمدة محددة) |
@@ -50,6 +51,7 @@
 | `daily_stats` | تقارير يومية (توقيت بغداد)؛ تُضاف كلفة الهدر وخسارة التسويات (T18) | أدمن | دوال |
 | `pin_resets` (T19) | تدقيق إعادة ضبط الـ PIN (بلا الرمز) | أدمن | `admin-reset-pin` (`record_pin_reset`) |
 | `user_creations` (T19) | تدقيق إنشاء الحسابات من اللوحة | أدمن | `admin-create-user` (`finish_user_creation`) |
+| `admin_audit` (مراجعة T16-T19) | من غيّر ماذا ومتى (القديم ← الجديد): `user_role` (الدور والتفعيل)، `settings` (الحقول المتغيرة فقط)، `order_driver` (نقل طلب من سائق لآخر) | أدمن | `set_user_role`، `update_app_settings`، `assign_driver` فقط |
 | `cities` / `vendors` | للتوسع لاحقاً | الجميع (النشط) | أدمن |
 
 **لماذا نسخ (snapshots)؟** الطلب يحتفظ بالاسم والسعر والعنوان وهاتف الزبون كما كانت لحظة الطلب. تغيير سعر منتج أو حذف عنوان أو حذف الحساب لا يغيّر الفواتير القديمة ولا التقارير.
@@ -60,7 +62,7 @@
 ### `place_order(p_address_id, p_items, p_idempotency_key, p_note?) → jsonb`
 - `p_items`: `[{"product_id": uuid, "qty": int}]`. **التطبيق لا يرسل أي سعر.**
 - الخطوات بمعاملة واحدة:
-  1. يتحقق أن المستخدم زبون نشط وله رقم هاتف.
+  1. يتحقق أن المستخدم زبون نشط (ورمزه غير مؤقت) وله رقم هاتف.
   2. **منع التكرار:** قفل استشاري لكل زبون. لو وُجد طلب بنفس المفتاح يرجعه مع `replayed: true`. التطبيق يولّد المفتاح مرة لكل محاولة "تأكيد الطلب" ويعيد استخدامه عند إعادة المحاولة.
   3. **حد الطلبات المفتوحة:** يرفض إن كان للزبون `max_active_orders` (افتراضي 3) طلبات غير منتهية (`pending`/`preparing`/`ready`/`out_for_delivery`).
   4. المتجر مفتوح؟ العنوان للزبون نفسه؟ والعمارة والوحدة والقطاع مفعّلة؟
@@ -69,9 +71,9 @@
   7. يتحقق من التفعيل والرصيد، يحسب `subtotal = round_iqd(Σ price × qty)`، يتحقق من الحد الأدنى، ثم `total = subtotal + delivery_fee`.
   8. ينشئ الطلب والبنود وتكاليفها، ينقص المخزون، يسجل الحركات والتاريخ، ويضيف إشعاراً واحداً للأدمن والموظفين (`audience = 'admins'`، النص: الوحدة والعمارة والمجموع). السائقون لا يُبلَّغون هنا.
 - يرجع: `{order_id, order_number, total_iqd, status, replayed}`.
-- أخطاء: `NOT_AUTHENTICATED`, `NOT_CUSTOMER`, `PHONE_REQUIRED`, `IDEMPOTENCY_KEY_REQUIRED`, `TOO_MANY_ACTIVE_ORDERS` (`detail` = الحد), `STORE_CLOSED`, `ADDRESS_NOT_FOUND`, `ADDRESS_INACTIVE`, `EMPTY_CART`, `TOO_MANY_ITEMS`, `INVALID_QTY` (يشمل بنداً ليس كائناً أو `qty` ليس عدداً صحيحاً), `PRODUCT_UNAVAILABLE` (يشمل `product_id` مفقوداً أو بصيغة خاطئة؛ `detail` = القيمة المرسلة), `INSUFFICIENT_STOCK`, `BELOW_MIN_ORDER`.
+- أخطاء: `NOT_AUTHENTICATED`, `NOT_CUSTOMER`, `PIN_CHANGE_REQUIRED` (رمز مؤقت، §3), `PHONE_REQUIRED`, `IDEMPOTENCY_KEY_REQUIRED`, `TOO_MANY_ACTIVE_ORDERS` (`detail` = الحد), `STORE_CLOSED`, `ADDRESS_NOT_FOUND`, `ADDRESS_INACTIVE`, `EMPTY_CART`, `TOO_MANY_ITEMS`, `INVALID_QTY` (يشمل بنداً ليس كائناً أو `qty` ليس عدداً صحيحاً), `PRODUCT_UNAVAILABLE` (يشمل `product_id` مفقوداً أو بصيغة خاطئة؛ `detail` = القيمة المرسلة), `INSUFFICIENT_STOCK`, `BELOW_MIN_ORDER`.
 
-### `set_order_status(p_order_id, p_status, p_reason?) → orders`
+### `set_order_status(p_order_id, p_status, p_reason?, p_return_stock = true) → orders`
 مخطط الحالات:
 ```
 pending ──► preparing ──► ready ──► out_for_delivery ──► delivered
@@ -85,13 +87,13 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 | driver (المعيَّن فقط) | `ready` ← `out_for_delivery` (يتطلب أن يكون معيَّناً)، `out_for_delivery` ← `delivered` |
 | customer (صاحب الطلب) | الإلغاء وهو `pending` فقط |
 
-آثار جانبية: طوابع الوقت (`preparing_at`، `ready_at`، ...)، سجل التاريخ، إشعار للزبون (قيد التحضير، "طلبك جاهز، بانتظار السائق"، بالطريق، تم التوصيل، الإلغاء). عند `ready`: إن لم يكن للطلب سائق ← إشعار `audience = 'drivers'` لكل السائقين النشطين (`type: new_order`)؛ وإن عُيِّن مسبقاً أثناء التحضير ← إشعار لسائقه فقط (`type: ready`). `p_reason` يُقص لـ 300 حرف. الإلغاء **يرجع المخزون** بحركة `cancel_return`، ويُبلّغ السائق المعيَّن (إن وُجد) بإشعار `type: cancelled`. التسليم يحدّث `daily_stats` (الإيراد، الأجرة، التكلفة من `order_item_costs`، الربح الإجمالي).
+آثار جانبية: طوابع الوقت (`preparing_at`، `ready_at`، ...)، سجل التاريخ، إشعار للزبون (قيد التحضير، "طلبك جاهز، بانتظار السائق"، بالطريق، تم التوصيل، الإلغاء). عند `ready`: إن لم يكن للطلب سائق ← إشعار `audience = 'drivers'` لكل السائقين النشطين (`type: new_order`)؛ وإن عُيِّن مسبقاً أثناء التحضير ← إشعار لسائقه فقط (`type: ready`). `p_reason` يُقص لـ 300 حرف. الإلغاء **يرجع المخزون** بحركة `cancel_return`، ويُبلّغ السائق المعيَّن (إن وُجد) بإشعار `type: cancelled`. **الإلغاء بلا إرجاع** (`p_return_stock = false`، قرار المالك 2026-11-16): للأدمن وحده ولطلب `out_for_delivery` وحده (البضاعة طلعت مع السائق؛ غير ذلك `INVALID_REQUEST` بـ `detail = 'p_return_stock'`، وغير الأدمن `NOT_ALLOWED`): الرصيد لا يتغير، وتُكتب حركتان بنفس الكمية لكل منتج: `cancel_return` (+) و`waste` (−) بملاحظة "cancelled after dispatch" وكلفة البنود وقت الطلب (`order_item_costs`)، فيبقى السجل = الرصيد ويدخل الهدر خسائر اليوم وصافي الربح. التسليم يحدّث `daily_stats` (الإيراد، الأجرة، التكلفة من `order_item_costs`، الربح الإجمالي).
 أخطاء: `ORDER_NOT_FOUND`, `INVALID_TRANSITION`, `NOT_ALLOWED`, `NO_DRIVER_ASSIGNED`.
 
 ### دوال السائق
 - `available_orders(p_limit=20)`: الطلبات غير المعيَّنة بحالة `ready` فقط **بدون هاتف الزبون واسمه**، حد أقصى 50. لغير السائق النشط: `NOT_ALLOWED`.
 - `accept_order(p_order_id)`: على طلب `ready` غير معيَّن فقط (غير ذلك `ORDER_NOT_AVAILABLE`). أول سائق يقبل يأخذ الطلب؛ الثاني يحصل `ORDER_NOT_AVAILABLE`. بعد القبول يرى السائق الهاتف والعنوان الكامل عبر RLS.
-- `assign_driver(p_order_id, p_driver_id)` (موظف/أدمن): تعيين أو تغيير يدوي من `preparing` أو `ready` فقط، مع إشعار للسائق (`type: assigned`)، وإشعار السائق السابق عند التغيير (`type: unassigned`). أخطاء: `NOT_ALLOWED`, `DRIVER_NOT_FOUND` (ليس سائقاً نشطاً), `ORDER_NOT_AVAILABLE` (الطلب ليس `preparing`/`ready`، أو غير موجود).
+- `assign_driver(p_order_id, p_driver_id)` (موظف/أدمن): تعيين أو تغيير يدوي من `preparing` أو `ready`، أو **نقل طلب `out_for_delivery` لسائق نشط آخر** (قرار المالك 2026-11-16؛ الموظف أيضاً كإجراءات التوصيل الاحتياطية؛ الحالة لا تتغير، ملاحظة التاريخ `driver_reassigned`)، مع إشعار للسائق (`type: assigned`)، وإشعار السائق السابق عند التغيير (`type: unassigned`). كل تغيير من سائق لآخر يُسجَّل بـ `admin_audit` (`order_driver`). ملف السائق يُقفل `for share` (يتسلسل مع تعطيله). أخطاء: `NOT_ALLOWED`, `DRIVER_NOT_FOUND` (ليس سائقاً نشطاً), `ORDER_NOT_AVAILABLE` (الطلب ليس `preparing`/`ready`/`out_for_delivery`، أو غير موجود).
 - `list_drivers()` (موظف/أدمن): السائقون فقط، بالأعمدة `id, full_name, phone, is_active` (لقائمة التعيين واسم السائق بجدول الطلبات). غيرهم: `NOT_ALLOWED`.
 
 ### دوال أخرى
@@ -106,11 +108,11 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `admin_save_product(p jsonb) → uuid` (أدمن): إنشاء (بلا `id`؛ يتطلب `name`، `category_id`، `unit`، `price_iqd`) أو تعديل (مع `id`؛ الحقول الموجودة فقط تتغير): `name`، `description`، `category_id`، `unit` (القائمة الثابتة، قيد `products_unit_allowed`)، `price_iqd` (مضاعف 250)، `image_path`، `is_active`، `sort_order`، `cost_iqd` (سعر الشراء، تصحيح يدوي؛ null = بلا تغيير)، `low_stock_threshold` (0..10000). أخطاء: `NOT_ALLOWED`, `INVALID_PRODUCT` (`detail` = اسم الحقل)، `PRODUCT_NOT_FOUND`.
 - `set_product_price(p_product_id, p_price_iqd)` (أدمن، التعديل السريع): `NOT_ALLOWED`, `INVALID_PRODUCT`, `PRODUCT_NOT_FOUND`. `reorder_products(p_ids uuid[])` (أدمن؛ `sort_order` = الموضع 1، 2، …): `NOT_ALLOWED`, `INVALID_PRODUCT` (فارغة أو مكررة)، `PRODUCT_NOT_FOUND`.
 - **إشعار النقص** (trigger على `stock`، كل المسارات: `place_order`، الإلغاء، `adjust_stock*`): نزول الرصيد من ≥ `low_stock_threshold` إلى أقل منه لمنتج نشط ← `_notify('admins_only', …)` مرة واحدة (`data.type = 'low_stock'`، `product_id`؛ النص بالكيلو لنص الكيلو). جمهور `admins_only` = الأدمن وحده (`admins` = الأدمن والموظفون للطلب الجديد).
-- `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
-- `update_app_settings(p jsonb) → app_settings` (أدمن، T19 migration `20261122000001`): الحقول الموجودة فقط تتغير: `delivery_fee_iqd` و`min_order_iqd` (أعداد صحيحة ≥ 0 مضاعفات 250)، `max_active_orders` (1..1000)، `store_open` (boolean)، `closed_message` (≤ 200، الفارغ = null). مفتاح غير معروف أو قيمة خاطئة: `INVALID_SETTINGS` (`detail` = الحقل). غير الأدمن: `NOT_ALLOWED`. **لا update مباشر** على `app_settings` (سُحبت الصلاحية والسياسة). قيد `app_settings_min_order_multiple_250` (migration `20261111000002`) خط الدفاع الأخير.
+- `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن نشط برمز غير مؤقت؛ migration `20261123000001`). نفس القيم ← لا شيء. غير ذلك: التغيير + سطر `admin_audit` (`user_role`، القديم ← الجديد). **التعطيل أو تخفيض الدور** (الرتبة: زبون < سائق < موظف < أدمن) يستدعي `revoke_user_sessions` (كل الأجهزة تخرج؛ إعادة التفعيل تتطلب دخولاً جديداً). سائق عنده طلبات `preparing`/`ready`/`out_for_delivery` لا يُعطَّل ولا يُغيَّر دوره (`DRIVER_HAS_ORDERS`، `detail` = أرقام الطلبات "#12، #15")؛ الحل: نقلها (`assign_driver`) أو إكمالها. تغييرات الأدمن متسلسلة (قفل صفوف الأدمن النشطين) فلا يُزال آخر أدمن نشط (`LAST_ADMIN`، خط دفاع: الأدمن لا يزيل نفسه أصلاً). أخطاء: `NOT_ALLOWED`, `INVALID_ROLE` (دور أو تفعيل null), `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`, `LAST_ADMIN`, `DRIVER_HAS_ORDERS`.
+- `update_app_settings(p jsonb) → app_settings` (أدمن، T19 migration `20261122000001`): الحقول الموجودة فقط تتغير: `delivery_fee_iqd` و`min_order_iqd` (أعداد صحيحة ≥ 0 مضاعفات 250)، `max_active_orders` (1..1000)، `store_open` (boolean)، `closed_message` (≤ 200، الفارغ = null). مفتاح غير معروف أو قيمة خاطئة: `INVALID_SETTINGS` (`detail` = الحقل). غير الأدمن: `NOT_ALLOWED`. **لا update مباشر** على `app_settings` (سُحبت الصلاحية والسياسة). قيد `app_settings_min_order_multiple_250` (migration `20261111000002`) خط الدفاع الأخير. كل حفظ يغيّر شيئاً يكتب سطر `admin_audit` (`settings`) بالحقول المتغيرة فقط (القديم ← الجديد).
 - `stuck_notifications_count() → int` (أدمن): إشعارات غير مرسلة أقدم من 5 دقائق (مؤشر صفحة الإعدادات). `NOT_ALLOWED`.
 - `add_buildings(p_subsection_id, p_numbers text[]) → int` (أدمن): عمارات بالجملة لوحدة (أرقام 1..9999 نصاً، حتى 500، المكرر بالقائمة أو بالجدول يُتجاهل بـ `on conflict do nothing`)، ويرجع عدد المُضاف؛ `sort_order` = الرقم. أخطاء: `NOT_ALLOWED`, `INVALID_BUILDINGS` (قائمة فارغة/طويلة/رقم خاطئ، أو وحدة غير موجودة).
-- دوال service_role لـ `admin-reset-pin` و`admin-create-user` (T19): `admin_actions_last_hour(p_kind, p_admin)` (`pin_reset` أو `user_creation`، وإلا `INVALID_REQUEST`) لحد 20/ساعة؛ `record_pin_reset(p_user_id, p_reset_by)`؛ `finish_user_creation(p_user_id, p_created_by, p_role, p_full_name)` (الدور والاسم والتدقيق بمعاملة؛ `INVALID_ROLE` لغير `staff`/`driver`، `USER_NOT_FOUND`).
+- دوال service_role لـ `admin-reset-pin` و`admin-create-user` (T19): `admin_actions_last_hour(p_kind, p_admin)` (`pin_reset` أو `user_creation`، وإلا `INVALID_REQUEST`) لحد 20/ساعة؛ `record_pin_reset(p_user_id, p_reset_by)` (يضبط `must_change_pin` أيضاً)؛ `finish_user_creation(p_user_id, p_created_by, p_role, p_full_name)` (الدور والاسم و`must_change_pin` والتدقيق بمعاملة؛ `INVALID_ROLE` لغير `staff`/`driver`، `USER_NOT_FOUND`).
 - حذف الحساب (service_role فقط، تستدعيها Edge Function `delete-account`، T08): `begin_account_deletion(p_user_id) → boolean` (is_active السابق) تأخذ قفل `place_order` لنفس المستخدم، ترفض `ADMIN_ACCOUNT` (أدمن) و`ACTIVE_ORDER` (طلب غير منتهٍ كزبون أو كسائق معيَّن)، وتعطّل الحساب حتى يكتمل `auth.admin.deleteUser`؛ `abort_account_deletion(p_user_id, p_was_active)` ترجع الحالة إن فشل الحذف. `USER_NOT_FOUND` إن لم يوجد ملف شخصي. الدالة ترجع نفس الرموز بـ `{error}` مع HTTP 403/409/404.
 - حماية الحسابات (trigger `before insert/update of phone` على `auth.users`، migration `20261116000001`، ADR 0001): `PHONE_INVALID` لحساب بلا هاتف أو برقم ليس `9647XXXXXXXXX` (يصل للتطبيق كخطأ GoTrue عام "Database error"؛ التطبيق يتحقق من الرقم قبل الإرسال).
 
@@ -188,6 +190,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - نص العنوان بالإشعارات ("وحدة A1 - عمارة 12") بـ `03_place_order.sql` و`05_driver.sql`، ووحدات البيع الثابتة بـ `02_rls_catalog.sql`.
 - الدخول بالهاتف + PIN (`13_phone_pin_auth.sql`): الـ hook يرفض كل SMS وصلاحياته، رفض حساب بلا رقم أو برقم غير صالح، رقم واحد = حساب واحد، وصيغة `profiles.phone`.
 - التسجيل عبر الخادم: حدود المعدل وصلاحياتها والتجزئة والنافذة (`14_signup_rate_limit.sql`)، منطق الدالة (`signup_test.ts`)، وتكامل `pnpm it:signup` على dev (و`-- --signup-disabled` بعد إطفاء التسجيل العام).
+- مراجعة T16-T19 جلسة A (`20_account_lifecycle.sql`): الرمز المؤقت (الضبط، الرفض، المسح بتغيير كلمة السر)، المعطّل/المخفَّض بلا وصول، الجلسات تُبطل، التدقيق، آخر أدمن، سائق بطلبات، نقل طلب بالطريق، الإلغاء بلا إرجاع (هدر بكلفة الطلب)، إشعار `ready` مرة واحدة. `21_staff_money.sql`: كل عمود مبالغ مصنَّف، وما يراه الموظف منها بالضبط.
 - T19 (`19_admin_settings_staff.sql`): `update_app_settings` (أدمن فقط، قيد 250، لا update مباشر)، مؤشر الإشعارات العالقة، RLS `pin_resets`/`user_creations` ودوال service_role، و`add_buildings`؛ منطق الدالتين (`admin_reset_pin_test.ts`، `admin_create_user_test.ts`)، وتكامل `pnpm it:admin-users` على dev.
 
 ## 11) النسخ الاحتياطي والمراقبة
@@ -266,7 +269,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 34. **وحدة البيع (قرار المالك 2026-11-14):** الخضار والفواكه (ومنها التمور والمكسرات المباعة بالوزن سابقاً) بوحدة `نص كيلو`، والأعشاب `باقة`، والباقي بالقطعة. السعر لكل وحدة ومن مضاعفات 250 كما هو. بالـ seed: سعر النص كيلو = نصف سعر الكيلو السابق مقرّباً لأقرب 250 (حد أدنى 250)، وسعر الشراء النصف، والرصيد الابتدائي الضعف. أسعار مؤقتة يعدّلها المالك.
 35. **حالة `ready` (قرار المالك 2026-11-15):** بين `preparing` و`out_for_delivery`، يضعها الموظف/الأدمن عند انتهاء التجهيز. migrations: `20261115000001_order_status_ready.sql` (قيمة الـ enum وعمود `ready_at`، بملف مستقل لأن Postgres لا يستخدم قيمة enum جديدة بنفس المعاملة) و`20261115000002_ready_flow.sql` (الدوال والفهرس الجزئي `orders_unassigned_idx` صار على `status = 'ready'`).
 36. الطلب الجديد يُبلَّغ للأدمن والموظفين فقط؛ السائقون يُبلَّغون عند `ready`. **افتراض:** طلب عُيِّن له سائق أثناء التحضير لا يُذاع لكل السائقين عند `ready`، بل يُبلَّغ سائقه فقط (`type: ready`، "الطلب #N جاهز للاستلام").
-37. **افتراض:** إعادة التعيين (`assign_driver`) لم تعد ممكنة بعد خروج الطلب للتوصيل؛ مشكلة أثناء التوصيل = إلغاء من الأدمن.
+37. ~~إعادة التعيين غير ممكنة بعد خروج الطلب~~ ← **2026-11-16 (قرار المالك):** `assign_driver` ينقل طلباً `out_for_delivery` لسائق نشط آخر (§5)، والأدمن يقدر يلغيه بلا إرجاع للمخزون (هدر).
 38. **مشاريع Expo المختلطة (مراجعة 2026-11-14، C1):** تطبيق الزبون وتطبيق السائق الخارجي غالباً مشروعا Expo مختلفان، و Expo يرفض الطلب كاملاً إن خلطهما (`PUSH_TOO_MANY_EXPERIENCE_IDS`، والحقل `details` يربط اسم المشروع برموزه). `push-dispatch` يقسم الدفعة حسب المشروع من `details` ويعيد إرسال كل جزء، ويحفظ الربط طوال الاستدعاء. **افتراض:** قيم `details` مصفوفات رموز (توثيق Expo لا يعرض الشكل)؛ إن لم تُفهم، تُرسل الرسائل غير المربوطة واحدة واحدة. جزء يُرفض مجدداً يُعامل كخطأ مؤقت (إعادة لاحقة).
 39. فشل تشغيل الإرسال (Vault أو `pg_net`) لا يُفشل المعاملة التي كتبت الإشعار (مثل `place_order`): يتحول إلى `warning` و`pg_cron` يلتقط الصف خلال دقيقة (S1).
 40. طلب HTTP واحد على الأكثر من الـ trigger لكل معاملة (علامة محلية `mukhdar.push_kicked`)، لا لكل جملة insert (S2). **افتراض:** لا نافذة زمنية بين المعاملات (كانت مقترحة: ثانيتان)، لأن صف معاملة متأخرة قد ينتظر دورة الـ cron (حتى دقيقة) إن حجزت الدالة قبل الـ commit.

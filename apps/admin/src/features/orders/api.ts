@@ -205,11 +205,13 @@ export async function setOrderStatus(
   orderId: string,
   status: OrderStatus,
   reason?: string,
+  returnStock = true,
 ): Promise<void> {
   const { error } = await client.rpc('set_order_status', {
     p_order_id: orderId,
     p_status: status,
     ...(reason ? { p_reason: reason } : {}),
+    ...(returnStock ? {} : { p_return_stock: false }),
   });
   if (error) throw error;
 }

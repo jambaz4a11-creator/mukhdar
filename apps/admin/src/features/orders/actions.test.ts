@@ -4,6 +4,7 @@ import type { PanelRole } from '@/lib/access';
 import {
   ACTION_TARGET,
   actionBlocked,
+  canCancelWithoutReturn,
   orderActions,
   validateCancelReason,
   type OrderAction,
@@ -24,8 +25,9 @@ const EXPECTED: Record<OrderStatus, Record<PanelRole, OrderAction[]>> = {
     staff: ['assign_driver', 'mark_out_for_delivery', 'cancel'],
   },
   out_for_delivery: {
-    admin: ['mark_delivered', 'cancel'], // الإلغاء من بالطريق للأدمن وحده
-    staff: ['mark_delivered'],
+    // نقل لسائق آخر (2026-11-16)؛ الإلغاء من بالطريق للأدمن وحده
+    admin: ['assign_driver', 'mark_delivered', 'cancel'],
+    staff: ['assign_driver', 'mark_delivered'],
   },
   delivered: { admin: [], staff: [] },
   cancelled: { admin: [], staff: [] },
@@ -68,5 +70,15 @@ describe('validateCancelReason', () => {
     expect(validateCancelReason('المنتج نفد')).toBeNull();
     expect(validateCancelReason('x'.repeat(300))).toBeNull();
     expect(validateCancelReason('x'.repeat(301))).toMatch(/300/);
+  });
+});
+
+describe('cancel without returning stock (goods left with the driver)', () => {
+  it('admin only, out_for_delivery only', () => {
+    expect(canCancelWithoutReturn('out_for_delivery', 'admin')).toBe(true);
+    expect(canCancelWithoutReturn('out_for_delivery', 'staff')).toBe(false);
+    for (const s of ['pending', 'preparing', 'ready', 'delivered', 'cancelled'] as const) {
+      expect(canCancelWithoutReturn(s, 'admin')).toBe(false);
+    }
   });
 });

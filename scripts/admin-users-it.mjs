@@ -155,6 +155,36 @@ try {
   );
   check(audit.rows[0].n === 1, 'one pin_resets row (customer, admin)');
 
+  // ---------------------------------------------------------------- الرمز المؤقت (migration 20261123000001)
+  const flag = async (id) =>
+    (await db.query(`select must_change_pin from public.profiles where id = $1`, [id])).rows[0]
+      ?.must_change_pin;
+  check((await flag(custId)) === true, 'reset sets must_change_pin');
+  check(
+    (await flag(custId)) === true,
+    'signing in with the temporary PIN does not clear the flag (GoTrue does not rewrite the hash)',
+  );
+  const blocked = await request(`${base}/rest/v1/rpc/place_order`, {
+    token: withNew.json?.access_token,
+    body: {
+      p_address_id: crypto.randomUUID(),
+      p_items: [],
+      p_idempotency_key: crypto.randomUUID(),
+    },
+  });
+  check(
+    blocked.status !== 200 && JSON.stringify(blocked.json).includes('PIN_CHANGE_REQUIRED'),
+    `flagged customer: place_order → PIN_CHANGE_REQUIRED (${blocked.status})`,
+  );
+  const changedPin = newPin();
+  const changed = await request(`${base}/auth/v1/user`, {
+    method: 'PUT',
+    token: withNew.json?.access_token,
+    body: { password: changedPin },
+  });
+  check(changed.status === 200, `customer changes the PIN with updateUser (${changed.status})`);
+  check((await flag(custId)) === false, 'a real PIN change clears must_change_pin');
+
   // ---------------------------------------------------------------- admin-create-user
   const driverPhone = newPhone();
   const tempPin = newPin();
@@ -201,6 +231,29 @@ try {
     [driverId, adminId],
   );
   check(creation.rows[0]?.role === 'driver', 'user_creations row (driver, admin)');
+  const driverFlag = await db.query(`select must_change_pin from public.profiles where id = $1`, [
+    driverId,
+  ]);
+  check(driverFlag.rows[0]?.must_change_pin === true, 'new driver must change the temporary PIN');
+  const driverBlocked = await request(`${base}/rest/v1/rpc/available_orders`, {
+    token: driverSession.json?.access_token,
+    body: {},
+  });
+  check(
+    driverBlocked.status !== 200,
+    `flagged driver: available_orders refused (${driverBlocked.status})`,
+  );
+  const driverChange = await request(`${base}/auth/v1/user`, {
+    method: 'PUT',
+    token: driverSession.json?.access_token,
+    body: { password: newPin() },
+  });
+  check(driverChange.status === 200, `driver changes the PIN (${driverChange.status})`);
+  const driverOk = await request(`${base}/rest/v1/rpc/available_orders`, {
+    token: driverSession.json?.access_token,
+    body: {},
+  });
+  check(driverOk.status === 200, `after the change: available_orders works (${driverOk.status})`);
 
   const dup = await fn('admin-create-user', adminJwt, { ...createBody, pin: newPin() });
   check(

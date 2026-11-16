@@ -5,6 +5,8 @@ export const SIGN_IN = '/auth/sign-in';
 export const SIGN_UP = '/auth/sign-up';
 export const NAME = '/auth/name';
 export const NEW_ADDRESS = '/address/new';
+/** تغيير الرمز؛ بعد الدخول برمز مؤقت (من المتجر) يُفتح إجبارياً بـ forced=1. */
+export const CHANGE_PIN = '/account/pin';
 
 export function safeRedirect(raw: unknown): string {
   const value = Array.isArray(raw) ? (raw[0] as unknown) : raw;

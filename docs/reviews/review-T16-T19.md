@@ -4,6 +4,23 @@
 - **Method:** read-only. I compared the live definitions on mukhdar-dev (`pg_proc`, `pg_policies`, grants, read in a read-only transaction) against the migrations, read the Edge Function handlers, the admin feature code, the tests, `SPEC-admin`, `SPEC-backend`, `DRIVER-API.md`, ADR 0001 and the RUNBOOK. I also took screenshots of `/settings`, `/staff` and `/addresses` against dev.
 - **This review changed no application code, migration, Edge Function or cloud setting.**
 
+## Status (updated 2026-11-16, fix session A)
+
+Fixed in migration `20261123000001_account_lifecycle.sql` (applied to mukhdar-dev) plus panel and
+customer-app changes. No Edge Function redeploy was needed.
+
+| Finding | Status |
+|---|---|
+| H1 temporary PIN / no change-PIN screen | **Fixed**: `profiles.must_change_pin` set inside `finish_user_creation` / `record_pin_reset`, cleared by a trigger when the password really changes; `current_user_role()` is null while set and `place_order` raises `PIN_CHANGE_REQUIRED`; panel `/change-pin` (forced + sidebar link); customer app forced step after sign-in; DRIVER-API §2 |
+| H2 driver with orders stranded | **Fixed**: `set_user_role` refuses `DRIVER_HAS_ORDERS` (detail = order numbers); `assign_driver` also moves `out_for_delivery` orders (admin and staff, audited); admin cancel without stock return (waste "cancelled after dispatch" at order-time cost). Owner decisions 2 and 3 |
+| M1 sessions survive deactivation | **Fixed**: deactivation or role downgrade calls `revoke_user_sessions` |
+| M2 staff and sale amounts | **Resolved by owner decision 1**: sale amounts allowed; SPEC-admin §1 and CLAUDE.md reworded; `21_staff_money.sql` pins every money column and what staff can read |
+| M3 admin vs admin, no audit | **Fixed**: `admin_audit` (roles/active, settings, order driver); admin changes serialized; `LAST_ADMIN` guard (defence in depth: an admin can't remove themselves, so it's unreachable through the API today) |
+| M6 DRIVER-API behind | **Fixed**: "Changes for the driver app" section at the top |
+| L1 `1000.0` cast | **Fixed** (folded into the same migration) |
+| Tests T1–T5, T8 | **Added**: `20_account_lifecycle.sql` (71), `21_staff_money.sql` (23), `pnpm it:admin-users` (+9 live checks), e2e forced change-PIN for a new staff member |
+| M4 break-glass, M5 stuck count, M7 address renames, L2–L7, T6, T7, T9 | **Open** (fix session B) |
+
 ## Summary
 
 No **Critical** findings. The database is the real gate everywhere I looked:

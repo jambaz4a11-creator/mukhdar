@@ -7,6 +7,8 @@ export type PanelRole = 'admin' | 'staff';
 export const PUBLIC_PATHS = ['/privacy', '/terms', '/delete-account'] as const;
 export const LOGIN_PATH = '/login';
 export const NOT_AUTHORIZED_PATH = '/not-authorized';
+/** تغيير رمز الدخول (SPEC-admin §2.6): إجباري برمز مؤقت، ومتاح دائماً من القائمة. */
+export const CHANGE_PIN_PATH = '/change-pin';
 
 /** كل صفحات اللوحة ومن يدخلها. أول جزء من المسار يحدد الصفحة. */
 export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
@@ -21,6 +23,7 @@ export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
   '/staff': ['admin'], // الموظفون والسائقون
   '/settings': ['admin'],
   '/print': ['admin', 'staff'], // إيصال 80mm للطلب (T17)، بلا قائمة
+  '/change-pin': ['admin', 'staff'], // تغيير الرمز (مراجعة T16-T19)، بلا قائمة
 };
 
 export function isPanelRole(role: unknown): role is PanelRole {

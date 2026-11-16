@@ -5,7 +5,7 @@ select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
   'categories', 'products', 'product_costs', 'stock', 'inventory_movements', 'orders', 'order_items',
   'order_item_costs', 'order_status_history', 'ratings', 'push_tokens', 'notification_outbox', 'daily_stats',
-  'pin_resets', 'user_creations'
+  'pin_resets', 'user_creations', 'admin_audit'
 ], 'public has exactly the expected tables');
 
 select is(
