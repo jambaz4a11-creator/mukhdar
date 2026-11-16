@@ -1,4 +1,12 @@
-import { PIN_MESSAGES, isTrivialPin, normalizePin, phonePinCredentials, validatePin } from '../pin';
+import {
+  PIN_MESSAGES,
+  generatePin,
+  isTrivialPin,
+  normalizePin,
+  phonePinCredentials,
+  validatePin,
+  whatsappPinLink,
+} from '../pin';
 
 describe('normalizePin', () => {
   it('converts Arabic-Indic and Persian digits and strips spaces', () => {
@@ -88,5 +96,39 @@ describe('phonePinCredentials', () => {
 
   it('does not check triviality (old accounts must still sign in)', () => {
     expect(phonePinCredentials('07701234567', '123456')).not.toBeNull();
+  });
+});
+
+describe('generatePin (admin PIN reset / account creation, T19)', () => {
+  it('always returns 6 digits that pass validatePin', () => {
+    for (let i = 0; i < 500; i++) {
+      const pin = generatePin('07701234567');
+      expect(pin).toMatch(/^[0-9]{6}$/);
+      expect(validatePin(pin, '07701234567')).toBeNull();
+    }
+  });
+
+  it('skips trivial candidates and ones taken from the phone', () => {
+    // أول مرشح 123456 (تسلسل)، ثم 770123 (من الرقم)، ثم 482915
+    const digits = [1, 2, 3, 4, 5, 6, 7, 7, 0, 1, 2, 3, 4, 8, 2, 9, 1, 5].map((d) => d / 10 + 0.01);
+    let i = 0;
+    expect(generatePin('07701234567', () => digits[i++ % digits.length] as number)).toBe('482915');
+  });
+
+  it('gives up instead of looping forever on a broken random source', () => {
+    expect(() => generatePin(undefined, () => 0)).toThrow('generatePin');
+  });
+});
+
+describe('whatsappPinLink', () => {
+  it('builds a wa.me link with the international number and the encoded text', () => {
+    expect(whatsappPinLink('0770 123 4567', 'رمزك: 482915')).toBe(
+      `https://wa.me/9647701234567?text=${encodeURIComponent('رمزك: 482915')}`,
+    );
+    expect(whatsappPinLink('9647701234567', 'x')).toBe('https://wa.me/9647701234567?text=x');
+  });
+
+  it('returns null for an invalid phone', () => {
+    expect(whatsappPinLink('12345', 'x')).toBeNull();
   });
 });

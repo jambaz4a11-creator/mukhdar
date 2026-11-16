@@ -33,8 +33,8 @@
 | الجدول | الغرض | من يقرأ | من يكتب |
 |---|---|---|---|
 | `profiles` | دور، هاتف، اسم | صاحبه + أدمن | trigger عند التسجيل؛ الاسم من صاحبه |
-| `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن (← `update_app_settings` فقط، T19) |
-| `sectors` / `subsections` / `buildings` | العنوان الهرمي: قطاع ← وحدة ← عمارة (قطاعان A وB، 17 وحدة، 1700 عمارة؛ رقم العمارة فريد داخل الوحدة فقط) | الجميع (النشط) | أدمن |
+| `app_settings` | الأجرة، الحد الأدنى، فتح/غلق المتجر، حد الطلبات المفتوحة للزبون (`max_active_orders`) | الجميع | أدمن عبر `update_app_settings` فقط (T19؛ لا update مباشر) |
+| `sectors` / `subsections` / `buildings` | العنوان الهرمي: قطاع ← وحدة ← عمارة (قطاعان A وB، 17 وحدة، 1700 عمارة؛ رقم العمارة فريد داخل الوحدة فقط) | الجميع (النشط) | أدمن (RLS؛ العمارات بالجملة `add_buildings`، T19) |
 | `addresses` | عناوين الزبون (عمارة + شقة نصاً)، عنوان افتراضي واحد | صاحبها + أدمن | صاحبها (أعمدة محددة) |
 | `categories` / `products` | الكتالوج | الجميع (النشط)، موظف/أدمن الكل | الأقسام: أدمن (RLS)؛ المنتجات: أدمن عبر الدوال فقط (T18) |
 | `product_costs` | سعر الشراء (= آخر سعر مشتريات) | أدمن | دوال فقط (`adjust_stock*`، `admin_save_product`) |
@@ -48,7 +48,8 @@
 | `push_tokens` | رموز الإشعارات، ولكل رمز مزوّد `provider`: `expo` (افتراضي، مُنفَّذ) أو `fcm` (محجوز، يُتخطى عند الإرسال). انظر DRIVER-API §6 | صاحبها (قراءة وحذف) | `register_push_token` فقط (لا insert/update مباشر) |
 | `notification_outbox` | إشعارات بانتظار الإرسال (`claimed_at` = حجز عامل الإرسال، 5 دقائق) | service_role فقط | دوال |
 | `daily_stats` | تقارير يومية (توقيت بغداد)؛ تُضاف كلفة الهدر وخسارة التسويات (T18) | أدمن | دوال |
-| `user_creations` (T19) | تدقيق إنشاء الحسابات من اللوحة | أدمن | `admin-create-user` |
+| `pin_resets` (T19) | تدقيق إعادة ضبط الـ PIN (بلا الرمز) | أدمن | `admin-reset-pin` (`record_pin_reset`) |
+| `user_creations` (T19) | تدقيق إنشاء الحسابات من اللوحة | أدمن | `admin-create-user` (`finish_user_creation`) |
 | `cities` / `vendors` | للتوسع لاحقاً | الجميع (النشط) | أدمن |
 
 **لماذا نسخ (snapshots)؟** الطلب يحتفظ بالاسم والسعر والعنوان وهاتف الزبون كما كانت لحظة الطلب. تغيير سعر منتج أو حذف عنوان أو حذف الحساب لا يغيّر الفواتير القديمة ولا التقارير.
@@ -106,6 +107,10 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - `set_product_price(p_product_id, p_price_iqd)` (أدمن، التعديل السريع): `NOT_ALLOWED`, `INVALID_PRODUCT`, `PRODUCT_NOT_FOUND`. `reorder_products(p_ids uuid[])` (أدمن؛ `sort_order` = الموضع 1، 2، …): `NOT_ALLOWED`, `INVALID_PRODUCT` (فارغة أو مكررة)، `PRODUCT_NOT_FOUND`.
 - **إشعار النقص** (trigger على `stock`، كل المسارات: `place_order`، الإلغاء، `adjust_stock*`): نزول الرصيد من ≥ `low_stock_threshold` إلى أقل منه لمنتج نشط ← `_notify('admins_only', …)` مرة واحدة (`data.type = 'low_stock'`، `product_id`؛ النص بالكيلو لنص الكيلو). جمهور `admins_only` = الأدمن وحده (`admins` = الأدمن والموظفون للطلب الجديد).
 - `set_user_role(p_user_id, p_role, p_is_active=true)` (أدمن). أخطاء: `NOT_ALLOWED`, `CANNOT_DEMOTE_SELF`, `USER_NOT_FOUND`.
+- `update_app_settings(p jsonb) → app_settings` (أدمن، T19 migration `20261122000001`): الحقول الموجودة فقط تتغير: `delivery_fee_iqd` و`min_order_iqd` (أعداد صحيحة ≥ 0 مضاعفات 250)، `max_active_orders` (1..1000)، `store_open` (boolean)، `closed_message` (≤ 200، الفارغ = null). مفتاح غير معروف أو قيمة خاطئة: `INVALID_SETTINGS` (`detail` = الحقل). غير الأدمن: `NOT_ALLOWED`. **لا update مباشر** على `app_settings` (سُحبت الصلاحية والسياسة). قيد `app_settings_min_order_multiple_250` (migration `20261111000002`) خط الدفاع الأخير.
+- `stuck_notifications_count() → int` (أدمن): إشعارات غير مرسلة أقدم من 5 دقائق (مؤشر صفحة الإعدادات). `NOT_ALLOWED`.
+- `add_buildings(p_subsection_id, p_numbers text[]) → int` (أدمن): عمارات بالجملة لوحدة (أرقام 1..9999 نصاً، حتى 500، المكرر بالقائمة أو بالجدول يُتجاهل بـ `on conflict do nothing`)، ويرجع عدد المُضاف؛ `sort_order` = الرقم. أخطاء: `NOT_ALLOWED`, `INVALID_BUILDINGS` (قائمة فارغة/طويلة/رقم خاطئ، أو وحدة غير موجودة).
+- دوال service_role لـ `admin-reset-pin` و`admin-create-user` (T19): `admin_actions_last_hour(p_kind, p_admin)` (`pin_reset` أو `user_creation`، وإلا `INVALID_REQUEST`) لحد 20/ساعة؛ `record_pin_reset(p_user_id, p_reset_by)`؛ `finish_user_creation(p_user_id, p_created_by, p_role, p_full_name)` (الدور والاسم والتدقيق بمعاملة؛ `INVALID_ROLE` لغير `staff`/`driver`، `USER_NOT_FOUND`).
 - حذف الحساب (service_role فقط، تستدعيها Edge Function `delete-account`، T08): `begin_account_deletion(p_user_id) → boolean` (is_active السابق) تأخذ قفل `place_order` لنفس المستخدم، ترفض `ADMIN_ACCOUNT` (أدمن) و`ACTIVE_ORDER` (طلب غير منتهٍ كزبون أو كسائق معيَّن)، وتعطّل الحساب حتى يكتمل `auth.admin.deleteUser`؛ `abort_account_deletion(p_user_id, p_was_active)` ترجع الحالة إن فشل الحذف. `USER_NOT_FOUND` إن لم يوجد ملف شخصي. الدالة ترجع نفس الرموز بـ `{error}` مع HTTP 403/409/404.
 - حماية الحسابات (trigger `before insert/update of phone` على `auth.users`، migration `20261116000001`، ADR 0001): `PHONE_INVALID` لحساب بلا هاتف أو برقم ليس `9647XXXXXXXXX` (يصل للتطبيق كخطأ GoTrue عام "Database error"؛ التطبيق يتحقق من الرقم قبل الإرسال).
 
@@ -120,7 +125,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 6. `anon` يقرأ الكتالوج والعناوين والإعدادات فقط (التصفح قبل الدخول).
 7. السياسات تستخدم `(select auth.uid())` و`(select private.is_admin())` (تُحسب مرة لكل استعلام)، ولا توجد سياستان permissive لنفس الدور والعملية. الهدف: Advisor بلا تحذيرات عدا دوال RPC العشر المقصودة.
 8. الدوال الجديدة **لا تُنفَّذ افتراضياً** من `PUBLIC` (`alter default privileges for role postgres` عامة، لا بالمخطط)، فكل دالة RPC جديدة تحتاج `grant execute` صريحاً.
-9. `service_role` (لـ Edge Functions فقط) له صلاحيات محددة: `usage` على `public`، `select/update` على `notification_outbox`، `select/delete` على `push_tokens`، `select` على `profiles` و`orders`، وتنفيذ `signup_rate_hit` (جدوله بمخطط `private`). أي حاجة جديدة تُمنح بـ migration المهمة. `01_schema.sql` يفحص القائمة بالضبط (محلياً وبالسحابة).
+9. `service_role` (لـ Edge Functions فقط) له صلاحيات محددة: `usage` على `public`، `select/update` على `notification_outbox`، `select/delete` على `push_tokens`، `select` على `profiles` و`orders`، وتنفيذ `signup_rate_hit` (جدوله بمخطط `private`) و`revoke_user_sessions` ودوال T19 (`admin_actions_last_hour`، `record_pin_reset`، `finish_user_creation`؛ لا صلاحية مباشرة على `pin_resets`/`user_creations`). أي حاجة جديدة تُمنح بـ migration المهمة. `01_schema.sql` يفحص القائمة بالضبط (محلياً وبالسحابة).
 10. الكتابة المباشرة على `products` و`addresses` بأعمدة محددة فقط (لا `in_stock` ولا `id` ولا `created_at`، ولا نقل عنوان لزبون آخر). لا صلاحيات على الـ sequences لـ `anon`/`authenticated`.
 11. bucket الصور عام (العرض بالرابط العام)، لكن **قائمة الملفات** للأدمن فقط.
 
@@ -145,8 +150,8 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 | `push-dispatch` | trigger (`after insert for each statement`) على `notification_outbox` يطلب الدالة بـ `pg_net`، + `pg_cron` كل دقيقة إن بقي شيء غير مرسل. المصادقة بترويسة `x-dispatch-secret` (سر بـ Vault، `verify_jwt = false`) | تحجز حتى 200 صف، تجمع الرموز حسب الجمهور (`user` / كل السائقين النشطين / الأدمن والموظفون النشطون)، ترسل كل رمز عبر مزوّده: Expo Push API بدفعات ≤100 (`channelId: orders`، أولوية عالية)؛ `fcm` يُتخطى بملاحظة بـ `last_error`. تحدّث `sent_at` أو `attempts` و`last_error` (حد أقصى 5 محاولات)، وتحذف الرموز التي يرجع لها `DeviceNotRegistered` |
 | `delete-account` | يستدعيها التطبيق بـ JWT المستخدم (`POST`، مطلوب من Apple وGoogle؛ `verify_jwt = true` + `auth.getUser`) | `begin_account_deletion` (يرفض `ADMIN_ACCOUNT` ← 403، `ACTIVE_ORDER` ← 409 لطلب غير منتهٍ كزبون أو كسائق معيَّن؛ ويعطّل الحساب)، ثم `auth.admin.deleteUser`؛ إن فشل: `abort_account_deletion` و500. الحذف يمتد: `profiles` ← العناوين والرموز تُحذف، والطلبات والتقييمات والسجل تبقى بنسخها مع `customer_id`/`driver_id` = null |
 | `signup` (ADR 0001، تحديث 2026-11-15) | التطبيقات قبل الدخول (`POST {phone, pin}`، `verify_jwt = false`؛ المفتاح المنشور ليس JWT) | `signup_rate_hit(ip, phone)` أولاً (كل محاولة تُحسب؛ 20/ساعة لكل IP من `cf-connecting-ip`، 5/ساعة لكل رقم)، ثم `normalizeIraqiPhone` و`validatePin` من `packages/shared` (عبر `import_map`)، ثم `auth.admin.createUser({phone, password, phone_confirm: true})` ← `201 {created: true}`، والتطبيق يدخل بـ `signInWithPassword`. الأخطاء (`{"error": CODE}`): `PHONE_INVALID` ← 400، `PIN_INVALID` ← 400، `PHONE_TAKEN` ← 409، `RATE_LIMITED` ← 429، `SIGNUP_FAILED` ← 400/405/500 (جسم خاطئ، أو فشل الحد أو Auth: يغلق ولا يمرر). لا يُسجَّل الـ PIN ولا جسم الطلب |
-| `admin-create-user` (**مواصفة؛ تُبنى بـ T19**) | لوحة الأدمن بـ JWT الأدمن (`POST`، `verify_jwt = true` + أدمن نشط) | إنشاء حساب موظف أو سائق (هاتف، اسم، دور، رمز مؤقت) بـ `auth.admin.createUser` ثم الدور وسجل `user_creations`. التفاصيل والأخطاء: SPEC-admin §2.6؛ الرموز تُضاف لهذا القسم مع البناء |
-| `admin-reset-pin` (**مواصفة؛ تُبنى بـ T19**) | لوحة الأدمن بـ JWT الأدمن (`POST`، `verify_jwt = true` + `auth.getUser` + `profiles.role = 'admin'` ونشط) | إعادة ضبط PIN مستخدم نسيه (بعد رسالة واتساب من نفس الرقم). التفاصيل والأخطاء: SPEC-admin §2.6 |
+| `admin-create-user` (T19) | لوحة الأدمن بـ JWT الأدمن (`POST {phone, full_name, role, pin}`، `verify_jwt = true` + `auth.getUser` + أدمن نشط) | `normalizeIraqiPhone` و`validatePin` من `packages/shared`، حد 20/ساعة لكل أدمن (`admin_actions_last_hour`)، `auth.admin.createUser` (هاتف مؤكد) ثم `finish_user_creation`؛ فشلها ← حذف الحساب. ← `201 {user_id}`. الأخطاء: `NOT_AUTHENTICATED` ← 401، `NOT_ALLOWED` ← 403، `INVALID_REQUEST` ← 400/405 (جسم أو اسم 1..80 خاطئ)، `PHONE_INVALID` ← 400، `INVALID_ROLE` ← 400 (غير `staff`/`driver`)، `PIN_INVALID` ← 400 (`detail`)، `RATE_LIMITED` ← 429، `PHONE_TAKEN` ← 409، `INTERNAL` ← 500. الرمز لا يرجع ولا يُسجَّل. التفاصيل: SPEC-admin §2.6 |
+| `admin-reset-pin` (T19) | لوحة الأدمن بـ JWT الأدمن (`POST {user_id, new_pin}`، `verify_jwt = true` + `auth.getUser` + `profiles.role = 'admin'` ونشط) | إعادة ضبط PIN مستخدم نسيه (بعد رسالة واتساب من نفس الرقم): `validatePin` برقم الهدف، حد 20/ساعة لكل أدمن، `updateUserById` ثم `revoke_user_sessions` و`record_pin_reset`. ← `200 {ok: true}`. الأخطاء: `NOT_AUTHENTICATED` ← 401، `NOT_ALLOWED` ← 403، `INVALID_REQUEST` ← 400/405، `USER_NOT_FOUND` ← 404، `ADMIN_ACCOUNT` ← 403 (هدف أدمن أو المستدعي نفسه)، `PIN_INVALID` ← 400 (`detail` = سبب الرفض من `validatePin`: الطول، رمز سهل، أو من رقم الهدف)، `TOO_MANY_RESETS` ← 429، `INTERNAL` ← 500. التفاصيل: SPEC-admin §2.6 |
 
 ## 9) كيف نضمن الأداء
 | الإجراء | التفصيل |
@@ -183,6 +188,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - نص العنوان بالإشعارات ("وحدة A1 - عمارة 12") بـ `03_place_order.sql` و`05_driver.sql`، ووحدات البيع الثابتة بـ `02_rls_catalog.sql`.
 - الدخول بالهاتف + PIN (`13_phone_pin_auth.sql`): الـ hook يرفض كل SMS وصلاحياته، رفض حساب بلا رقم أو برقم غير صالح، رقم واحد = حساب واحد، وصيغة `profiles.phone`.
 - التسجيل عبر الخادم: حدود المعدل وصلاحياتها والتجزئة والنافذة (`14_signup_rate_limit.sql`)، منطق الدالة (`signup_test.ts`)، وتكامل `pnpm it:signup` على dev (و`-- --signup-disabled` بعد إطفاء التسجيل العام).
+- T19 (`19_admin_settings_staff.sql`): `update_app_settings` (أدمن فقط، قيد 250، لا update مباشر)، مؤشر الإشعارات العالقة، RLS `pin_resets`/`user_creations` ودوال service_role، و`add_buildings`؛ منطق الدالتين (`admin_reset_pin_test.ts`، `admin_create_user_test.ts`)، وتكامل `pnpm it:admin-users` على dev.
 
 ## 11) النسخ الاحتياطي والمراقبة
 - Supabase Pro: نسخ يومي. تجربة استعادة واحدة على مشروع staging قبل الإطلاق.
@@ -190,7 +196,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - مراقبة `notification_outbox` (عدد غير المرسل أقدم من 5 دقائق) بلوحة الأدمن.
 
 ## 12) تغييرات مخططة للوحة الأدمن (قرارات 2026-11-15)
-> **بُني بـ T18 (migration `20261121000001`):** §12.1 كاملاً، و§12.2 للمنتجات (`update_app_settings` بـ T19)، و§12.5. التفاصيل النهائية بـ §5.
+> **بُني بـ T18 (migration `20261121000001`):** §12.1 كاملاً، و§12.2 للمنتجات، و§12.5. **بـ T19 (migration `20261122000001`):** `update_app_settings` وسحب الـ update المباشر (قيد الحد الأدنى كان موجوداً). التفاصيل النهائية بـ §5.
 > مواصفة للمهام T18، T19، T20، T25، T26. كل بند = migration جديدة واختبارات pgTAP. الرموز الجديدة تُنقل إلى §5 (وerrors.ts) مع البناء فقط، لأن اختبار Jest يطابق §5 مع ما يرفعه SQL فعلاً.
 
 ### 12.1 المخزون والكلفة (T18)

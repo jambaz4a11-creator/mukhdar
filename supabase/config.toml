@@ -424,6 +424,20 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/signup/index.ts"
 
+# T19: لوحة الأدمن بـ JWT الأدمن (البوابة تتحقق منه، والدالة تتحقق ثانيةً: auth.getUser + دور admin نشط).
+# import_map يربط قواعد الرقم والـ PIN من packages/shared.
+[functions.admin-reset-pin]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/admin-reset-pin/index.ts"
+
+[functions.admin-create-user]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/admin-create-user/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

@@ -89,11 +89,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Start local Supabase (Postgres + Auth + REST + Realtime + Storage via Kong)
+      # edge-runtime: admin-reset-pin وadmin-create-user (T19) تُخدم محلياً من supabase/functions
+      - name: Start local Supabase (Postgres + Auth + REST + Realtime + Storage + Edge Functions via Kong)
         timeout-minutes: 10
         run: >-
           pnpm exec supabase start
-          -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          -x imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
       - name: seed:demo (demo admin, staff, drivers, customers with DEMO_PIN)
         run: pnpm seed:demo --no-images
       - name: Local Supabase URL and anon key for the admin app
@@ -111,7 +112,7 @@ jobs:
       - name: Playwright browser
         working-directory: apps/admin
         run: pnpm exec playwright install --with-deps chromium
-      - name: Playwright (access, orders incl. live order and actions)
+      - name: Playwright (access, orders, catalog, settings/staff/addresses incl. Edge Functions)
         env:
           # الطلبات التجريبية تُنشأ وتُعدَّل هنا فقط (Supabase محلي)، لا على mukhdar-dev
           E2E_ALLOW_WRITES: '1'

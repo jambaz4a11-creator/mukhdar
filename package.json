@@ -17,9 +17,10 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:reset": "node scripts/seed-reset.mjs",
     "supabase": "supabase",
-    "test:functions": "deno check --config supabase/functions/deno.json supabase/functions/push-dispatch/index.ts supabase/functions/delete-account/index.ts supabase/functions/signup/index.ts && deno test --no-prompt --config supabase/functions/deno.json supabase/functions",
+    "test:functions": "deno check --config supabase/functions/deno.json supabase/functions/push-dispatch/index.ts supabase/functions/delete-account/index.ts supabase/functions/signup/index.ts supabase/functions/admin-reset-pin/index.ts supabase/functions/admin-create-user/index.ts && deno test --no-prompt --config supabase/functions/deno.json supabase/functions",
     "it:delete-account": "node scripts/delete-account-it.mjs",
-    "it:signup": "node scripts/signup-it.mjs"
+    "it:signup": "node scripts/signup-it.mjs",
+    "it:admin-users": "node scripts/admin-users-it.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

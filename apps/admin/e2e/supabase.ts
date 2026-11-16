@@ -18,7 +18,7 @@ export function anonClient(): SupabaseClient {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-export async function signedInClient(phone: string): Promise<SupabaseClient> {
+export async function signedInClient(phone: string, pin = PIN): Promise<SupabaseClient> {
   const { url, key } = env();
   const client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -26,7 +26,7 @@ export async function signedInClient(phone: string): Promise<SupabaseClient> {
   // 07XXXXXXXXX ← +9647XXXXXXXXX (أرقام العرض صالحة دائماً)
   const { error } = await client.auth.signInWithPassword({
     phone: `+964${phone.slice(1)}`,
-    password: PIN,
+    password: pin,
   });
   if (error) throw error;
   return client;

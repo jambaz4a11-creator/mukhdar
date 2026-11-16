@@ -1,12 +1,8 @@
 import type { Metadata } from 'next';
-import { Placeholder } from '@/components/Placeholder';
+import { StaffScreen } from '@/features/admin/StaffScreen';
 
 export const metadata: Metadata = { title: 'الموظفون والسواق' };
 
 export default function Page() {
-  return (
-    <Placeholder title="الموظفون والسواق" task="T19">
-      إضافة موظف أو سائق، تغيير الدور، إعادة ضبط رمز الدخول.
-    </Placeholder>
-  );
+  return <StaffScreen />;
 }

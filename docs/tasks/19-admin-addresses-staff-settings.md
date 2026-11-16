@@ -1,4 +1,4 @@
-# 19: العناوين والموظفون والإعدادات
+# 19: العناوين والموظفون والإعدادات ✅
 
 **الهدف:** SPEC-admin §2.4 و§2.6 (ومنها إعادة ضبط الـ PIN وإنشاء الحسابات) و§2.7، وSPEC-backend §12.2 (الإعدادات).
 قاعدة الكيلو (SPEC-admin §2.9) لا تنطبق هنا: الأجرة والحد الأدنى مبالغ بالدينار كما هي، ولا كميات منتجات بهذه الصفحات. الشكل حسب شاشة "Settings" بالتصميم المعتمد.
@@ -36,3 +36,11 @@
 - Playwright: إنشاء سائق يعرض الرمز مرة واحدة.
 - pgTAP: RLS `pin_resets` (`revoke_user_sessions` مغطاة بـ `17_revoke_user_sessions.sql`).
 - تكامل على dev (مثل `it:delete-account`): القديم يفشل والجديد ينجح بعد الضبط؛ وحساب مُنشأ بـ `admin-create-user` يدخل بدوره.
+
+## ملاحظات التنفيذ (2026-11-16)
+- **قاعدة البيانات:** migration `20261122000001_admin_settings_staff.sql` (طُبّقت على mukhdar-dev بموافقة صاحب المشروع): `update_app_settings` (أدمن، `INVALID_SETTINGS`) وسحب الـ update المباشر وسياسته؛ `stuck_notifications_count` (أدمن)؛ `pin_resets` و`user_creations` (قراءة للأدمن فقط بـ RLS، لا صلاحيات مباشرة لـ service_role)؛ دوال service_role `admin_actions_last_hour` و`record_pin_reset` و`finish_user_creation`؛ `add_buildings` (أدمن، `INVALID_BUILDINGS`، `on conflict do nothing`). **قيد `min_order_iqd % 250 = 0` كان موجوداً** (`app_settings_min_order_multiple_250`، migration `20261111000002`) فلم يُكرر؛ اختبار pgTAP يثبته.
+- **Edge Functions:** `admin-reset-pin` و`admin-create-user` (`verify_jwt = true`، `_shared/admin.ts` للتحقق من الأدمن)، قواعد الرقم والـ PIN مستوردة من `packages/shared` (لا نسخة). منشورتان على mukhdar-dev بموافقة صاحب المشروع. رموز جديدة: `TOO_MANY_RESETS`، `INVALID_ROLE`، `INVALID_REQUEST`، `INVALID_SETTINGS`، `INVALID_BUILDINGS` (errors.ts وSPEC-backend §5/§8).
+- **packages/shared:** `generatePin` (يمر بـ `validatePin`) و`whatsappPinLink`، والأنواع مُعاد توليدها.
+- **اللوحة:** `apps/admin/src/features/admin`: `SettingsScreen` (`/settings`)، `StaffScreen` + `PinDialogs` (`/staff`)، `AddressesScreen` (`/addresses`)، `forms.ts` (تحليل العمارات، نموذج الإعدادات).
+- **الاختبارات:** pgTAP 675 على mukhdar-dev (جديد `19_admin_settings_staff.sql` 53، وتحديث `01`/`02`)؛ deno 55 (جديد 20)؛ وحدة: shared 218، admin 151؛ تكامل `pnpm it:admin-users` على dev (19 فحصاً، الحسابات المؤقتة حُذفت)؛ Playwright `settings.spec.ts`: القراءة ومحاولات الرفض محلياً ضد mukhdar-dev، والكتابة (غلق المتجر ← `STORE_CLOSED`، ترقية، تصفير رمز، إنشاء سائق، 1..100 عمارة) بـ CI فقط (Supabase محلي مع `edge-runtime`).
+- **القرارات:** SPEC-admin افتراض 19.

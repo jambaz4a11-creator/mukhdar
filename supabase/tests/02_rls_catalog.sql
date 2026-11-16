@@ -1,5 +1,5 @@
 -- 02: RLS للكتالوج والعناوين والإعدادات (anon / customer / staff / admin)
-select plan(38);
+select plan(39);
 
 -- التجهيز (postgres)
 select tests.remember('admin', tests.new_user('admin'));
@@ -39,8 +39,8 @@ select throws_ok($$ update public.products set price_iqd = 250 where id = tests.
   '42501', null, 'customer cannot update a product');
 select throws_ok($$ delete from public.products where id = tests.id('p_active') $$,
   '42501', null, 'customer cannot delete a product');
-select results_eq($$ with u as (update public.app_settings set store_open = false returning 1)
-                     select count(*)::int from u $$, array[0], 'customer cannot update app_settings');
+select throws_ok($$ update public.app_settings set store_open = false $$,
+  '42501', null, 'customer cannot update app_settings');
 select results_eq($$ select id from public.addresses $$, array[tests.id('a1')], 'customer sees only own address');
 select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment)
                            select %L, building_id, '9' from public.addresses limit 1 $$, tests.id('c2')),
@@ -65,8 +65,10 @@ select results_eq($$ select cost_iqd from public.product_costs where product_id 
 select lives_ok($$ insert into public.categories (name) values ('test admin category') $$, 'admin inserts a category');
 select throws_ok($$ update public.products set price_iqd = 1250 where id = tests.id('p_active') $$,
   '42501', null, 'even admin cannot update a product directly (functions only, T18)');
-select results_eq($$ with u as (update public.app_settings set delivery_fee_iqd = 1500 returning 1)
-                     select count(*)::int from u $$, array[1], 'admin updates app_settings');
+select throws_ok($$ update public.app_settings set delivery_fee_iqd = 1500 $$,
+  '42501', null, 'even admin cannot update app_settings directly (update_app_settings, T19)');
+select is((select delivery_fee_iqd from public.update_app_settings('{"delivery_fee_iqd": 1500}')), 1500::bigint,
+  'admin updates settings through update_app_settings');
 select throws_ok($$ select public.admin_save_product(jsonb_build_object(
                       'category_id', (select id from public.categories limit 1),
                       'name', 'bad price', 'unit', 'نص كيلو', 'price_iqd', 1100)) $$,

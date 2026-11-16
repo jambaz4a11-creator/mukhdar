@@ -380,3 +380,25 @@ select bucket, hits, window_start from private.signup_rate_limits
 **T17:** اختبارات Playwright التي تنشئ وتعدّل طلبات تعمل فقط مع `E2E_ALLOW_WRITES=1` (CI ضد Supabase محلي مع Realtime). لا تضبطه ضد mukhdar-dev؛ بدونه تعمل اختبارات القراءة فقط.
 
 **T18:** اختبارات الكتابة للكتالوج (قسم بصورة، منتج بصورة، مشتريات، هدر، تعطيل) ترفع صوراً، فـ job `admin-e2e` يشغّل `storage-api` أيضاً (لم يعد ضمن `-x`). نفس قاعدة `E2E_ALLOW_WRITES=1`.
+
+**T19:** اختبارات الكتابة للإعدادات والموظفين والعناوين (حفظ الإعدادات، ترقية، تصفير رمز، إنشاء سائق، عمارات بالجملة) تستدعي `admin-reset-pin` و`admin-create-user`، فـ job `admin-e2e` يشغّل `edge-runtime` أيضاً (لم يعد ضمن `-x`). نفس قاعدة `E2E_ALLOW_WRITES=1`. تصفير الرمز يستعمل زبون العرض `07000000119` ويرجعه لـ `DEMO_PIN` بنهاية الاختبار.
+
+## 16) الإعدادات والموظفون: `admin-reset-pin` و`admin-create-user` (T19)
+### النشر (لكل بيئة، بموافقة صاحب المشروع)، بالترتيب
+```sh
+pnpm exec supabase db push --remote --yes          # migration 20261122000001 (update_app_settings، pin_resets، user_creations، add_buildings)
+pnpm exec supabase functions deploy admin-reset-pin --remote=<ref> --use-api --yes     # verify_jwt = true
+pnpm exec supabase functions deploy admin-create-user --remote=<ref> --use-api --yes   # verify_jwt = true
+```
+لا أسرار جديدة: `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase. اللوحة تستدعي الدالتين بجلسة الأدمن (`functions.invoke`).
+
+### اختبار التكامل (`pnpm it:admin-users`، مشروع التطوير فقط)
+ينشئ أدمن وزبوناً مؤقتين (البادئة `9647007`) ويختبر الدالتين المنشورتين: الرفض (401/403/`ADMIN_ACCOUNT`/`PIN_INVALID`)، بعد التصفير يفشل الرمز القديم وينجح الجديد ويسقط رمز التحديث القديم، وسائق جديد يدخل برمزه المؤقت ويظهر بـ `list_drivers`، والرقم المكرر ← `PHONE_TAKEN`. يحذف كل الحسابات وسطور `pin_resets`/`user_creations` التي أنشأها حتى عند الفشل.
+
+### التشغيل
+- **نسيان الرمز:** الشخص يراسل واتساب المتجر **من نفس الرقم المسجّل** ← الأدمن: الموظفون والسواق ← بحث بالرقم ← "تصفير الرمز" ← رمز عشوائي ← يظهر مرة واحدة ← "إرسال بالواتساب". التصفير يطلّعه من كل الأجهزة (رمز الوصول الحالي يبقى ≤ ساعة).
+- **رمز أدمن:** لا يُصفَّر من اللوحة (`ADMIN_ACCOUNT`): صاحبه يغيّره من حسابي، أو صاحب المشروع بـ SQL (§7).
+- **الحد:** 20 تصفيراً و20 إنشاءً بالساعة لكل أدمن (من `pin_resets`/`user_creations`). سجل التدقيق: `select * from public.pin_resets order by created_at desc` (بلا الرمز).
+
+### الحالة على mukhdar-dev (2026-11-16)
+migration `20261122000001` مطبّقة، والدالتان منشورتان (`verify_jwt = true`)، و`pnpm it:admin-users` نجح (19 فحصاً) والحسابات المؤقتة حُذفت.

@@ -88,6 +88,26 @@ export function validatePin(input: string, phone?: string): PinError | null {
   return null;
 }
 
+/**
+ * رمز عشوائي من 6 أرقام يمر بـ validatePin (لإعادة الضبط وإنشاء الحسابات من لوحة الأدمن).
+ * crypto.getRandomValues (متصفح، Node ≥ 19، Deno)؛ random للاختبار فقط.
+ */
+export function generatePin(phone?: string, random?: () => number): string {
+  const next = random ?? (() => (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 2 ** 32);
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    let pin = '';
+    for (let i = 0; i < PIN_LENGTH; i++) pin += String(Math.floor(next() * 10) % 10);
+    if (validatePin(pin, phone) === null) return pin;
+  }
+  throw new Error('generatePin: no acceptable PIN');
+}
+
+/** رسالة واتساب جاهزة للرمز (wa.me برقم دولي بلا "+")؛ phone بأي صيغة. null لرقم غير صالح. */
+export function whatsappPinLink(phone: string, text: string): string | null {
+  const e164 = normalizeIraqiPhone(phone);
+  return e164 ? `https://wa.me/${e164.slice(1)}?text=${encodeURIComponent(text)}` : null;
+}
+
 export interface PhonePinCredentials {
   /** E.164: +9647XXXXXXXXX (Supabase يخزنه 9647XXXXXXXXX) */
   phone: string;

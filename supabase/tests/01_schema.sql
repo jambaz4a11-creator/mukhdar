@@ -1,10 +1,11 @@
 -- 01: المخطط، RLS، الصلاحيات، والدوال الأساسية
-select plan(39);
+select plan(41);
 
 select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
   'categories', 'products', 'product_costs', 'stock', 'inventory_movements', 'orders', 'order_items',
-  'order_item_costs', 'order_status_history', 'ratings', 'push_tokens', 'notification_outbox', 'daily_stats'
+  'order_item_costs', 'order_status_history', 'ratings', 'push_tokens', 'notification_outbox', 'daily_stats',
+  'pin_resets', 'user_creations'
 ], 'public has exactly the expected tables');
 
 select is(
@@ -32,10 +33,11 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['accept_order', 'adjust_stock', 'adjust_stock_bulk', 'admin_save_product', 'assign_driver',
+  array['accept_order', 'add_buildings', 'adjust_stock', 'adjust_stock_bulk', 'admin_save_product', 'assign_driver',
         'available_orders', 'list_drivers', 'place_order', 'rate_order', 'recompute_daily_stats',
-        'register_push_token', 'reorder_products', 'set_order_status', 'set_product_price', 'set_user_role'],
-  'authenticated can execute exactly the 15 RPCs among SECURITY DEFINER functions');
+        'register_push_token', 'reorder_products', 'set_order_status', 'set_product_price', 'set_user_role',
+        'stuck_notifications_count', 'update_app_settings'],
+  'authenticated can execute exactly the 18 RPCs among SECURITY DEFINER functions');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');
@@ -79,7 +81,17 @@ select is(
       and has_table_privilege('service_role', c.oid, p.priv)),
   array['notification_outbox:SELECT', 'notification_outbox:UPDATE', 'orders:SELECT', 'profiles:SELECT',
         'push_tokens:DELETE', 'push_tokens:SELECT'],
-  'service_role has exactly the table privileges T07/T08 need');
+  'service_role has exactly the table privileges T07/T08 need (T19 audit tables: functions only)');
+
+-- service_role: الدوال الخاصة به بالضبط (Edge Functions)، لا أكثر
+select is(
+  (select array_agg(p.proname::text order by p.proname) from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.prosecdef
+      and has_function_privilege('service_role', p.oid, 'execute')
+      and not has_function_privilege('authenticated', p.oid, 'execute')),
+  array['abort_account_deletion', 'admin_actions_last_hour', 'begin_account_deletion', 'finish_user_creation',
+        'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions', 'signup_rate_hit'],
+  'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19 PIN reset / account creation)');
 
 -- الدوال الجديدة لا تُنفَّذ افتراضياً (default privileges عامة، لا بالمخطط فقط)
 create function public.zz_default_acl_probe() returns int language sql set search_path = '' as 'select 1';
@@ -120,6 +132,8 @@ select throws_ok($$ update public.app_settings set min_order_iqd = 100 $$, '2351
 select is((select column_default from information_schema.columns
             where table_schema = 'public' and table_name = 'app_settings' and column_name = 'max_active_orders'),
   '3', 'max_active_orders defaults to 3');
+select ok(not has_table_privilege('authenticated', 'public.app_settings', 'update'),
+  'app_settings is not directly writable (update_app_settings, T19)');
 
 -- التقريب لأقرب 250 (النصف للأعلى)
 select is(public.round_iqd(0), 0::bigint, 'round_iqd(0) = 0');

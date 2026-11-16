@@ -1,12 +1,8 @@
 import type { Metadata } from 'next';
-import { Placeholder } from '@/components/Placeholder';
+import { AddressesScreen } from '@/features/admin/AddressesScreen';
 
 export const metadata: Metadata = { title: 'العناوين' };
 
 export default function Page() {
-  return (
-    <Placeholder title="العناوين" task="T19">
-      قطاع ← وحدة ← عمارة، وإضافة عمارات بالجملة.
-    </Placeholder>
-  );
+  return <AddressesScreen />;
 }

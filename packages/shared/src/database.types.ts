@@ -589,6 +589,43 @@ export type Database = {
           },
         ];
       };
+      pin_resets: {
+        Row: {
+          created_at: string;
+          id: number;
+          reset_by: string | null;
+          user_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: never;
+          reset_by?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: never;
+          reset_by?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'pin_resets_reset_by_fkey';
+            columns: ['reset_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'pin_resets_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       product_costs: {
         Row: {
           cost_iqd: number;
@@ -899,6 +936,46 @@ export type Database = {
           },
         ];
       };
+      user_creations: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: number;
+          role: Database['public']['Enums']['user_role'];
+          user_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: never;
+          role: Database['public']['Enums']['user_role'];
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: never;
+          role?: Database['public']['Enums']['user_role'];
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'user_creations_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'user_creations_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       vendors: {
         Row: {
           created_at: string;
@@ -990,6 +1067,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      add_buildings: { Args: { p_numbers: string[]; p_subsection_id: number }; Returns: number };
       adjust_stock: {
         Args: {
           p_note?: string;
@@ -1008,6 +1086,7 @@ export type Database = {
         };
         Returns: number;
       };
+      admin_actions_last_hour: { Args: { p_admin: string; p_kind: string }; Returns: number };
       admin_save_product: { Args: { p: Json }; Returns: string };
       assign_driver: {
         Args: { p_driver_id: string; p_order_id: string };
@@ -1080,6 +1159,15 @@ export type Database = {
         Args: { p_dead_tokens?: string[]; p_results: Json };
         Returns: undefined;
       };
+      finish_user_creation: {
+        Args: {
+          p_created_by: string;
+          p_full_name: string;
+          p_role: Database['public']['Enums']['user_role'];
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_staff_or_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       list_drivers: {
@@ -1101,6 +1189,7 @@ export type Database = {
         Returns: undefined;
       };
       recompute_daily_stats: { Args: { p_from: string; p_to: string }; Returns: number };
+      record_pin_reset: { Args: { p_reset_by: string; p_user_id: string }; Returns: undefined };
       register_push_token: {
         Args: {
           p_platform: Database['public']['Enums']['push_platform'];
@@ -1166,6 +1255,25 @@ export type Database = {
         Returns: undefined;
       };
       signup_rate_hit: { Args: { p_ip: string; p_phone: string }; Returns: boolean };
+      stuck_notifications_count: { Args: Record<PropertyKey, never>; Returns: number };
+      update_app_settings: {
+        Args: { p: Json };
+        Returns: {
+          closed_message: string | null;
+          delivery_fee_iqd: number;
+          id: number;
+          max_active_orders: number;
+          min_order_iqd: number;
+          store_open: boolean;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'app_settings';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
     };
     Enums: {
       movement_type: 'purchase' | 'sale' | 'waste' | 'adjust' | 'cancel_return';
