@@ -417,3 +417,67 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 - **تعطيل سائق:** إن رُفض بـ "السائق عنده طلبات لم تنتهِ: … الطلبات: #12" ← افتح كل طلب ← "نقل الطلب لسائق آخر" (يعمل حتى والطلب بالطريق) ← ثم عطّله.
 - **طلب بالطريق والبضاعة ضاعت/تلفت:** إلغاء (أدمن) مع خانة "البضاعة طلعت مع السائق" ← تُسجَّل هدراً بكلفة الطلب.
 - **سجل التدقيق:** `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
+
+## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعة الجلستين A وB، 2026-11-16)
+
+> مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm exec supabase migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
+> إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (migration جديدة لـ H1/M1 وإعادة نشر `admin-reset-pin`) تُضاف لهذه القائمة حين تُنجز، **قبل** الإطلاق.
+
+### 1. الـ migrations بالترتيب
+| # | الملف |
+|---|---|
+| 1 | `20261110000001_init.sql` |
+| 2 | `20261110000002_storage.sql` |
+| 3 | `20261111000001_advisor_fixes.sql` |
+| 4 | `20261111000002_review_fixes.sql` |
+| 5 | `20261112000001_sequence_grants.sql` |
+| 6 | `20261112000002_inactive_driver_orders.sql` |
+| 7 | `20261112000003_push_dispatch.sql` |
+| 8 | `20261112000004_delete_account.sql` |
+| 9 | `20261114000001_address_wording.sql` |
+| 10 | `20261115000001_order_status_ready.sql` |
+| 11 | `20261115000002_ready_flow.sql` |
+| 12 | `20261115000003_push_reliability.sql` |
+| 13 | `20261115000004_hardening.sql` |
+| 14 | `20261115000005_deletion_safety.sql` |
+| 15 | `20261116000001_phone_pin_auth.sql` |
+| 16 | `20261117000001_signup_rate_limit.sql` |
+| 17 | `20261118000001_set_default_address.sql` |
+| 18 | `20261119000001_revoke_user_sessions.sql` |
+| 19 | `20261120000001_staff_delivery_fallback.sql` |
+| 20 | `20261121000001_catalog_stock.sql` |
+| 21 | `20261122000001_admin_settings_staff.sql` |
+| 22 | `20261123000001_account_lifecycle.sql` |
+| 23 | `20261124000001_review_session_b.sql` |
+
+**قاعدة إلزامية:** طبّق migration **`20261124000001`** قبل نشر **`admin-create-user`** و**`admin-reset-pin`**. النسخة الحالية من الدالتين تستدعي `admin_rate_hit` و`record_pin_reset(..., p_kind)`، وهما غير موجودتين قبل هذه الـ migration: لو نُشرت الدالتان أولاً، فكل إنشاء حساب وكل إعادة ضبط رمز يفشل بـ 500.
+
+قاعدة للتحقق قبل `20261124000001` (فقط إن كان بالإنتاج بيانات عناوين قبلها؛ على مشروع جديد فارغ لا حاجة): يجب أن يرجع 0، وإلا يفشل قيد العمارة 1..100:
+```sql
+select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
+```
+
+### 2. الترتيب الكامل
+1. أنشئ المشروع بمنطقة **`eu-central-1`** (§1)، ثم اربطه: `pnpm exec supabase link --project-ref <prod-ref>`. (سكربتات التطوير `db:test:remote` و`seed:*` ترفض المشروع المربوط إن لم يكن mukhdar-dev، وهذا مقصود؛ أعد ربط التطوير بعد الانتهاء.)
+2. `pnpm exec supabase db push --remote --dry-run` ← يجب أن يعرض الـ 23 ملفاً بالترتيب أعلاه ← `pnpm exec supabase db push --remote --yes`.
+3. إعدادات Auth من اللوحة: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7. **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
+4. الدوال، بالترتيب (كلها بعد الخطوة 2، فالقاعدة أعلاه محققة تلقائياً):
+   ```bash
+   pnpm exec supabase functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt --yes
+   pnpm exec supabase functions deploy delete-account    --remote=<prod-ref> --use-api --yes   # verify_jwt = true
+   pnpm exec supabase functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt --yes
+   pnpm exec supabase functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261124000001
+   pnpm exec supabase functions deploy admin-create-user --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261124000001
+   ```
+   ثم `push_dispatch_url` بـ Vault (§11).
+5. §6 الخطوة 3: **Allow new users to sign up: OFF**، وفحص يدوي: حساب تجريبي من التطبيق ثم احذفه (§14).
+6. البيانات الأساسية (المدينة، القطاعات، الوحدات، العمارات 1..100): من `supabase/seed.sql` بقرار المالك (§10؛ الملف يضيف أيضاً كتالوجاً تجريبياً بأسعار، فيُراجع قبل تشغيله على الإنتاج). **لا** `seed:demo` ولا `DEMO_PIN` على الإنتاج.
+7. أول أدمن (§7 الخطوتان 1 و2) برقم صاحب المشروع ورمز لا يعرفه غيره.
+8. اللوحة على Vercel (Production ← مشروع الإنتاج): `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` فقط (§15).
+
+### 3. `.env.local` بجذر المشروع (جهاز صاحب المشروع فقط، مُتجاهل بـ git)
+سكربت الطوارئ `pnpm admin:break-glass-reset` (§7) **يرفض العمل** بدون هذا السطر، ويطبع المشروع الذي يشير له قبل أي سؤال:
+```
+SUPABASE_URL=https://<prod-ref>.supabase.co
+```
+مع `SUPABASE_SERVICE_ROLE_KEY=<مفتاح service_role لنفس المشروع>` (القالب `.env.example`). `.env.local` الحالي يشير لـ mukhdar-dev؛ للإنتاج مرّر القيمتين بالبيئة وقت التشغيل، أو احتفظ بنسخة منفصلة، ولا تخلط رابط مشروع بمفتاح مشروع آخر (السكربت يفشل حينها بلا تغيير). المفتاح لا يُوضع بأي مكان آخر.
