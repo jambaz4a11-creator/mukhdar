@@ -2,7 +2,7 @@
 --   يرى: مبالغ البيع اللازمة للإيصال (إجمالي الطلب وأجرته وبنوده، سعر البيع، أجرة التوصيل والحد الأدنى).
 --   لا يرى: الكلفة، الربح، قيمة الهدر، كلفة حركات المخزون، التقارير، الإعدادات (تعديلاً).
 -- أي عمود مبالغ جديد يُفشل الاختبار الأول حتى يُصنَّف هنا (بيع للموظف أو للأدمن فقط).
-select plan(29);
+select plan(32);
 
 -- ---------------------------------------------------------------- 1) قائمة أعمدة المبالغ مثبّتة
 select set_eq(
@@ -82,6 +82,16 @@ select throws_ok($$ select * from public.report_drivers(current_date - 7, curren
   'no report_drivers');
 select throws_ok($$ select * from public.report_waste(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
   'no report_waste (waste and shortage cost)');
+-- الرئيسية (T25): الموظف يستدعيها لكن كل المال null بالدالة نفسها (لا بالواجهة)، والأدمن يراه
+select is(
+  (select count(*)::int from jsonb_each(public.dashboard_today()) e(k, v)
+    where k in ('sales_iqd', 'sales_prev_iqd', 'avg_order_iqd', 'avg_order_prev_iqd', 'waste_cost_iqd',
+                'net_profit_iqd', 'net_profit_prev_iqd') and jsonb_typeof(v) = 'null'),
+  7, 'dashboard_today: all 7 money fields are null for staff');
+select ok((public.dashboard_today() ->> 'delivered_count')::int >= 1 and (public.dashboard_today() -> 'open') is not null,
+  'dashboard_today: staff still gets the counts (delivered today, open orders)');
+select ok(public.dashboard_today()::text !~ '(cost|profit)_iqd"\s*:\s*[0-9-]',
+  'dashboard_today: no cost or profit number in the staff payload');
 select throws_ok(format($$ update public.app_settings set delivery_fee_iqd = 1000 where id = 1 $$), '42501', null,
   'no direct settings write');
 

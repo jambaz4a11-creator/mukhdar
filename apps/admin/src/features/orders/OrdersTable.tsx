@@ -5,6 +5,29 @@ import type { OrderRow } from './api';
 import { formatTime, shortAddress } from './format';
 import { StatusBadge } from './StatusBadge';
 
+export type OrdersColumn =
+  'order' | 'time' | 'customer' | 'address' | 'total' | 'driver' | 'status';
+
+const COLUMN_LABELS: Record<OrdersColumn, string> = {
+  order: 'الطلب',
+  time: 'الوقت',
+  customer: 'الزبون',
+  address: 'العنوان',
+  total: 'المجموع',
+  driver: 'السائق',
+  status: 'الحالة',
+};
+
+const ALL_COLUMNS: readonly OrdersColumn[] = [
+  'order',
+  'time',
+  'customer',
+  'address',
+  'total',
+  'driver',
+  'status',
+];
+
 interface Props {
   rows: OrderRow[];
   driverNames: ReadonlyMap<string, string>;
@@ -16,6 +39,10 @@ interface Props {
   loading?: boolean;
   footer?: React.ReactNode;
   caption?: string;
+  /** أعمدة مختارة بترتيبها (الرئيسية: بلا زبون وسائق، وللموظف بلا مجموع). الافتراضي كل الأعمدة. */
+  columns?: readonly OrdersColumn[];
+  /** بلا إطار خارجي: داخل بطاقة لها عنوان (الرئيسية) */
+  bare?: boolean;
 }
 
 export function OrdersTable({
@@ -28,18 +55,21 @@ export function OrdersTable({
   loading,
   footer,
   caption = 'قائمة الطلبات',
+  columns = ALL_COLUMNS,
+  bare = false,
 }: Props) {
+  const has = (c: OrdersColumn) => columns.includes(c);
   return (
     <section
       aria-label={caption}
-      className="min-w-0 overflow-x-auto rounded-card border border-border bg-surface"
+      className={`min-w-0 overflow-x-auto bg-surface ${bare ? '' : 'rounded-card border border-border'}`}
     >
       <table className="w-full min-w-[640px] border-collapse text-sm" data-testid="orders-table">
         <thead>
           <tr className="bg-background text-right text-text-muted">
-            {['الطلب', 'الوقت', 'الزبون', 'العنوان', 'المجموع', 'السائق', 'الحالة'].map((h) => (
-              <th key={h} scope="col" className="px-3.5 py-3 font-semibold">
-                {h}
+            {columns.map((c) => (
+              <th key={c} scope="col" className="px-3.5 py-3 font-semibold">
+                {COLUMN_LABELS[c]}
               </th>
             ))}
           </tr>
@@ -57,30 +87,42 @@ export function OrdersTable({
                   selected ? 'bg-primary-soft/60' : isNew ? 'bg-warning-soft/60' : 'bg-surface'
                 }`}
               >
-                <td className="p-0">
-                  <button
-                    type="button"
-                    onClick={() => onSelect?.(r.id)}
-                    className="num min-h-[52px] w-full px-3.5 text-right font-bold"
-                    aria-label={`الطلب رقم ${r.order_number}`}
-                  >
-                    #{r.order_number}
-                  </button>
-                </td>
-                <td className="num px-3.5 whitespace-nowrap text-text-muted">
-                  {formatTime(r.created_at)}
-                </td>
-                <td className="px-3.5">{r.customer_name ?? '—'}</td>
-                <td className="px-3.5 whitespace-nowrap">{shortAddress(r.address_snapshot)}</td>
-                <td className="num px-3.5 font-semibold whitespace-nowrap">
-                  {formatIQD(r.total_iqd)}
-                </td>
-                <td className="px-3.5 text-text-muted">
-                  {r.driver_id ? (driverNames.get(r.driver_id) ?? 'سائق') : '—'}
-                </td>
-                <td className="px-3.5">
-                  <StatusBadge status={r.status} />
-                </td>
+                {has('order') && (
+                  <td className="p-0">
+                    <button
+                      type="button"
+                      onClick={() => onSelect?.(r.id)}
+                      className="num min-h-[52px] w-full px-3.5 text-right font-bold"
+                      aria-label={`الطلب رقم ${r.order_number}`}
+                    >
+                      #{r.order_number}
+                    </button>
+                  </td>
+                )}
+                {has('time') && (
+                  <td className="num px-3.5 whitespace-nowrap text-text-muted">
+                    {formatTime(r.created_at)}
+                  </td>
+                )}
+                {has('customer') && <td className="px-3.5">{r.customer_name ?? '—'}</td>}
+                {has('address') && (
+                  <td className="px-3.5 whitespace-nowrap">{shortAddress(r.address_snapshot)}</td>
+                )}
+                {has('total') && (
+                  <td className="num px-3.5 font-semibold whitespace-nowrap">
+                    {formatIQD(r.total_iqd)}
+                  </td>
+                )}
+                {has('driver') && (
+                  <td className="px-3.5 text-text-muted">
+                    {r.driver_id ? (driverNames.get(r.driver_id) ?? 'سائق') : '—'}
+                  </td>
+                )}
+                {has('status') && (
+                  <td className="px-3.5">
+                    <StatusBadge status={r.status} />
+                  </td>
+                )}
               </tr>
             );
           })}

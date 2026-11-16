@@ -1234,6 +1234,7 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Database['public']['Enums']['user_role'];
       };
+      dashboard_today: { Args: Record<PropertyKey, never>; Returns: Json };
       dismiss_failed_notifications: { Args: Record<PropertyKey, never>; Returns: number };
       failed_notifications_count: { Args: Record<PropertyKey, never>; Returns: number };
       finish_push_notifications: {

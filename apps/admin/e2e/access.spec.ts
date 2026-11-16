@@ -58,7 +58,8 @@ test.describe.serial('admin', () => {
   test.afterAll(async () => page.context().close());
 
   test('lands on / with the full sidebar', async () => {
-    await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
+    // الرئيسية (T25): العنوان تحية بالتصميم المعتمد، فنتحقق من بطاقاتها
+    await expect(page.getByTestId('kpi-delivered')).toBeVisible();
     await expect(sidebarLinks(page)).toHaveText([
       /الرئيسية/,
       /الطلبات/,
@@ -101,7 +102,8 @@ test.describe.serial('staff', () => {
   test.afterAll(async () => page.context().close());
 
   test('lands on / with home, orders, stock and ratings only', async () => {
-    await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
+    // الرئيسية (T25): العنوان تحية بالتصميم المعتمد، فنتحقق من بطاقاتها
+    await expect(page.getByTestId('kpi-delivered')).toBeVisible();
     await expect(sidebarLinks(page)).toHaveText([
       /الرئيسية/,
       /الطلبات/,

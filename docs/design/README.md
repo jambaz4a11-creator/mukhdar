@@ -87,7 +87,7 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 ## Screens
 | Screen | Notes |
 |---|---|
-| Home (الرئيسية) | today cards with change vs yesterday, open orders by status, low-stock count, today's orders table (SPEC-admin §2.0) |
+| Home (الرئيسية) | greeting + store-open pill, 8 KPI cards (sales, delivered, cancelled, net profit, today's orders, average order, waste, low stock) with change vs yesterday, open orders by status (4 tiles), low-stock list, today's orders table (SPEC-admin §2.0). Built in T25; deviations below |
 | Orders (Main) | status tabs with counts, table, side panel with details, print (§2.1) |
 | Products & stock | categories section (image cards: image, name, product count, edit; "+ قسم جديد"), products table with price and cost **per kilo**, stock in kilos, "(قليل)" under the threshold, "نفد" at 0, "غير محدد" for a missing cost (§2.2, §2.3) |
 | Daily Waste (هدر اليوم) | read-only "today" label (Baghdad date, no date input), one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
@@ -108,3 +108,31 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 - Wide container up to 1600px on large screens; card grids use `auto-fit`.
 - Category and product images are resized in the browser to WebP before upload; missing images
   show a neutral tile with the first letter.
+
+## Home screen: deviations from the approved design (T25)
+Design source: `project/Home.dc.html` of the approved admin canvas. Implemented as drawn (layout, order of the
+8 cards, tags, colours, Iraqi wording such as "هسه" and "وي أمس", the 4 open-order tiles, the low-stock list).
+Differences, all deliberate:
+1. **Staff view.** The design tags cards "للأدمن" / "الكل" on one screen. Staff never get the admin cards at
+   all (the database returns the money fields as `null`), so staff see 4 cards (delivered, cancelled, today's
+   orders, low stock) and the orders table **without the total column**: the task rule is "no dinar figure on
+   staff's home" (stricter than the receipt-money allowance for the orders page).
+2. **Today's orders table** uses the shared `OrdersTable` (T17) with the `columns` prop to match the design's five
+   columns (order, time, address, total, status) instead of the orders page's seven; first 50 only, with a link
+   to the full list when there are more. Clicking a row opens it in the orders page (`/orders?order=<id>`).
+3. **"Today's orders" card** shows the comparison vs yesterday at the same time (SPEC-admin §2.0 lists it for
+   incoming orders) instead of the static caption "كل اللي انطلبت من الصبح".
+4. **Average order** reads "عن أمس لنفس الساعة" (the design says only "عن أمس"): the comparison really is up to the
+   same minute, so the wording says so.
+5. **Greeting** follows the Baghdad hour ("صباح الخير" before 12:00, "مساء الخير" after) and the header has no
+   "بيانات تجريبية" suffix (that was the mock-up's sample data). The store pill reads `app_settings.store_open`
+   ("المحل مفتوح" / "المحل مسكّر").
+6. **Low-stock list**: quantities via `formatAdminQuantity` (kilos for half-kilo products: "1.5 كيلو من حد 2.5 كيلو"),
+   "نفد" at 0, first 8 by quantity, then "و N منتج آخر". The "منتجات ناقصة" card and "كل المخزون" link go to `/stock`
+   (both roles may open it) rather than the design's products page.
+7. **Realtime:** the existing orders subscription (250 ms debounce, `PanelProviders`) refreshes the page; the task
+   file's separate 2 s debounce was not added (no new mechanism). Stock and the "same minute" window refresh by the
+   same 60 s polling the settings page already uses.
+8. **Stuck notifications** are not on the Home screen: neither the approved design nor SPEC-admin §2.0 has them
+   (the admin-only indicator stays on the settings page).
+
