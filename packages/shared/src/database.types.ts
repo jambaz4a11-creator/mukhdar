@@ -1284,6 +1284,64 @@ export type Database = {
         Returns: undefined;
       };
       reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
+      report_daily: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          adjust_loss_iqd: number;
+          cancelled_count: number;
+          cost_iqd: number;
+          day: string;
+          delivered_count: number;
+          delivery_fees_iqd: number;
+          gross_profit_iqd: number;
+          net_profit_iqd: number;
+          placed_count: number;
+          sales_iqd: number;
+          waste_cost_iqd: number;
+        }[];
+      };
+      report_drivers: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          delivered_count: number;
+          delivery_fees_iqd: number;
+          driver_id: string;
+          name: string;
+        }[];
+      };
+      report_orders_placed: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          day: string;
+          placed_count: number;
+        }[];
+      };
+      report_summary: { Args: { p_from: string; p_to: string }; Returns: Json };
+      report_top_products: {
+        Args: { p_from: string; p_limit?: number; p_to: string };
+        Returns: {
+          cost_iqd: number;
+          gross_profit_iqd: number;
+          name: string;
+          product_id: string;
+          qty: number;
+          sales_iqd: number;
+          unit: string;
+        }[];
+      };
+      report_waste: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          name: string;
+          product_id: string;
+          shortage_cost_iqd: number;
+          shortage_qty: number;
+          total_cost_iqd: number;
+          unit: string;
+          waste_cost_iqd: number;
+          waste_qty: number;
+        }[];
+      };
       revoke_user_sessions: { Args: { p_user_id: string }; Returns: number };
       round_iqd: { Args: { amount: number }; Returns: number };
       set_default_address: { Args: { p_address_id: string }; Returns: undefined };

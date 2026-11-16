@@ -14,6 +14,7 @@
     "db:test": "node scripts/db-test.mjs",
     "db:test:remote": "node scripts/db-test.mjs --remote",
     "db:concurrency": "node scripts/db-concurrency.mjs",
+    "db:report-perf": "node scripts/report-perf.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:reset": "node scripts/seed-reset.mjs",
     "supabase": "supabase",

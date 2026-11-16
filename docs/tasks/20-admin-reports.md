@@ -1,5 +1,7 @@
 # 20: التقارير
 
+**الحالة: ✅ منجزة (2026-11-16).** migration `20261126000001_reports.sql` (مطبّقة على mukhdar-dev): `report_summary`، `report_daily`، `report_orders_placed`، `report_top_products`، `report_drivers`، `report_waste` (أدمن فقط)، فهرسان، ومنع الحذف الفعلي لمنتج له تاريخ (مراجعة AB L4(أ)). الصفحة `apps/admin/src/features/reports/`. الاختبارات: pgTAP `24_reports.sql` (38، أرقام محسوبة يدوياً) و`21_staff_money.sql` (+6) و`01_schema.sql`؛ vitest `reports.test.ts` (12)؛ Playwright `reports.spec.ts`؛ السرعة `pnpm db:report-perf` (CI).
+
 **الهدف:** SPEC-admin §2.5، وSPEC-backend §12.3 (التقارير). تعريف المبيعات وصافي الربح: SPEC-backend §2 (قرارات 2026-11-15).
 
 ## الخطوات

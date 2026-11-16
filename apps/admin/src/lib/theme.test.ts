@@ -25,6 +25,11 @@ describe('admin theme matches docs/design/README.md', () => {
     expect(m?.[1]?.toLowerCase()).toBe(hex.toLowerCase());
   });
 
+  it('admin-only chartSales token (reports chart, T20)', () => {
+    expect(readme).toMatch(/`chartSales` = `#4CAF6A`/);
+    expect(css).toMatch(/--color-chart-sales:\s*#4caf6a;/);
+  });
+
   it('radii 12 / 14 / 16', () => {
     expect(css).toMatch(/--radius-control:\s*12px/);
     expect(css).toMatch(/--radius-input:\s*14px/);

@@ -92,8 +92,11 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 | Products & stock | categories section (image cards: image, name, product count, edit; "+ قسم جديد"), products table with price and cost **per kilo**, stock in kilos, "(قليل)" under the threshold, "نفد" at 0, "غير محدد" for a missing cost (§2.2, §2.3) |
 | Daily Waste (هدر اليوم) | read-only "today" label (Baghdad date, no date input), one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
 | Ratings (التقييمات) | average, count, star distribution, filtered list (§2.8) |
-| Reports (التقارير والأرباح) | range picker, cards, daily chart, waste and top products in kilos, CSV (§2.5) |
+| Reports (التقارير والأرباح) | range picker, cards, daily chart, waste and top products in kilos, CSV (§2.5). Chart: sales `chartSales` + net profit `primary`, zero baseline (net profit can be negative), legend, hover values and a daily table view. The design's light green `#A9CDB3` failed the chart-colour checks (lightness, chroma, contrast 1.7:1), so `chartSales` replaces it (T20) |
 | Settings & staff | fee, minimum order, store open/closed, staff and drivers, PIN reset (§2.6, §2.7) |
+
+## Admin-only tokens
+- **`chartSales` = `#4CAF6A`** (`--color-chart-sales`): daily sales bars in the reports chart; net profit bars use `primary`. Validated with net profit as a two-series chart palette (lightness, chroma, CVD ΔE 20.9); contrast 2.7:1 is covered by the legend, hover values and the table view (T20).
 
 ## Display rules
 - **Kilos inside the admin panel:** quantities and prices of half-kilo products are shown and

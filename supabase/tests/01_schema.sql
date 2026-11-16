@@ -36,9 +36,10 @@ select is(
   array['accept_order', 'add_buildings', 'address_usage', 'adjust_stock', 'adjust_stock_bulk', 'admin_save_product',
         'assign_driver', 'available_orders', 'dismiss_failed_notifications', 'failed_notifications_count',
         'list_drivers', 'place_order', 'rate_order', 'recompute_daily_stats', 'register_push_token',
-        'reorder_products', 'set_order_status', 'set_product_price', 'set_user_role',
+        'reorder_products', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
+        'report_top_products', 'report_waste', 'set_order_status', 'set_product_price', 'set_user_role',
         'stuck_notifications_count', 'update_app_settings'],
-  'authenticated can execute exactly the 21 RPCs among SECURITY DEFINER functions');
+  'authenticated can execute exactly the 27 RPCs among SECURITY DEFINER functions');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');

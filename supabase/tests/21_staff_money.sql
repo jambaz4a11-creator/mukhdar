@@ -2,7 +2,7 @@
 --   يرى: مبالغ البيع اللازمة للإيصال (إجمالي الطلب وأجرته وبنوده، سعر البيع، أجرة التوصيل والحد الأدنى).
 --   لا يرى: الكلفة، الربح، قيمة الهدر، كلفة حركات المخزون، التقارير، الإعدادات (تعديلاً).
 -- أي عمود مبالغ جديد يُفشل الاختبار الأول حتى يُصنَّف هنا (بيع للموظف أو للأدمن فقط).
-select plan(23);
+select plan(29);
 
 -- ---------------------------------------------------------------- 1) قائمة أعمدة المبالغ مثبّتة
 select set_eq(
@@ -69,6 +69,19 @@ select throws_ok(format($$ select public.admin_save_product(jsonb_build_object('
 select throws_ok(format($$ select public.set_product_price(%L, 2500) $$, tests.id('p')), '42501', 'NOT_ALLOWED',
   'no set_product_price');
 select throws_ok($$ select * from public.available_orders() $$, '42501', 'NOT_ALLOWED', 'available_orders is for drivers');
+-- التقارير (T20): أدمن فقط، كل الدوال الست
+select throws_ok($$ select public.report_summary(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no report_summary (sales, profit, waste)');
+select throws_ok($$ select * from public.report_daily(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no report_daily');
+select throws_ok($$ select * from public.report_orders_placed(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no report_orders_placed (reports page is admin-only)');
+select throws_ok($$ select * from public.report_top_products(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no report_top_products (sales and cost per product)');
+select throws_ok($$ select * from public.report_drivers(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no report_drivers');
+select throws_ok($$ select * from public.report_waste(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED',
+  'no report_waste (waste and shortage cost)');
 select throws_ok(format($$ update public.app_settings set delivery_fee_iqd = 1000 where id = 1 $$), '42501', null,
   'no direct settings write');
 
@@ -80,12 +93,16 @@ select set_eq(
         and has_function_privilege('authenticated', p.oid, 'execute')
         and (pg_get_function_result(p.oid) ~ '(_iqd|cost|profit|revenue|price)'
              or pg_get_function_result(p.oid) in ('orders', 'app_settings', 'daily_stats', 'products')) $$,
-  $$ values ('accept_order'), ('assign_driver'), ('available_orders'), ('set_order_status'), ('update_app_settings') $$,
-  'RPCs returning money-bearing rows: order rows (sale amounts) and settings (admin only); none returns cost');
-select ok(not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace
-            and has_function_privilege('authenticated', p.oid, 'execute')
-            and pg_get_function_result(p.oid) ~ '(cost|profit|revenue|waste)'),
-  'no authenticated RPC returns cost, profit, revenue or waste');
+  $$ values ('accept_order'), ('assign_driver'), ('available_orders'), ('set_order_status'), ('update_app_settings'),
+            ('report_daily'), ('report_drivers'), ('report_top_products'), ('report_waste') $$,
+  'RPCs returning money-bearing rows: order rows (sale amounts), settings and reports (admin only, section 4)');
+select set_eq(
+  $$ select p.proname::text collate "default" from pg_proc p where p.pronamespace = 'public'::regnamespace
+       and has_function_privilege('authenticated', p.oid, 'execute')
+       and (pg_get_function_result(p.oid) ~ '(cost|profit|revenue|waste)' or p.proname::text like 'report\_%') $$,
+  $$ values ('report_daily'), ('report_drivers'), ('report_orders_placed'), ('report_summary'),
+            ('report_top_products'), ('report_waste') $$,
+  'the only authenticated RPCs that return cost, profit or waste are the report RPCs, refused to staff above');
 select ok(not has_table_privilege('authenticated', 'public.daily_stats', 'insert, update, delete'),
   'daily_stats is not writable');
 select ok(not has_table_privilege('authenticated', 'public.product_costs', 'insert, update, delete'),

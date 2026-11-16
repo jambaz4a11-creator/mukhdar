@@ -57,6 +57,8 @@ jobs:
         run: pnpm seed:demo --scale=load --no-images
       - name: pgTAP (with demo data; 09 = daily_stats matches orders)
         run: pnpm db:test
+      - name: Report RPC speed (T20; one year, 200k orders, rolled back)
+        run: pnpm db:report-perf
       - name: seed:reset, then check again
         run: pnpm seed:reset && pnpm db:test 09
       - name: seed:demo refuses a non-local target (and says why)
