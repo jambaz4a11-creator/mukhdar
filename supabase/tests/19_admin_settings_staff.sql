@@ -89,11 +89,11 @@ select is(tests.try($$ select public.stuck_notifications_count() $$), 'NOT_ALLOW
 -- ---------------------------------------------------------------- service_role helpers: الصلاحيات
 select tests.as_postgres();
 select ok(has_function_privilege('service_role', 'public.admin_actions_last_hour(text, uuid)', 'execute')
-      and has_function_privilege('service_role', 'public.record_pin_reset(uuid, uuid)', 'execute')
+      and has_function_privilege('service_role', 'public.record_pin_reset(uuid, uuid, text)', 'execute')
       and has_function_privilege('service_role', 'public.finish_user_creation(uuid, uuid, public.user_role, text)', 'execute'),
   'service_role can call the three helper functions');
 select ok(not has_function_privilege('authenticated', 'public.admin_actions_last_hour(text, uuid)', 'execute')
-      and not has_function_privilege('authenticated', 'public.record_pin_reset(uuid, uuid)', 'execute')
+      and not has_function_privilege('authenticated', 'public.record_pin_reset(uuid, uuid, text)', 'execute')
       and not has_function_privilege('authenticated', 'public.finish_user_creation(uuid, uuid, public.user_role, text)', 'execute'),
   'authenticated cannot call them');
 select ok(not has_function_privilege('anon', 'public.finish_user_creation(uuid, uuid, public.user_role, text)', 'execute'),
@@ -164,10 +164,10 @@ select tests.as_user(tests.id('admin'));
 select is(public.add_buildings(current_setting('t.sub')::int,
             (select array_agg(g::text) from generate_series(1, 100) g)),
   99, '1..100 in one call: 99 new, the existing 5 ignored');
-select is(public.add_buildings(current_setting('t.sub')::int, array['1', '2', '2', '101']), 1,
+select is(public.add_buildings(current_setting('t.sub')::int, array['1', '2', '2']), 0,
   'duplicates in the list and in the table are ignored');
 select is((select count(*)::int from public.buildings where subsection_id = current_setting('t.sub')::int),
-  101, 'unit now has buildings 1..101');
+  100, 'unit now has buildings 1..100 (the DB format check allows nothing above 100)');
 select is(tests.try(format($$ select public.add_buildings(%s, array['0']) $$, current_setting('t.sub'))),
   'INVALID_BUILDINGS', 'building 0 is rejected');
 select is(tests.try(format($$ select public.add_buildings(%s, array['12a']) $$, current_setting('t.sub'))),

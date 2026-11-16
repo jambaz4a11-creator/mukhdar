@@ -4,22 +4,44 @@
 - **Method:** read-only. I compared the live definitions on mukhdar-dev (`pg_proc`, `pg_policies`, grants, read in a read-only transaction) against the migrations, read the Edge Function handlers, the admin feature code, the tests, `SPEC-admin`, `SPEC-backend`, `DRIVER-API.md`, ADR 0001 and the RUNBOOK. I also took screenshots of `/settings`, `/staff` and `/addresses` against dev.
 - **This review changed no application code, migration, Edge Function or cloud setting.**
 
-## Status (updated 2026-11-16, fix session A)
+## Status (updated 2026-11-16, after fix sessions A and B)
 
-Fixed in migration `20261123000001_account_lifecycle.sql` (applied to mukhdar-dev) plus panel and
-customer-app changes. No Edge Function redeploy was needed.
+Every finding below is **Done** or explicitly **Deferred** with the reason. Nothing is silently open.
 
-| Finding | Status |
-|---|---|
-| H1 temporary PIN / no change-PIN screen | **Fixed**: `profiles.must_change_pin` set inside `finish_user_creation` / `record_pin_reset`, cleared by a trigger when the password really changes; `current_user_role()` is null while set and `place_order` raises `PIN_CHANGE_REQUIRED`; panel `/change-pin` (forced + sidebar link); customer app forced step after sign-in; DRIVER-API §2 |
-| H2 driver with orders stranded | **Fixed**: `set_user_role` refuses `DRIVER_HAS_ORDERS` (detail = order numbers); `assign_driver` also moves `out_for_delivery` orders (admin and staff, audited); admin cancel without stock return (waste "cancelled after dispatch" at order-time cost). Owner decisions 2 and 3 |
-| M1 sessions survive deactivation | **Fixed**: deactivation or role downgrade calls `revoke_user_sessions` |
-| M2 staff and sale amounts | **Resolved by owner decision 1**: sale amounts allowed; SPEC-admin §1 and CLAUDE.md reworded; `21_staff_money.sql` pins every money column and what staff can read |
-| M3 admin vs admin, no audit | **Fixed**: `admin_audit` (roles/active, settings, order driver); admin changes serialized; `LAST_ADMIN` guard (defence in depth: an admin can't remove themselves, so it's unreachable through the API today) |
-| M6 DRIVER-API behind | **Fixed**: "Changes for the driver app" section at the top |
-| L1 `1000.0` cast | **Fixed** (folded into the same migration) |
-| Tests T1–T5, T8 | **Added**: `20_account_lifecycle.sql` (71), `21_staff_money.sql` (23), `pnpm it:admin-users` (+9 live checks), e2e forced change-PIN for a new staff member |
-| M4 break-glass, M5 stuck count, M7 address renames, L2–L7, T6, T7, T9 | **Open** (fix session B) |
+- **Session A** (migration `20261123000001_account_lifecycle.sql`): H1, H2, M1, M2, M3, M6, L1, L8(a), T1–T5, T8.
+- **Session B** (migration `20261124000001_review_session_b.sql`, plus a redeploy of `admin-create-user` and `admin-reset-pin`, both on mukhdar-dev only with `verify_jwt = true`): M4, M5, M7, L2–L7, T6, T7, T9, and the Edge Function `must_change_pin` check.
+- Cloud changes in both sessions: mukhdar-dev only (two migrations, one redeploy of the two functions). No production change.
+
+| Finding | Status | What was done / why deferred |
+|---|---|---|
+| H1 temporary PIN / no change-PIN screen | **Done** (A) | `profiles.must_change_pin` set inside `finish_user_creation` / `record_pin_reset`, cleared by a trigger when the password really changes; `current_user_role()` is null while set and `place_order` raises `PIN_CHANGE_REQUIRED`; panel `/change-pin`; customer app forced step; DRIVER-API §2 |
+| H1 follow-up: Edge Functions ignored the flag | **Done** (B) | `requireAdmin` refuses a flagged admin with `PIN_CHANGE_REQUIRED` (403) before the rate limit or any change; Deno tests; live check in `pnpm it:admin-users` |
+| H2 driver with orders stranded | **Done** (A) | `set_user_role` refuses `DRIVER_HAS_ORDERS` (detail = order numbers); `assign_driver` also moves `out_for_delivery` orders (audited); admin cancel without stock return (waste "cancelled after dispatch") |
+| M1 sessions survive deactivation | **Done** (A) | deactivation or role downgrade calls `revoke_user_sessions` |
+| M2 staff and sale amounts | **Done** (A, owner decision) | sale amounts allowed; SPEC-admin §1 and CLAUDE.md reworded; `21_staff_money.sql` pins every money column |
+| M3 admin vs admin, no audit | **Done** (A) | `admin_audit` (roles/active, settings, order driver); `LAST_ADMIN` guard |
+| M4 break-glass admin PIN reset | **Done** (B) | `pnpm admin:break-glass-reset <phone>` (`scripts/admin-break-glass.mjs`): refuses without `SUPABASE_URL` / service key, prints the project and asks y/N, admin accounts only, random PIN shown once on screen and never written anywhere, revokes sessions, sets `must_change_pin`, writes `pin_resets` with `kind = 'break_glass'`. RUNBOOK §7 rewritten (PIN by phone call, never WhatsApp / SQL Editor). Tested live on mukhdar-dev with a throwaway admin (`pnpm it:break-glass`, 20 checks), then deleted |
+| M5 stuck count never clears | **Done** (B) | "stuck" = retryable only (`attempts < 5`); permanent failures counted separately and dismissed by the admin (`dismissed_at`, audited); SPEC-admin §2.7; pgTAP 22 |
+| M6 DRIVER-API behind | **Done** (A) | "Changes for the driver app" section at the top |
+| M7 address renames / building format | **Done** (B) | rename confirmation with the number of affected saved addresses (`address_usage`, fails closed); `buildings.number` check 1..100 (dev data verified: 1700 rows, 0 violations); admin can no longer re-parent or delete address rows; `add_buildings` and the bulk form limited to 1..100; pgTAP 22 + e2e |
+| L1 `1000.0` cast | **Done** (A) | folded into the session A migration |
+| L2 `search_path` | **Done for touched functions; rest Deferred** (B) | every function rewritten in session B uses `''` with qualified names. The older `public, pg_temp` functions are unchanged on purpose: they are safe today (`authenticated` cannot create objects in `public`, `pg_temp` is last) and rewriting working bodies would add risk for no behaviour change; the review itself said no standalone migration. Revisit when each is next touched |
+| L3 rate limits count only successes | **Done** (B) | `admin_function_hits` + `admin_rate_hit` (per-admin advisory lock, counts every attempt, so repeated `PHONE_TAKEN` probes stop at 20/hour); Deno + live checks |
+| L4 log lines not scrubbed | **Done** (B) | `errTextWithout` removes the raw and normalized PIN from every log line, including Arabic-digit input; Deno tests |
+| L5 "السواق" vs "السائقون" | **Done** (B) | UI uses the SPEC wording. Also fixed other mismatches on the three T19 screens: "إعدادات المحل" / "المحل مفتوح" → "إعدادات المتجر" / "المتجر مفتوح" / "المتجر مغلق", "طلبات مفتوحة لكل زبون" → "حد الطلبات المفتوحة للزبون". Colloquial helper text kept as designed |
+| L6 schema test lost the service-role list | **Done** (B) | restored in `01_schema.sql`, excluding trigger functions and `_`-prefixed helpers (what the local stack grants by default) |
+| L7 hidden-address wording | **Done** (B) | `/addresses` now says saved addresses under a hidden row cannot order until it is restored |
+| L8 status flow | **Done** | confirmed correct. Note (a) (fallback "بالطريق" with an inactive assigned driver) is no longer reachable: deactivation with open orders is refused (H2). Note (b) needs no action |
+| T1 exactly one `new_order` / ready notification | **Done** (A) | `20_account_lifecycle.sql` |
+| T2 deactivated admin/staff lose access | **Done** (A) | `20_account_lifecycle.sql` |
+| T3 driver-with-orders guard | **Done** (A) | `20_account_lifecycle.sql` |
+| T4 sessions removed on deactivation | **Done** (A) | `20_account_lifecycle.sql` |
+| T5 staff cannot read costs / stats | **Done** (A) | `21_staff_money.sql` |
+| T6 "PIN never logged" only against fake deps | **Done at unit level; live log check Deferred** (B) | handlers now scrub the PIN from log lines and the Deno tests feed PIN-bearing errors through every log path. A live check through the Management API logs needs a Management API token the project does not keep for this; the scrubbing makes it moot |
+| T7 write e2e only run in CI | **Deferred by design** (B) | never write to dev/prod data from tests; CI runs them on a throwaway local Supabase (admin-e2e green on every push). Documented in RUNBOOK ("اختبارات الكتابة بالواجهة") |
+| T8 staff money matrix | **Done** (A) | `21_staff_money.sql` |
+| T9 stuck count with a dead row | **Done** (B) | `22_review_session_b.sql` |
+| Docs mismatches (SPEC-admin §1/§2.6, DRIVER-API, RUNBOOK §7) | **Done** (A + B) | SPEC-admin §1, §2.4, §2.6, §2.7 and assumptions 20–21; SPEC-backend; DRIVER-API; RUNBOOK §7 |
 
 ## Summary
 

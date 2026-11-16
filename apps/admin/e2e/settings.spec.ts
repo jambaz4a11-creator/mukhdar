@@ -87,6 +87,39 @@ test.describe.serial('settings, staff, addresses (admin, read / refused)', () =>
     await page.getByLabel('إضافة عمارات بالجملة').fill('9-5');
     await expect(page.getByText('مقلوب')).toBeVisible();
   });
+
+  test('renaming a unit with saved customer addresses asks for confirmation with the count (M7)', async () => {
+    // وحدة عليها عنوان محفوظ لزبون العرض (بلا كتابة: نلغي عند التأكيد، فلا يتغيّر شيء)
+    const customer = await signedInClient('07000000115');
+    const { data } = await customer
+      .from('addresses')
+      .select('buildings(subsections(name))')
+      .limit(1);
+    const unitName = (data?.[0] as unknown as { buildings: { subsections: { name: string } } })
+      .buildings.subsections.name;
+
+    await page.goto('/addresses');
+    await page.locator(`[data-unit="${unitName}"]`).getByRole('button').first().click();
+    const panel = page.getByRole('region', { name: 'العمارات' });
+    await panel.getByRole('button', { name: 'تعديل الاسم' }).first().click();
+    await panel.getByRole('textbox', { name: /^الاسم الجديد/ }).fill('ZZ9');
+    await panel.getByRole('button', { name: 'حفظ', exact: true }).click();
+    const confirm = page.getByTestId('rename-confirm');
+    await expect(confirm).toContainText('عنوان محفوظ للزبائن');
+    await expect(confirm).toContainText(`«${unitName}»`);
+    await expect(confirm).toContainText('«ZZ9»');
+    await confirm.getByRole('button', { name: 'رجوع' }).click();
+    await panel.getByRole('button', { name: 'إلغاء', exact: true }).click();
+    await expect(page.locator(`[data-unit="${unitName}"]`)).toBeVisible();
+    await expect(page.locator('[data-unit="ZZ9"]')).toHaveCount(0);
+  });
+
+  test('building numbers outside 1-100 are refused by the bulk form', async () => {
+    await page.goto('/addresses');
+    await page.locator('[data-unit]').first().getByRole('button').first().click();
+    await page.getByLabel('إضافة عمارات بالجملة').fill('99-101');
+    await expect(page.getByText('الأرقام من 1 إلى 100')).toBeVisible();
+  });
 });
 
 test.describe.serial('settings, staff, addresses (writes)', () => {
@@ -99,7 +132,7 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
 
   test('closing the store blocks ordering (STORE_CLOSED), then reopening', async () => {
     await page.goto('/settings');
-    await page.getByLabel('المحل مفتوح').uncheck();
+    await page.getByLabel('المتجر مفتوح').uncheck();
     await page.getByLabel('رسالة الإغلاق').fill('نرجع الساعة 8 الصبح');
     await page.getByRole('button', { name: 'حفظ الإعدادات' }).click();
     await expect(page.getByTestId('settings-saved')).toBeVisible();
@@ -124,7 +157,7 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     expect(error?.message).toBe('STORE_CLOSED');
 
     await page.reload();
-    await page.getByLabel('المحل مفتوح').check();
+    await page.getByLabel('المتجر مفتوح').check();
     await page.getByRole('button', { name: 'حفظ الإعدادات' }).click();
     await expect(page.getByTestId('settings-saved')).toBeVisible();
     const { data: after } = await customer.from('app_settings').select('store_open').single();

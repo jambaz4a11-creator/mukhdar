@@ -1,8 +1,16 @@
 // منطق نماذج T19 بلا واجهة (يُختبر بـ vitest): تحليل أرقام العمارات بالجملة، ونموذج الإعدادات.
 import { normalizePin } from '@mukhdar/shared';
 
-export const MAX_BUILDINGS_PER_ADD = 500;
-export const MAX_BUILDING_NUMBER = 9999;
+/** عمارة 1..100 داخل كل وحدة (CLAUDE.md)؛ قاعدة البيانات تفرضها أيضاً (buildings_number_format). */
+export const MAX_BUILDING_NUMBER = 100;
+const BUILDING_NUMBER_RE = /^([1-9][0-9]?|100)$/;
+
+/** رقم عمارة واحد (تعديل الاسم): رسالة الخطأ، أو null. الأرقام العربية تُحوَّل قبل الفحص. */
+export function validateBuildingNumber(input: string): string | null {
+  return BUILDING_NUMBER_RE.test(normalizePin(input))
+    ? null
+    : `رقم العمارة من 1 إلى ${MAX_BUILDING_NUMBER}`;
+}
 
 export interface BuildingParse {
   /** أرقام فريدة مرتبة تصاعدياً (نصاً، كما تُخزن بـ buildings.number). */
@@ -13,7 +21,7 @@ export interface BuildingParse {
 
 /**
  * "1-100" أو "1,2,5-9" أو أسطر/مسافات، بأرقام لاتينية أو عربية وفاصلة عربية "،".
- * المكرر يُحذف. الخطأ: جزء غير رقمي، رقم خارج 1..9999، مدى مقلوب، أو أكثر من 500 رقم.
+ * المكرر يُحذف. الخطأ: جزء غير رقمي، رقم خارج 1..100، أو مدى مقلوب.
  */
 export function parseBuildingNumbers(input: string): BuildingParse {
   // التقسيم أولاً (المسافات فواصل)، ثم تحويل الأرقام العربية لكل جزء (normalizePin يحذف المسافات)
@@ -35,13 +43,7 @@ export function parseBuildingNumbers(input: string): BuildingParse {
       return { numbers: [], error: `الأرقام من 1 إلى ${MAX_BUILDING_NUMBER}` };
     }
     if (from > to) return { numbers: [], error: `المدى "${part}" مقلوب، اكتب الأصغر أولاً` };
-    if (to - from + 1 > MAX_BUILDINGS_PER_ADD) {
-      return { numbers: [], error: `حد أقصى ${MAX_BUILDINGS_PER_ADD} عمارة بالمرة` };
-    }
     for (let n = from; n <= to; n++) set.add(n);
-    if (set.size > MAX_BUILDINGS_PER_ADD) {
-      return { numbers: [], error: `حد أقصى ${MAX_BUILDINGS_PER_ADD} عمارة بالمرة` };
-    }
   }
   return { numbers: [...set].sort((a, b) => a - b).map(String), error: null };
 }

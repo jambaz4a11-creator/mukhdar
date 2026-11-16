@@ -1,5 +1,5 @@
 'use client';
-// الموظفون والسواق (أدمن، SPEC-admin §2.6): قائمة غير الزبائن، بحث بالهاتف لأي حساب (للترقية أو
+// الموظفون والسائقون (أدمن، SPEC-admin §2.6): قائمة غير الزبائن، بحث بالهاتف لأي حساب (للترقية أو
 // تصفير الرمز)، تغيير الدور والتفعيل (set_user_role؛ الأدمن لا يخفّض نفسه ولا يعطّلها: رفض
 // CANNOT_DEMOTE_SELF من قاعدة البيانات يظهر كرسالة)، إضافة موظف أو سائق (admin-create-user)،
 // وتصفير الرمز (admin-reset-pin؛ لا لحساب أدمن).
@@ -36,7 +36,7 @@ export function StaffScreen() {
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <h1 className="m-0 text-[26px] font-bold">الموظفون والسواق</h1>
+          <h1 className="m-0 text-[26px] font-bold">الموظفون والسائقون</h1>
           <span className="text-sm text-text-muted">
             تصفير الرمز يطلّع الشخص من كل الأجهزة. الأدمن ما يكدر ينزّل دوره أو يعطّل نفسه.
           </span>
@@ -68,7 +68,7 @@ export function StaffScreen() {
       />
 
       <section
-        aria-label="قائمة الموظفين والسواق"
+        aria-label="قائمة الموظفين والسائقين"
         className="flex flex-col rounded-card border border-border bg-surface px-[18px] py-2"
         data-testid="staff-list"
       >

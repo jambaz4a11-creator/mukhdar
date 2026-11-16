@@ -116,6 +116,36 @@ export type Database = {
           },
         ];
       };
+      admin_function_hits: {
+        Row: {
+          admin_id: string;
+          created_at: string;
+          id: number;
+          kind: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          admin_id: string;
+          created_at?: string;
+          id?: never;
+          kind: string;
+        };
+        Update: {
+          admin_id?: string;
+          created_at?: string;
+          id?: never;
+          kind?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'admin_function_hits_admin_id_fkey';
+            columns: ['admin_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       app_settings: {
         Row: {
           closed_message: string | null;
@@ -338,6 +368,7 @@ export type Database = {
           claimed_at: string | null;
           created_at: string;
           data: NonNullable<Json>;
+          dismissed_at: string | null;
           id: number;
           last_error: string | null;
           sent_at: string | null;
@@ -352,6 +383,7 @@ export type Database = {
           claimed_at?: string | null;
           created_at?: string;
           data?: NonNullable<Json>;
+          dismissed_at?: string | null;
           id?: never;
           last_error?: string | null;
           sent_at?: string | null;
@@ -365,6 +397,7 @@ export type Database = {
           claimed_at?: string | null;
           created_at?: string;
           data?: NonNullable<Json>;
+          dismissed_at?: string | null;
           id?: never;
           last_error?: string | null;
           sent_at?: string | null;
@@ -632,6 +665,7 @@ export type Database = {
         Row: {
           created_at: string;
           id: number;
+          kind: string;
           reset_by: string | null;
           user_id: string | null;
         };
@@ -639,12 +673,14 @@ export type Database = {
         Insert: {
           created_at?: string;
           id?: never;
+          kind?: string;
           reset_by?: string | null;
           user_id?: string | null;
         };
         Update: {
           created_at?: string;
           id?: never;
+          kind?: string;
           reset_by?: string | null;
           user_id?: string | null;
         };
@@ -1110,6 +1146,7 @@ export type Database = {
         };
       };
       add_buildings: { Args: { p_numbers: string[]; p_subsection_id: number }; Returns: number };
+      address_usage: { Args: { p_id: number; p_kind: string }; Returns: number };
       adjust_stock: {
         Args: {
           p_note?: string;
@@ -1129,6 +1166,7 @@ export type Database = {
         Returns: number;
       };
       admin_actions_last_hour: { Args: { p_admin: string; p_kind: string }; Returns: number };
+      admin_rate_hit: { Args: { p_admin: string; p_kind: string }; Returns: number };
       admin_save_product: { Args: { p: Json }; Returns: string };
       assign_driver: {
         Args: { p_driver_id: string; p_order_id: string };
@@ -1197,6 +1235,8 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Database['public']['Enums']['user_role'];
       };
+      dismiss_failed_notifications: { Args: Record<PropertyKey, never>; Returns: number };
+      failed_notifications_count: { Args: Record<PropertyKey, never>; Returns: number };
       finish_push_notifications: {
         Args: { p_dead_tokens?: string[]; p_results: Json };
         Returns: undefined;
@@ -1231,7 +1271,10 @@ export type Database = {
         Returns: undefined;
       };
       recompute_daily_stats: { Args: { p_from: string; p_to: string }; Returns: number };
-      record_pin_reset: { Args: { p_reset_by: string; p_user_id: string }; Returns: undefined };
+      record_pin_reset: {
+        Args: { p_kind?: string; p_reset_by: string; p_user_id: string };
+        Returns: undefined;
+      };
       register_push_token: {
         Args: {
           p_platform: Database['public']['Enums']['push_platform'];

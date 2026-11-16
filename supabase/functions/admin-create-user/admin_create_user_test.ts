@@ -9,22 +9,33 @@ import {
 
 const ADMIN = '00000000-0000-4000-8000-000000000001';
 const STAFF = '00000000-0000-4000-8000-000000000003';
+const FLAGGED = '00000000-0000-4000-8000-000000000007';
 const NEW_ID = '00000000-0000-4000-8000-0000000000aa';
 
-const JWTS: Record<string, string> = { 'jwt-admin': ADMIN, 'jwt-staff': STAFF };
+const JWTS: Record<string, string> = {
+  'jwt-admin': ADMIN,
+  'jwt-staff': STAFF,
+  'jwt-flagged': FLAGGED,
+};
 const PROFILES: Record<string, ProfileRow> = {
   [ADMIN]: { role: 'admin', is_active: true, phone: '9647000000001' },
   [STAFF]: { role: 'staff', is_active: true, phone: '9647000000002' },
+  // أدمن برمز مؤقت لم يغيّره (must_change_pin)
+  [FLAGGED]: { role: 'admin', is_active: true, phone: '9647000000007', must_change_pin: true },
 };
 const TAKEN = '9647709999999';
 
-function setup(overrides: Partial<CreateUserDeps> = {}, count = 0) {
+/** count = ما يرجعه rateHit: عدد محاولات آخر ساعة شاملة المحاولة الحالية. */
+function setup(overrides: Partial<CreateUserDeps> = {}, count = 1) {
   const calls: string[] = [];
   const logs: string[] = [];
   const deps: CreateUserDeps = {
     getUserId: (jwt) => Promise.resolve(JWTS[jwt] ?? null),
     getProfile: (id) => Promise.resolve(PROFILES[id] ?? null),
-    creationsLastHour: () => Promise.resolve(count),
+    rateHit() {
+      calls.push('rate');
+      return Promise.resolve(count);
+    },
     createUser(phone, pin) {
       calls.push(`create:${phone}:${pin}`);
       return Promise.resolve(phone === TAKEN ? 'exists' : { id: NEW_ID });
@@ -106,14 +117,52 @@ Deno.test('admin-create-user: registered phone → 409 PHONE_TAKEN, no second ac
   await expectResponse(await handler(post({ ...VALID, phone: '07709999999' })), 409, {
     error: 'PHONE_TAKEN',
   });
-  assert.deepEqual(calls, [`create:${TAKEN}:482915`]);
+  // المحاولة الفاشلة (رقم مسجّل) تُحسب بالحد أيضاً: لا استكشاف أرقام بلا سقف (L3)
+  assert.deepEqual(calls, ['rate', `create:${TAKEN}:482915`]);
 });
 
-Deno.test('admin-create-user: 20 creations in the hour → 429', async () => {
-  const { handler, calls } = setup({}, CREATIONS_PER_HOUR);
-  await expectResponse(await handler(post(VALID)), 429, { error: 'RATE_LIMITED' });
-  assert.deepEqual(calls, []);
-});
+Deno.test(
+  'admin-create-user: the 21st attempt in the hour → 429 (attempts count, not only successes)',
+  async () => {
+    const over = setup({}, CREATIONS_PER_HOUR + 1);
+    await expectResponse(await over.handler(post(VALID)), 429, { error: 'RATE_LIMITED' });
+    assert.deepEqual(over.calls, ['rate']); // سُجّلت المحاولة، ولا حساب أُنشئ
+    const limit = setup({}, CREATIONS_PER_HOUR);
+    await expectResponse(await limit.handler(post(VALID)), 201, { user_id: NEW_ID });
+  },
+);
+
+Deno.test(
+  'admin-create-user: an admin with a temporary PIN is refused → 403 PIN_CHANGE_REQUIRED',
+  async () => {
+    const { handler, calls } = setup();
+    await expectResponse(await handler(post(VALID, 'Bearer jwt-flagged')), 403, {
+      error: 'PIN_CHANGE_REQUIRED',
+    });
+    assert.deepEqual(calls, []); // لا حد معدل ولا إنشاء
+  },
+);
+
+Deno.test(
+  'admin-create-user: PIN never reaches the logs even inside an error message (T6/L4)',
+  async () => {
+    const leaky = setup({
+      createUser: () => Promise.reject(new Error('invalid password 482915 for user')),
+      finish: () => Promise.reject(new Error('db down 482915')),
+    });
+    await expectResponse(await leaky.handler(post(VALID)), 500, { error: 'INTERNAL' });
+    assert.ok(leaky.logs.length > 0);
+    assert.ok(leaky.logs.every((l) => !l.includes('482915')));
+    assert.ok(leaky.logs.some((l) => l.includes('***')));
+    // فشل التنظيف بعد finish أيضاً
+    const cleanup = setup({
+      finish: () => Promise.reject(new Error('x 482915')),
+      deleteUser: () => Promise.reject(new Error('cannot delete 482915')),
+    });
+    await expectResponse(await cleanup.handler(post(VALID)), 500, { error: 'INTERNAL' });
+    assert.ok(cleanup.logs.every((l) => !l.includes('482915')));
+  },
+);
 
 Deno.test(
   'admin-create-user: success writes the role and audit; PIN not returned or logged',
@@ -121,6 +170,7 @@ Deno.test(
     const { handler, calls, logs } = setup();
     await expectResponse(await handler(post(VALID)), 201, { user_id: NEW_ID });
     assert.deepEqual(calls, [
+      'rate',
       'create:9647701234567:482915',
       `finish:${NEW_ID}:${ADMIN}:driver:علي`,
     ]);
@@ -133,11 +183,11 @@ Deno.test('admin-create-user: failure after creation deletes the account → 500
   await expectResponse(await handler(post({ ...VALID, role: 'staff' })), 500, {
     error: 'INTERNAL',
   });
-  assert.deepEqual(calls, ['create:9647701234567:482915', `delete:${NEW_ID}`]);
+  assert.deepEqual(calls, ['rate', 'create:9647701234567:482915', `delete:${NEW_ID}`]);
 });
 
 Deno.test('admin-create-user: createUser error → 500, nothing to clean', async () => {
   const { handler, calls } = setup({ createUser: () => Promise.reject(new Error('auth down')) });
   await expectResponse(await handler(post(VALID)), 500, { error: 'INTERNAL' });
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, ['rate']);
 });

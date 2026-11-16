@@ -3,7 +3,7 @@
 // (القطاعات والوحدات بالأسهم أو بالسحب). العمارات مرتبة بالرقم، وتُضاف بالجملة لوحدة ("1-100"،
 // "1,2,5-9") مع معاينة قبل الحفظ، والمكرر يُتجاهل (add_buildings، on conflict do nothing).
 // الكتابة المباشرة للأدمن بـ RLS؛ لا حذف (العناوين القديمة تشير للعمارات).
-import { errorMessage, formatSector } from '@mukhdar/shared';
+import { errorMessage, formatSector, normalizePin } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
@@ -14,6 +14,7 @@ import {
   createSector,
   createSubsection,
   fetchAddressTree,
+  fetchAddressUsage,
   reorderAddressRows,
   updateAddressRow,
   type AddressTable,
@@ -21,7 +22,7 @@ import {
   type SectorRow,
   type SubsectionRow,
 } from './api';
-import { compactRanges, parseBuildingNumbers, splitNew } from './forms';
+import { compactRanges, parseBuildingNumbers, splitNew, validateBuildingNumber } from './forms';
 
 function useAddressWrite() {
   const { supabase } = usePanel();
@@ -66,7 +67,11 @@ export function AddressesScreen() {
       <header className="flex flex-col gap-0.5">
         <h1 className="m-0 text-[26px] font-bold">العناوين</h1>
         <span className="text-sm text-text-muted">
-          قطاع ← وحدة ← عمارة. المخفي ما يظهر للزبون، والعناوين القديمة تبقى.
+          قطاع ← وحدة ← عمارة. المخفي ما يظهر للزبون، والعناوين المحفوظة عليه ما تقدر تطلب لحد ما
+          ترجّعه.
+        </span>
+        <span className="text-sm text-text-muted">
+          تعديل الاسم يغيّر العنوان عند كل زبون حافظه: ينعرض لك عددهم قبل الحفظ.
         </span>
       </header>
       {write.error && (
@@ -246,10 +251,62 @@ function RowHeader({
   move?: React.ReactNode;
   normalize?: (v: string) => string;
 }) {
+  const { supabase } = usePanel();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  // إعادة التسمية تغيّر العنوان المحفوظ عند كل زبون يشير للصف: نعرض عددهم ونطلب تأكيداً (مراجعة T16-T19 M7)
+  const [confirm, setConfirm] = useState<{ value: string; count: number } | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const write = useAddressWrite();
   const field = table === 'buildings' ? 'number' : 'name';
+  const close = () => {
+    setEditing(false);
+    setConfirm(null);
+    setLocalError(null);
+  };
+  const rename = async (v: string) => {
+    await write
+      .mutateAsync((s) => updateAddressRow(s, table, row.id, { [field]: v }))
+      .then(close)
+      .catch(() => undefined);
+  };
+  if (editing && confirm) {
+    return (
+      <div
+        role="alertdialog"
+        aria-label={`تأكيد تغيير الاسم لـ${label}`}
+        data-testid="rename-confirm"
+        className="flex flex-wrap items-center gap-2 rounded-control bg-warning-soft px-3 py-2 text-sm text-warning-text"
+      >
+        <span className="flex-1">
+          <span className="num font-bold">{confirm.count}</span> عنوان محفوظ للزبائن راح يتغيّر عنده
+          الاسم من «{value}» إلى «{confirm.value}». طلباتهم الجاية توصل للاسم الجديد. أكمل؟
+        </span>
+        <button
+          type="button"
+          data-testid="rename-confirm-yes"
+          disabled={write.isPending}
+          onClick={() => rename(confirm.value)}
+          className="h-9 rounded-control bg-primary px-3 text-sm font-bold text-white disabled:opacity-60"
+        >
+          نعم، غيّر الاسم
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirm(null)}
+          className="h-9 rounded-control border border-border bg-surface px-3 text-sm text-text"
+        >
+          رجوع
+        </button>
+        {write.error && (
+          <span role="alert" className="basis-full text-xs text-danger">
+            {duplicateMessage(write.error)}
+          </span>
+        )}
+      </div>
+    );
+  }
   if (editing) {
     return (
       <form
@@ -257,11 +314,23 @@ function RowHeader({
         onSubmit={async (e) => {
           e.preventDefault();
           const v = normalize(draft.trim());
-          if (!v || v === value) return setEditing(false);
-          await write
-            .mutateAsync((s) => updateAddressRow(s, table, row.id, { [field]: v }))
-            .then(() => setEditing(false))
-            .catch(() => undefined);
+          if (!v || v === value) return close();
+          if (table === 'buildings') {
+            const invalid = validateBuildingNumber(v);
+            if (invalid) return setLocalError(invalid);
+          }
+          setLocalError(null);
+          setChecking(true);
+          try {
+            const count = await fetchAddressUsage(supabase, table, row.id);
+            if (count > 0) setConfirm({ value: v, count });
+            else await rename(v);
+          } catch (error) {
+            // نفشل مغلقين: بلا عدد العناوين المتأثرة لا نغيّر الاسم
+            setLocalError(`تعذّر معرفة عدد العناوين المتأثرة: ${errorMessage(error)}`);
+          } finally {
+            setChecking(false);
+          }
         }}
       >
         <input
@@ -273,20 +342,21 @@ function RowHeader({
         />
         <button
           type="submit"
-          className="h-10 rounded-control bg-primary px-3 text-sm font-bold text-white"
+          disabled={checking}
+          className="h-10 rounded-control bg-primary px-3 text-sm font-bold text-white disabled:opacity-60"
         >
-          حفظ
+          {checking ? 'جارٍ الفحص…' : 'حفظ'}
         </button>
         <button
           type="button"
-          onClick={() => setEditing(false)}
+          onClick={close}
           className="h-10 rounded-control border border-border px-3 text-sm"
         >
           إلغاء
         </button>
-        {write.error && (
+        {(localError || write.error) && (
           <span role="alert" className="basis-full text-xs text-danger">
-            {duplicateMessage(write.error)}
+            {localError ?? duplicateMessage(write.error)}
           </span>
         )}
       </form>
@@ -527,6 +597,7 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
               label={`عمارة ${editing.number}`}
               value={editing.number}
               title={<span className="text-sm font-semibold">عمارة {editing.number}</span>}
+              normalize={normalizePin}
             />
           </div>
         )}

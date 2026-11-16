@@ -255,15 +255,61 @@ try {
   });
   check(driverOk.status === 200, `after the change: available_orders works (${driverOk.status})`);
 
+  const hits = () =>
+    db
+      .query(
+        `select count(*)::int n from public.admin_function_hits where admin_id = $1 and kind = 'user_creation'`,
+        [adminId],
+      )
+      .then((r) => r.rows[0].n);
+  const hitsBefore = await hits();
   const dup = await fn('admin-create-user', adminJwt, { ...createBody, pin: newPin() });
   check(
     dup.status === 409 && dup.json?.error === 'PHONE_TAKEN',
     `create: same phone → 409 PHONE_TAKEN (${brief(dup)})`,
   );
+  check(
+    (await hits()) === hitsBefore + 1,
+    'create: the failed 409 attempt is counted by the rate limit too (L3)',
+  );
   const count = await db.query(`select count(*)::int n from auth.users where phone = $1`, [
     driverPhone,
   ]);
   check(count.rows[0].n === 1, 'no second account for the same phone');
+
+  // ---------------------------------------------------------------- أدمن برمز مؤقت (مراجعة T16-T19)
+  await db.query(`update public.profiles set must_change_pin = true where id = $1`, [adminId]);
+  const hitsFlagged = await hits();
+  const flaggedCreate = await fn('admin-create-user', adminJwt, {
+    ...createBody,
+    phone: newPhone(),
+    pin: newPin(),
+  });
+  check(
+    flaggedCreate.status === 403 && flaggedCreate.json?.error === 'PIN_CHANGE_REQUIRED',
+    `flagged admin: admin-create-user → 403 PIN_CHANGE_REQUIRED (${brief(flaggedCreate)})`,
+  );
+  const flaggedReset = await fn('admin-reset-pin', adminJwt, {
+    user_id: custId,
+    new_pin: newPin(),
+  });
+  check(
+    flaggedReset.status === 403 && flaggedReset.json?.error === 'PIN_CHANGE_REQUIRED',
+    `flagged admin: admin-reset-pin → 403 PIN_CHANGE_REQUIRED (${brief(flaggedReset)})`,
+  );
+  check(
+    (await hits()) === hitsFlagged,
+    'flagged admin: refused before the rate limit and any change',
+  );
+  await db.query(`update public.profiles set must_change_pin = false where id = $1`, [adminId]);
+  const unflaggedReset = await fn('admin-reset-pin', adminJwt, {
+    user_id: custId,
+    new_pin: newPin(),
+  });
+  check(
+    unflaggedReset.status === 200,
+    `after the PIN change the admin works again (${brief(unflaggedReset)})`,
+  );
 } catch (err) {
   console.error(`error: ${err.message}`);
   failures++;
@@ -272,6 +318,7 @@ try {
   if (adminId) {
     await db.query(`delete from public.pin_resets where reset_by = $1`, [adminId]);
     await db.query(`delete from public.user_creations where created_by = $1`, [adminId]);
+    await db.query(`delete from public.admin_function_hits where admin_id = $1`, [adminId]);
   }
   for (const id of created) {
     const del = await authAdmin('DELETE', `/admin/users/${id}`);

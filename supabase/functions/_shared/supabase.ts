@@ -20,7 +20,7 @@ export function adminAuthDeps(admin: SupabaseClient): AdminAuthDeps {
     async getProfile(userId) {
       const { data, error } = await admin
         .from('profiles')
-        .select('role, is_active, phone')
+        .select('role, is_active, phone, must_change_pin')
         .eq('id', userId)
         .maybeSingle();
       if (error) throw new Error(error.message);
@@ -29,12 +29,16 @@ export function adminAuthDeps(admin: SupabaseClient): AdminAuthDeps {
   };
 }
 
-export async function actionsLastHour(
+/**
+ * يسجّل محاولة (ناجحة أو فاشلة) ويرجع عدد محاولات هذا الأدمن بآخر ساعة **شاملة الحالية**
+ * (admin_rate_hit بقفل لكل أدمن، فلا تجاوز بالتزامن؛ مراجعة T16-T19 L3).
+ */
+export async function rateHit(
   admin: SupabaseClient,
   kind: 'pin_reset' | 'user_creation',
   adminId: string,
 ): Promise<number> {
-  const { data, error } = await admin.rpc('admin_actions_last_hour', {
+  const { data, error } = await admin.rpc('admin_rate_hit', {
     p_kind: kind,
     p_admin: adminId,
   });

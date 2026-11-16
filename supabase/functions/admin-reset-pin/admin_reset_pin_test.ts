@@ -8,12 +8,14 @@ const ADMIN2 = '00000000-0000-4000-8000-000000000002';
 const CUSTOMER = '00000000-0000-4000-8000-000000000101';
 const STAFF = '00000000-0000-4000-8000-000000000003';
 const OFF_ADMIN = '00000000-0000-4000-8000-000000000009';
+const FLAGGED = '00000000-0000-4000-8000-000000000007';
 
 const JWTS: Record<string, string> = {
   'jwt-admin': ADMIN,
   'jwt-staff': STAFF,
   'jwt-off-admin': OFF_ADMIN,
   'jwt-customer': CUSTOMER,
+  'jwt-flagged': FLAGGED,
 };
 const PROFILES: Record<string, ProfileRow> = {
   [ADMIN]: { role: 'admin', is_active: true, phone: '9647000000001' },
@@ -21,15 +23,21 @@ const PROFILES: Record<string, ProfileRow> = {
   [OFF_ADMIN]: { role: 'admin', is_active: false, phone: '9647000000009' },
   [STAFF]: { role: 'staff', is_active: true, phone: '9647000000002' },
   [CUSTOMER]: { role: 'customer', is_active: true, phone: '9647701234567' },
+  // أدمن برمز مؤقت لم يغيّره (must_change_pin)
+  [FLAGGED]: { role: 'admin', is_active: true, phone: '9647000000007', must_change_pin: true },
 };
 
-function setup(overrides: Partial<ResetPinDeps> = {}, count = 0) {
+/** count = ما يرجعه rateHit: عدد محاولات آخر ساعة شاملة المحاولة الحالية. */
+function setup(overrides: Partial<ResetPinDeps> = {}, count = 1) {
   const calls: string[] = [];
   const logs: string[] = [];
   const deps: ResetPinDeps = {
     getUserId: (jwt) => Promise.resolve(JWTS[jwt] ?? null),
     getProfile: (id) => Promise.resolve(PROFILES[id] ?? null),
-    resetsLastHour: () => Promise.resolve(count),
+    rateHit() {
+      calls.push('rate');
+      return Promise.resolve(count);
+    },
     updatePassword(userId, pin) {
       calls.push(`update:${userId}:${pin}`);
       return Promise.resolve();
@@ -130,18 +138,59 @@ Deno.test('admin-reset-pin: easy PIN → 400 PIN_INVALID with the reason', async
       detail,
     });
   }
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, []); // الرفض قبل الحد وقبل أي تغيير
 });
 
-Deno.test('admin-reset-pin: 20 resets in the hour → 429 TOO_MANY_RESETS', async () => {
-  const { handler, calls } = setup({}, RESETS_PER_HOUR);
+Deno.test('admin-reset-pin: the 21st attempt in the hour → 429 TOO_MANY_RESETS', async () => {
+  const { handler, calls } = setup({}, RESETS_PER_HOUR + 1);
   await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 429, {
     error: 'TOO_MANY_RESETS',
   });
-  assert.deepEqual(calls, []);
-  const under = setup({}, RESETS_PER_HOUR - 1);
-  assert.equal((await under.handler(post({ user_id: CUSTOMER, new_pin: '482915' }))).status, 200);
+  assert.deepEqual(calls, ['rate']); // المحاولة سُجّلت، ولا تغيير
+  const atLimit = setup({}, RESETS_PER_HOUR);
+  assert.equal((await atLimit.handler(post({ user_id: CUSTOMER, new_pin: '482915' }))).status, 200);
 });
+
+Deno.test(
+  'admin-reset-pin: an admin with a temporary PIN is refused → 403 PIN_CHANGE_REQUIRED',
+  async () => {
+    const { handler, calls } = setup();
+    await expectResponse(
+      await handler(post({ user_id: CUSTOMER, new_pin: '482915' }, 'Bearer jwt-flagged')),
+      403,
+      { error: 'PIN_CHANGE_REQUIRED' },
+    );
+    assert.deepEqual(calls, []); // لا حد معدل ولا تغيير ولا إبطال جلسات
+  },
+);
+
+Deno.test(
+  'admin-reset-pin: PIN never reaches the logs even inside an error message (T6/L4)',
+  async () => {
+    const { handler, logs } = setup({
+      updatePassword: () => Promise.reject(new Error('password 482915 rejected')),
+    });
+    await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
+      error: 'INTERNAL',
+    });
+    assert.ok(logs.length > 0);
+    assert.ok(logs.every((l) => !l.includes('482915')));
+    assert.ok(logs.some((l) => l.includes('***')));
+    // الرمز بأرقام عربية: المُطبَّع (لاتيني) والخام كلاهما يُحجب
+    const arabic = setup({
+      revokeSessions: () => Promise.reject(new Error('x 482915 y ٤٨٢٩١٥')),
+      recordReset: () => Promise.reject(new Error('z 482915')),
+    });
+    await expectResponse(
+      await arabic.handler(post({ user_id: CUSTOMER, new_pin: '٤٨٢٩١٥' })),
+      500,
+      {
+        error: 'INTERNAL',
+      },
+    );
+    assert.ok(arabic.logs.every((l) => !l.includes('482915') && !l.includes('٤٨٢٩١٥')));
+  },
+);
 
 Deno.test(
   'admin-reset-pin: success updates, revokes sessions, audits; PIN never returned or logged',
@@ -150,6 +199,7 @@ Deno.test(
     const res = await handler(post({ user_id: CUSTOMER.toUpperCase(), new_pin: '٤٨٢٩١٥' }));
     await expectResponse(res, 200, { ok: true });
     assert.deepEqual(calls, [
+      'rate',
       `update:${CUSTOMER}:482915`, // أرقام عربية تُحوَّل
       `revoke:${CUSTOMER}`,
       `record:${CUSTOMER}:${ADMIN}`,
@@ -167,7 +217,7 @@ Deno.test('admin-reset-pin: update failure → 500, no revoke/audit', async () =
   await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
     error: 'INTERNAL',
   });
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, ['rate']);
 });
 
 Deno.test('admin-reset-pin: revoke failure → 500 but the reset is still audited', async () => {
@@ -177,7 +227,7 @@ Deno.test('admin-reset-pin: revoke failure → 500 but the reset is still audite
   await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
     error: 'INTERNAL',
   });
-  assert.deepEqual(calls, [`update:${CUSTOMER}:482915`, `record:${CUSTOMER}:${ADMIN}`]);
+  assert.deepEqual(calls, ['rate', `update:${CUSTOMER}:482915`, `record:${CUSTOMER}:${ADMIN}`]);
 });
 
 Deno.test('admin-reset-pin: audit failure → 500 (after revoking)', async () => {
@@ -187,5 +237,5 @@ Deno.test('admin-reset-pin: audit failure → 500 (after revoking)', async () =>
   await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
     error: 'INTERNAL',
   });
-  assert.deepEqual(calls, [`update:${CUSTOMER}:482915`, `revoke:${CUSTOMER}`]);
+  assert.deepEqual(calls, ['rate', `update:${CUSTOMER}:482915`, `revoke:${CUSTOMER}`]);
 });

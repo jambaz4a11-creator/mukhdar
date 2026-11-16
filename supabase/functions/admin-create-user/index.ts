@@ -2,7 +2,7 @@
 // لوحة الأدمن: supabase.functions.invoke('admin-create-user', { body: { phone, full_name, role, pin } })
 // verify_jwt = true (البوابة) + auth.getUser + profiles.role = 'admin' ونشط (المعالج).
 import { createAdminCreateUserHandler } from './handler.ts';
-import { actionsLastHour, adminAuthDeps, log, serviceClient } from '../_shared/supabase.ts';
+import { adminAuthDeps, log, rateHit, serviceClient } from '../_shared/supabase.ts';
 
 const admin = serviceClient();
 const EXISTS_CODES = new Set(['phone_exists', 'user_already_exists']);
@@ -10,7 +10,7 @@ const EXISTS_CODES = new Set(['phone_exists', 'user_already_exists']);
 Deno.serve(
   createAdminCreateUserHandler({
     ...adminAuthDeps(admin),
-    creationsLastHour: (adminId) => actionsLastHour(admin, 'user_creation', adminId),
+    rateHit: (adminId) => rateHit(admin, 'user_creation', adminId),
     async createUser(phone, pin) {
       const { data, error } = await admin.auth.admin.createUser({
         phone,

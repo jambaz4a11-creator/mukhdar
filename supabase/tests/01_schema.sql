@@ -1,11 +1,11 @@
 -- 01: المخطط، RLS، الصلاحيات، والدوال الأساسية
-select plan(40);
+select plan(41);
 
 select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
   'categories', 'products', 'product_costs', 'stock', 'inventory_movements', 'orders', 'order_items',
   'order_item_costs', 'order_status_history', 'ratings', 'push_tokens', 'notification_outbox', 'daily_stats',
-  'pin_resets', 'user_creations', 'admin_audit'
+  'pin_resets', 'user_creations', 'admin_audit', 'admin_function_hits'
 ], 'public has exactly the expected tables');
 
 select is(
@@ -33,11 +33,12 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['accept_order', 'add_buildings', 'adjust_stock', 'adjust_stock_bulk', 'admin_save_product', 'assign_driver',
-        'available_orders', 'list_drivers', 'place_order', 'rate_order', 'recompute_daily_stats',
-        'register_push_token', 'reorder_products', 'set_order_status', 'set_product_price', 'set_user_role',
+  array['accept_order', 'add_buildings', 'address_usage', 'adjust_stock', 'adjust_stock_bulk', 'admin_save_product',
+        'assign_driver', 'available_orders', 'dismiss_failed_notifications', 'failed_notifications_count',
+        'list_drivers', 'place_order', 'rate_order', 'recompute_daily_stats', 'register_push_token',
+        'reorder_products', 'set_order_status', 'set_product_price', 'set_user_role',
         'stuck_notifications_count', 'update_app_settings'],
-  'authenticated can execute exactly the 18 RPCs among SECURITY DEFINER functions');
+  'authenticated can execute exactly the 21 RPCs among SECURITY DEFINER functions');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');
@@ -83,6 +84,19 @@ select is(
         'push_tokens:DELETE', 'push_tokens:SELECT'],
   'service_role has exactly the table privileges T07/T08 need (T19 audit tables: functions only)');
 
+
+-- service_role: الدوال الخاصة به بالضبط (Edge Functions)، لا أكثر (مراجعة T16-T19 L6). Supabase المحلي يمنح
+-- service_role تنفيذ الدوال الداخلية افتراضياً (السحابة لا): نستثني دوال الـ trigger وما يبدأ بـ "_" فقط.
+select is(
+  (select array_agg(p.proname::text order by p.proname) from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.prosecdef
+      and p.prorettype <> 'trigger'::regtype and left(p.proname::text, 1) <> '_'
+      and has_function_privilege('service_role', p.oid, 'execute')
+      and not has_function_privilege('authenticated', p.oid, 'execute')),
+  array['abort_account_deletion', 'admin_actions_last_hour', 'admin_rate_hit', 'begin_account_deletion',
+        'finish_user_creation', 'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions',
+        'signup_rate_hit'],
+  'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19/B PIN reset, account creation, rate limit)');
 
 -- الدوال الجديدة لا تُنفَّذ افتراضياً (default privileges عامة، لا بالمخطط فقط)
 create function public.zz_default_acl_probe() returns int language sql set search_path = '' as 'select 1';

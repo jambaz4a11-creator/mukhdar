@@ -41,8 +41,26 @@ export function saveSettings(supabase: MukhdarClient, p: SettingsPayload): Promi
   return unwrap(supabase.rpc('update_app_settings', { p: { ...p } }));
 }
 
-export function fetchStuckCount(supabase: MukhdarClient): Promise<number> {
-  return unwrap<number>(supabase.rpc('stuck_notifications_count'));
+export interface NotificationHealth {
+  /** عالقة: لم تُرسل وما زالت قابلة لإعادة المحاولة (attempts < 5) وأقدم من 5 دقائق: المرسِل متوقف أو بطيء. */
+  stuck: number;
+  /** فاشلة نهائياً: استنفدت المحاولات (5) ولم يصرفها الأدمن: غالباً رمز جهاز تالف، لا تعني توقف المرسِل. */
+  failed: number;
+}
+
+export async function fetchNotificationHealth(
+  supabase: MukhdarClient,
+): Promise<NotificationHealth> {
+  const [stuck, failed] = await Promise.all([
+    unwrap<number>(supabase.rpc('stuck_notifications_count')),
+    unwrap<number>(supabase.rpc('failed_notifications_count')),
+  ]);
+  return { stuck, failed };
+}
+
+/** الأدمن يصرف الفاشلة نهائياً (تبقى بالجدول بـ dismissed_at ويُسجَّل بـ admin_audit). */
+export function dismissFailedNotifications(supabase: MukhdarClient): Promise<number> {
+  return unwrap<number>(supabase.rpc('dismiss_failed_notifications'));
 }
 
 // ---------------------------------------------------------------- الموظفون
@@ -167,6 +185,15 @@ export async function fetchAddressTree(supabase: MukhdarClient): Promise<SectorR
 }
 
 export type AddressTable = 'sectors' | 'subsections' | 'buildings';
+
+/** عدد عناوين الزبائن المحفوظة تحت قطاع/وحدة/عمارة: إعادة التسمية تغيّر نصها عندهم كلهم. */
+export function fetchAddressUsage(
+  supabase: MukhdarClient,
+  table: AddressTable,
+  id: number,
+): Promise<number> {
+  return unwrap<number>(supabase.rpc('address_usage', { p_kind: table, p_id: id }));
+}
 
 export function updateAddressRow(
   supabase: MukhdarClient,

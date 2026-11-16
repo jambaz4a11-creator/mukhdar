@@ -13,7 +13,8 @@ import {
   fetchAddressTree,
   fetchSettings,
   fetchStaff,
-  fetchStuckCount,
+  dismissFailedNotifications,
+  fetchNotificationHealth,
   saveSettings,
   type AppSettings,
 } from './api';
@@ -47,8 +48,8 @@ export function SettingsScreen() {
           // بلا key: الحفظ يعيد الجلب، والنموذج يبقى (ورسالة "انحفظت" معه)
           <SettingsForm initial={settings.data} />
         ) : (
-          <section className={cardClass} aria-label="إعدادات المحل">
-            <h2 className="m-0 text-[17px] font-bold">إعدادات المحل</h2>
+          <section className={cardClass} aria-label="إعدادات المتجر">
+            <h2 className="m-0 text-[17px] font-bold">إعدادات المتجر</h2>
             <p className="m-0 text-sm text-text-muted">
               {settings.error ? errorMessage(settings.error) : 'جارٍ التحميل…'}
             </p>
@@ -112,8 +113,8 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
   );
 
   return (
-    <section aria-label="إعدادات المحل" className={cardClass}>
-      <h2 className="m-0 text-[17px] font-bold">إعدادات المحل</h2>
+    <section aria-label="إعدادات المتجر" className={cardClass}>
+      <h2 className="m-0 text-[17px] font-bold">إعدادات المتجر</h2>
       <form
         className="flex flex-col gap-3.5"
         noValidate
@@ -131,7 +132,7 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
             <span
               className={`text-[15px] font-bold ${values.store_open ? 'text-primary' : 'text-warning-text'}`}
             >
-              {values.store_open ? 'المحل مفتوح' : 'المحل مسدود'}
+              {values.store_open ? 'المتجر مفتوح' : 'المتجر مغلق'}
             </span>
             <span className="text-xs text-text-muted">
               {values.store_open
@@ -143,7 +144,7 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
             type="checkbox"
             checked={values.store_open}
             onChange={(e) => set('store_open', e.target.checked)}
-            aria-label="المحل مفتوح"
+            aria-label="المتجر مفتوح"
             className="h-[22px] w-[22px] accent-primary"
           />
         </label>
@@ -168,7 +169,7 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
         <div className="grid grid-cols-2 gap-2.5">
           {numberField('delivery_fee_iqd', 'أجرة التوصيل (د.ع)')}
           {numberField('min_order_iqd', 'الحد الأدنى للطلب')}
-          {numberField('max_active_orders', 'طلبات مفتوحة لكل زبون')}
+          {numberField('max_active_orders', 'حد الطلبات المفتوحة للزبون')}
         </div>
         <span className="text-xs text-text-muted">المبالغ لازم تكون من مضاعفات 250.</span>
         {save.error && (
@@ -201,21 +202,64 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
   );
 }
 
+/**
+ * حالة الإشعارات (SPEC-admin §2.7): "عالق" = قابل لإعادة المحاولة وأقدم من 5 دقائق (المرسِل متوقف أو بطيء)،
+ * و"فشل نهائياً" = استنفد المحاولات (رمز جهاز تالف مثلاً) ويصرفه الأدمن بزر "تجاهل"، فلا يبقى المؤشر أحمر للأبد.
+ */
 function StuckIndicator() {
   const { supabase } = usePanel();
-  const stuck = useQuery({
+  const qc = useQueryClient();
+  const health = useQuery({
     queryKey: adminKeys.stuck,
-    queryFn: () => fetchStuckCount(supabase),
+    queryFn: () => fetchNotificationHealth(supabase),
     refetchInterval: 60_000,
   });
-  if (stuck.isPending) return <span className="text-[13px] text-text-muted">فحص الإشعارات…</span>;
-  if (stuck.error)
+  const dismiss = useMutation({
+    mutationFn: () => dismissFailedNotifications(supabase),
+    onSettled: () => qc.invalidateQueries({ queryKey: adminKeys.stuck }),
+  });
+  if (health.isPending) return <span className="text-[13px] text-text-muted">فحص الإشعارات…</span>;
+  if (health.error)
     return (
       <span role="status" className="text-[13px] text-danger">
         تعذّر فحص الإشعارات
       </span>
     );
-  const n = stuck.data;
+  const { stuck: n, failed } = health.data;
+  return (
+    <div className="flex flex-col gap-2">
+      <StuckLine n={n} />
+      {failed > 0 && (
+        <div
+          role="status"
+          data-testid="failed-notifications"
+          className="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-2 text-[13px] text-text-muted"
+        >
+          <span>
+            <span className="num">{failed}</span> إشعار فشل نهائياً (استنفد المحاولات، غالباً جهاز
+            لا يستلم). هذا لا يعني أن الإرسال متوقف.
+          </span>
+          <button
+            type="button"
+            data-testid="dismiss-failed"
+            disabled={dismiss.isPending}
+            onClick={() => dismiss.mutate()}
+            className="h-8 rounded-md border border-border bg-surface px-3 text-xs font-bold text-text disabled:opacity-60"
+          >
+            {dismiss.isPending ? 'جارٍ التجاهل…' : 'تجاهل'}
+          </button>
+          {dismiss.error && (
+            <span role="alert" className="basis-full text-xs text-danger">
+              {errorMessage(dismiss.error)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StuckLine({ n }: { n: number }) {
   return n > 0 ? (
     <div
       role="status"
@@ -224,7 +268,8 @@ function StuckIndicator() {
     >
       <span aria-hidden="true">!</span>
       <span>
-        <span className="num">{n}</span> إشعار عالق (ما انرسل من أكثر من 5 دقايق)
+        <span className="num">{n}</span> إشعار عالق (ما انرسل من أكثر من 5 دقايق وما زال يُعاد
+        إرساله)
       </span>
     </div>
   ) : (
@@ -256,9 +301,9 @@ function StaffSummary() {
   const staff = useQuery({ queryKey: adminKeys.staff, queryFn: () => fetchStaff(supabase) });
   const rows = (staff.data ?? []).filter((r) => r.is_active).slice(0, 6);
   return (
-    <section aria-label="الموظفون والسواق" className={cardClass}>
+    <section aria-label="الموظفون والسائقون" className={cardClass}>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="m-0 text-[17px] font-bold">الموظفون والسواق</h2>
+        <h2 className="m-0 text-[17px] font-bold">الموظفون والسائقون</h2>
         <Link
           href="/staff"
           className="flex h-10 items-center rounded-control border border-border px-3 text-sm text-text no-underline"

@@ -4,14 +4,15 @@
 // الطلب:  POST {"phone": "07…", "full_name": "…", "role": "staff" | "driver", "pin": "######"}
 //         Authorization: Bearer <JWT الأدمن>
 // الرد:   201 {"user_id": "…"}، أو {"error": CODE[, "detail"]}:
-//         401 NOT_AUTHENTICATED | 403 NOT_ALLOWED | 400 INVALID_REQUEST | 400 PHONE_INVALID |
+//         401 NOT_AUTHENTICATED | 403 NOT_ALLOWED | 403 PIN_CHANGE_REQUIRED (المستدعي برمز مؤقت) |
+//         400 INVALID_REQUEST | 400 PHONE_INVALID |
 //         400 INVALID_ROLE | 400 PIN_INVALID (detail) | 429 RATE_LIMITED | 409 PHONE_TAKEN | 500 INTERNAL
 // فشل بعد إنشاء الحساب ← حذفه ثم 500. الرمز لا يرجع ولا يُسجَّل.
 import { normalizeIraqiPhone, toStoredPhone } from '../../../packages/shared/src/phone.ts';
 import { normalizePin, validatePin } from '../../../packages/shared/src/pin.ts';
 import {
   type AdminAuthDeps,
-  errText,
+  errTextWithout,
   fail,
   json,
   readJsonObject,
@@ -22,8 +23,8 @@ export const CREATIONS_PER_HOUR = 20;
 export type CreatableRole = 'staff' | 'driver';
 
 export interface CreateUserDeps extends AdminAuthDeps {
-  /** admin_actions_last_hour('user_creation', admin) */
-  creationsLastHour(adminId: string): Promise<number>;
+  /** admin_rate_hit('user_creation', admin): يسجّل المحاولة ويرجع عدد محاولات آخر ساعة شاملة هذه */
+  rateHit(adminId: string): Promise<number>;
   /** auth.admin.createUser({ phone, password, phone_confirm: true }): المعرّف، أو 'exists'. */
   createUser(phone: string, pin: string): Promise<{ id: string } | 'exists'>;
   /** finish_user_creation: الاسم والدور وسجل user_creations بمعاملة واحدة. */
@@ -61,21 +62,25 @@ export function createAdminCreateUserHandler(
     if (fullName.length < 1 || fullName.length > 80) return fail(400, 'INVALID_REQUEST');
     const pinError = validatePin(body.pin, phone);
     if (pinError) return fail(400, 'PIN_INVALID', pinError);
+    // الرمز الخام والمُطبَّع لا يدخلان أي سطر سجل (مراجعة T16-T19 L4)
+    const secrets = [body.pin, normalizePin(body.pin)];
+    const logErr = (msg: string, e: unknown) => deps.log?.(msg, errTextWithout(e, ...secrets));
 
     let count: number;
     try {
-      count = await deps.creationsLastHour(admin);
+      count = await deps.rateHit(admin);
     } catch (e) {
-      deps.log?.('admin-create-user rate check failed', errText(e));
+      logErr('admin-create-user rate check failed', e);
       return fail(500, 'INTERNAL');
     }
-    if (count >= CREATIONS_PER_HOUR) return fail(429, 'RATE_LIMITED');
+    // العدّاد يشمل هذه المحاولة؛ كل محاولة تُحسب (ومنها 409 PHONE_TAKEN: لا استكشاف أرقام بلا حد)
+    if (count > CREATIONS_PER_HOUR) return fail(429, 'RATE_LIMITED');
 
     let created: { id: string } | 'exists';
     try {
       created = await deps.createUser(phone, normalizePin(body.pin));
     } catch (e) {
-      deps.log?.('admin-create-user createUser failed', errText(e));
+      logErr('admin-create-user createUser failed', e);
       return fail(500, 'INTERNAL');
     }
     if (created === 'exists') return fail(409, 'PHONE_TAKEN');
@@ -83,10 +88,10 @@ export function createAdminCreateUserHandler(
     try {
       await deps.finish(created.id, admin, role, fullName);
     } catch (e) {
-      deps.log?.('admin-create-user finish failed', errText(e));
+      logErr('admin-create-user finish failed', e);
       await deps
         .deleteUser(created.id)
-        .catch((err) => deps.log?.('admin-create-user cleanup failed', errText(err)));
+        .catch((err) => logErr('admin-create-user cleanup failed', err));
       return fail(500, 'INTERNAL');
     }
 

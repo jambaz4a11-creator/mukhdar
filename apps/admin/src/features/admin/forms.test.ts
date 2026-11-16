@@ -5,6 +5,7 @@ import {
   parseBuildingNumbers,
   pinMessage,
   splitNew,
+  validateBuildingNumber,
   validateSettings,
   type SettingsValues,
 } from './forms';
@@ -48,10 +49,11 @@ describe('parseBuildingNumbers (bulk building add)', () => {
     ['-5', 'ليس رقماً'],
     ['1-2-3', 'ليس رقماً'],
     ['0', 'من 1 إلى'],
-    ['10000', 'من 1 إلى'],
+    ['101', 'من 1 إلى 100'],
+    ['10000', 'من 1 إلى 100'],
     ['9-5', 'مقلوب'],
-    ['1-501', 'حد أقصى 500'],
-    ['1-300, 400-700', 'حد أقصى 500'],
+    ['1-101', 'من 1 إلى 100'],
+    ['1-300, 400-700', 'من 1 إلى 100'],
     ['1.5', 'ليس رقماً'],
   ])('rejects %p', (input, message) => {
     const r = parseBuildingNumbers(input);
@@ -59,8 +61,8 @@ describe('parseBuildingNumbers (bulk building add)', () => {
     expect(r.error).toContain(message);
   });
 
-  it('accepts exactly 500', () => {
-    expect(parseBuildingNumbers('1-500').numbers).toHaveLength(500);
+  it('accepts exactly 1-100 (the DB format check allows nothing above 100)', () => {
+    expect(parseBuildingNumbers('1-100').numbers).toHaveLength(100);
   });
 });
 
@@ -141,5 +143,14 @@ describe('PIN helpers used by the staff screen', () => {
   it('WhatsApp messages carry the PIN', () => {
     expect(pinMessage('reset', '482915')).toContain('482915');
     expect(pinMessage('create', '482915')).toContain('رمزك المؤقت: 482915');
+  });
+});
+
+describe('validateBuildingNumber', () => {
+  it.each(['1', '9', '10', '57', '100', '٥٧'])('accepts %p', (input) => {
+    expect(validateBuildingNumber(input)).toBeNull();
+  });
+  it.each(['', '0', '101', '012', '1000', '12a', '1.5', '-3'])('rejects %p', (input) => {
+    expect(validateBuildingNumber(input)).toContain('من 1 إلى 100');
   });
 });

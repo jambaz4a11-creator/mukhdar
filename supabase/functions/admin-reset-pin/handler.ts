@@ -3,14 +3,15 @@
 //
 // الطلب:  POST {"user_id": "<uuid>", "new_pin": "######"}   Authorization: Bearer <JWT الأدمن>
 // الرد:   200 {"ok": true}، أو {"error": CODE[, "detail"]}:
-//         401 NOT_AUTHENTICATED | 403 NOT_ALLOWED | 400 INVALID_REQUEST | 404 USER_NOT_FOUND |
+//         401 NOT_AUTHENTICATED | 403 NOT_ALLOWED | 403 PIN_CHANGE_REQUIRED (المستدعي برمز مؤقت) |
+//         400 INVALID_REQUEST | 404 USER_NOT_FOUND |
 //         403 ADMIN_ACCOUNT | 400 PIN_INVALID (detail = PIN_LENGTH/PIN_TRIVIAL/PIN_MATCHES_PHONE) |
 //         429 TOO_MANY_RESETS | 500 INTERNAL
 // الرمز لا يرجع بالرد ولا يُسجَّل (لا الجسم ولا الرمز بأي سجل). قواعد الرمز من packages/shared (لا نسخة).
 import { normalizePin, validatePin } from '../../../packages/shared/src/pin.ts';
 import {
   type AdminAuthDeps,
-  errText,
+  errTextWithout,
   fail,
   json,
   readJsonObject,
@@ -21,8 +22,8 @@ import {
 export const RESETS_PER_HOUR = 20;
 
 export interface ResetPinDeps extends AdminAuthDeps {
-  /** admin_actions_last_hour('pin_reset', admin) */
-  resetsLastHour(adminId: string): Promise<number>;
+  /** admin_rate_hit('pin_reset', admin): يسجّل المحاولة ويرجع عدد محاولات آخر ساعة شاملة هذه */
+  rateHit(adminId: string): Promise<number>;
   /** auth.admin.updateUserById(user_id, { password }) */
   updatePassword(userId: string, pin: string): Promise<void>;
   /** revoke_user_sessions(user_id): تسقط رموز التحديث على كل الأجهزة */
@@ -45,12 +46,15 @@ export function createResetPinHandler(deps: ResetPinDeps): (req: Request) => Pro
     }
     if (!UUID_RE.test(body.user_id)) return fail(404, 'USER_NOT_FOUND');
     const userId = body.user_id.toLowerCase();
+    // الرمز الخام والمُطبَّع لا يدخلان أي سطر سجل (مراجعة T16-T19 L4)
+    const secrets = [body.new_pin, normalizePin(body.new_pin)];
+    const logErr = (msg: string, e: unknown) => deps.log?.(msg, errTextWithout(e, ...secrets));
 
     let target;
     try {
       target = await deps.getProfile(userId);
     } catch (e) {
-      deps.log?.('admin-reset-pin profile lookup failed', errText(e));
+      logErr('admin-reset-pin profile lookup failed', e);
       return fail(500, 'INTERNAL');
     }
     if (!target) return fail(404, 'USER_NOT_FOUND');
@@ -62,18 +66,18 @@ export function createResetPinHandler(deps: ResetPinDeps): (req: Request) => Pro
 
     let count: number;
     try {
-      count = await deps.resetsLastHour(admin);
+      count = await deps.rateHit(admin);
     } catch (e) {
-      deps.log?.('admin-reset-pin rate check failed', errText(e));
+      logErr('admin-reset-pin rate check failed', e);
       return fail(500, 'INTERNAL');
     }
-    if (count >= RESETS_PER_HOUR) return fail(429, 'TOO_MANY_RESETS');
+    // العدّاد يشمل هذه المحاولة؛ كل محاولة تُحسب حتى لو فشلت لاحقاً
+    if (count > RESETS_PER_HOUR) return fail(429, 'TOO_MANY_RESETS');
 
     try {
       await deps.updatePassword(userId, normalizePin(body.new_pin));
     } catch (e) {
-      // رسالة Auth فقط (لا تحمل كلمة السر)
-      deps.log?.('admin-reset-pin update failed', errText(e));
+      logErr('admin-reset-pin update failed', e);
       return fail(500, 'INTERNAL');
     }
 
@@ -83,13 +87,13 @@ export function createResetPinHandler(deps: ResetPinDeps): (req: Request) => Pro
       await deps.revokeSessions(userId);
     } catch (e) {
       ok = false;
-      deps.log?.('admin-reset-pin revoke failed', errText(e));
+      logErr('admin-reset-pin revoke failed', e);
     }
     try {
       await deps.recordReset(userId, admin);
     } catch (e) {
       ok = false;
-      deps.log?.('admin-reset-pin audit failed', errText(e));
+      logErr('admin-reset-pin audit failed', e);
     }
     if (!ok) return fail(500, 'INTERNAL');
 
