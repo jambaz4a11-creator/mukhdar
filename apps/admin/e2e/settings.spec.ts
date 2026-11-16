@@ -308,10 +308,12 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
       `انضافت 100 عمارة لوحدة ${unitName}`,
     );
     await expect(page.getByTestId('buildings').locator('button')).toHaveCount(100);
+    // كلها موجودة الآن: لا شيء جديد للإضافة (المكرر يُتجاهل)
+    await bulk.fill('1,2,5-9');
+    await expect(page.getByTestId('bulk-preview')).toContainText('كل الأرقام موجودة أصلاً');
+    // 101 خارج 1..100 (قيد قاعدة البيانات أيضاً): الواجهة ترفضه قبل الإرسال
     await bulk.fill('1,2,5-9, 101');
-    await expect(page.getByTestId('bulk-preview')).toContainText('7 موجودة');
-    await page.getByRole('button', { name: 'إضافة 1 عمارة' }).click();
-    await expect(page.getByTestId('bulk-result')).toContainText('انضافت 1 عمارة');
+    await expect(page.getByText('الأرقام من 1 إلى 100')).toBeVisible();
     // إخفاء الوحدة التجريبية (لا حذف)
     await page
       .getByRole('region', { name: 'العمارات' })
