@@ -188,3 +188,20 @@ describe('low stock quantities in kilos (adminUnits)', () => {
     expect(bunch && formatAdminQuantity(bunch.qty, bunch.unit)).toBe('3 باقة');
   });
 });
+
+describe('stuck notifications (admin-only badge)', () => {
+  it('number for the admin, null for staff, and tolerant of an older server', () => {
+    expect(parseDashboard({ ...base, stuck_notifications: 3 }).stuck_notifications).toBe(3);
+    expect(parseDashboard({ ...base, stuck_notifications: 0 }).stuck_notifications).toBe(0);
+    expect(parseDashboard({ ...staff, stuck_notifications: null }).stuck_notifications).toBeNull();
+    expect(parseDashboard(base).stuck_notifications).toBeNull();
+  });
+  it('rejects a fraction or a negative count', () => {
+    expect(() => parseDashboard({ ...base, stuck_notifications: 1.5 })).toThrow(
+      'stuck_notifications',
+    );
+    expect(() => parseDashboard({ ...base, stuck_notifications: -1 })).toThrow(
+      'stuck_notifications',
+    );
+  });
+});

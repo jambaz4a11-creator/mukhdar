@@ -86,8 +86,8 @@ select throws_ok($$ select * from public.report_waste(current_date - 7, current_
 select is(
   (select count(*)::int from jsonb_each(public.dashboard_today()) e(k, v)
     where k in ('sales_iqd', 'sales_prev_iqd', 'avg_order_iqd', 'avg_order_prev_iqd', 'waste_cost_iqd',
-                'net_profit_iqd', 'net_profit_prev_iqd') and jsonb_typeof(v) = 'null'),
-  7, 'dashboard_today: all 7 money fields are null for staff');
+                'net_profit_iqd', 'net_profit_prev_iqd', 'stuck_notifications') and jsonb_typeof(v) = 'null'),
+  8, 'dashboard_today: all 7 money fields and the admin-only stuck-notifications count are null for staff');
 select ok((public.dashboard_today() ->> 'delivered_count')::int >= 1 and (public.dashboard_today() -> 'open') is not null,
   'dashboard_today: staff still gets the counts (delivered today, open orders)');
 select ok(public.dashboard_today()::text !~ '(cost|profit)_iqd"\s*:\s*[0-9-]',

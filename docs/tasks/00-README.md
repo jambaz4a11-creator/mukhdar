@@ -29,7 +29,7 @@
 | 19 | [العناوين والموظفون والإعدادات](19-admin-addresses-staff-settings.md) | 16 | ✅ |
 | 20 | [التقارير](20-admin-reports.md) | 17، 18 | ✅ |
 | 25 | [الرئيسية (مؤشرات اليوم)](25-admin-dashboard.md) | 17، 18، 20 + تصميم "الرئيسية" | ✅ |
-| 26 | [التقييمات](26-admin-ratings.md) | 16 + تصميم "التقييمات" | ⬜ |
+| 26 | [التقييمات](26-admin-ratings.md) | 16 + تصميم "التقييمات" | ✅ |
 | 21 | [تطبيق السائق](21-driver-app.md) | - | 🔗 خارجي (external: built by a separate developer) |
 | 22 | [اختبار الحمل k6](22-load-test.md) | 13 | ⬜ |
 | 23 | [مراجعة الأمان](23-security-review.md) | 22 | ⬜ |

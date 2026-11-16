@@ -36,6 +36,7 @@ export const ERROR_MESSAGES = {
   INVALID_STARS: 'اختر تقييماً من 1 إلى 5 نجوم',
   ORDER_NOT_RATEABLE: 'لا يمكن تقييم هذا الطلب',
   ALREADY_RATED: 'قيّمت هذا الطلب مسبقاً',
+  COMMENT_TOO_LONG: 'التعليق أطول من 500 حرف',
   INVALID_TOKEN: 'تعذّر تفعيل الإشعارات على هذا الجهاز',
 
   // حذف الحساب (Edge Function delete-account)

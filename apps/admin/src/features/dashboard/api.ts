@@ -51,6 +51,8 @@ export interface Dashboard {
   waste_cost_iqd: number | null;
   net_profit_iqd: number | null;
   net_profit_prev_iqd: number | null;
+  /** الإشعارات العالقة (SPEC-admin §2.7): للأدمن فقط، null للموظف */
+  stuck_notifications: number | null;
 }
 
 const COUNT_FIELDS = [
@@ -92,6 +94,8 @@ export function parseDashboard(raw: unknown): Dashboard {
     const v = r[k];
     if (v !== null && !Number.isSafeInteger(v)) throw new Error(`DASHBOARD_SHAPE: ${k}`);
   }
+  if (r.stuck_notifications != null && !isCount(r.stuck_notifications))
+    throw new Error('DASHBOARD_SHAPE: stuck_notifications');
   const open = r.open as Record<string, unknown> | null;
   if (!open || typeof open !== 'object') throw new Error('DASHBOARD_SHAPE: open');
   for (const k of OPEN_FIELDS) if (!isCount(open[k])) throw new Error(`DASHBOARD_SHAPE: open.${k}`);
@@ -106,7 +110,10 @@ export function parseDashboard(raw: unknown): Dashboard {
     )
       throw new Error('DASHBOARD_SHAPE: low_stock_items[]');
   }
-  return raw as Dashboard;
+  return {
+    ...(raw as Dashboard),
+    stuck_notifications: (r.stuck_notifications as number | null) ?? null,
+  };
 }
 
 export async function fetchDashboard(client: MukhdarClient): Promise<Dashboard> {

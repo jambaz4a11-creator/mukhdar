@@ -318,3 +318,50 @@ test.describe.serial('home (writes: live update on a real order)', () => {
     );
   });
 });
+
+test.describe.serial('home: stuck-notifications badge (admin only)', () => {
+  test('hidden at 0, shown with the count and linked to the settings indicator otherwise', async ({
+    browser,
+  }) => {
+    const page = await pageAs(browser, 'admin');
+    const client = await signedInClient(ACCOUNTS.admin);
+    const real = await dashboard(client);
+    const mock = (n: number | null) =>
+      page.route('**/rest/v1/rpc/dashboard_today', async (route) => {
+        const res = await route.fetch();
+        const json = (await res.json()) as Record<string, unknown>;
+        json.stuck_notifications = n;
+        await route.fulfill({ response: res, json });
+      });
+
+    // القيمة الحقيقية: الشارة موجودة فقط إن كان العدد > 0
+    await openHome(page);
+    await expect(page.getByTestId('stuck-badge')).toHaveCount(
+      num(real.stuck_notifications) > 0 ? 1 : 0,
+    );
+
+    await mock(0);
+    await openHome(page);
+    await expect(page.getByTestId('stuck-badge')).toHaveCount(0);
+    await page.unroute('**/rest/v1/rpc/dashboard_today');
+
+    await mock(4);
+    await openHome(page);
+    const badge = page.getByTestId('stuck-badge');
+    await expect(badge).toContainText('4 إشعار عالق');
+    await expect(badge).toHaveAttribute('href', '/settings#notifications');
+    await badge.click();
+    await expect(page).toHaveURL(/\/settings#notifications$/);
+    await expect(page.getByTestId('stuck-notifications')).toBeVisible();
+    await page.context().close();
+  });
+
+  test('staff never get the badge, and their payload has null', async ({ browser }) => {
+    const page = await pageAs(browser, 'staff');
+    await openHome(page);
+    await expect(page.getByTestId('stuck-badge')).toHaveCount(0);
+    const d = await dashboard(await signedInClient(ACCOUNTS.staff));
+    expect(d.stuck_notifications).toBeNull();
+    await page.context().close();
+  });
+});

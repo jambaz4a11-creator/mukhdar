@@ -92,6 +92,7 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 | Products & stock | categories section (image cards: image, name, product count, edit; "+ قسم جديد"), products table with price and cost **per kilo**, stock in kilos, "(قليل)" under the threshold, "نفد" at 0, "غير محدد" for a missing cost (§2.2, §2.3) |
 | Daily Waste (هدر اليوم) | read-only "today" label (Baghdad date, no date input), one quantity input per active product (kilos or bunch, unit label by the name), cost before saving, one save, last 7 days, link to the waste report (§2.3) |
 | Ratings (التقييمات) | average, count, star distribution, filtered list (§2.8) |
+| Ratings (التقييمات) | average + stars, count, distribution bars, filter chips, list of ratings with order link (SPEC-admin §2.8). Built in T26; deviations below |
 | Reports (التقارير والأرباح) | range picker, cards, daily chart, waste and top products in kilos, CSV (§2.5). Chart: sales `chartSales` + net profit `primary`, zero baseline (net profit can be negative), legend, hover values and a daily table view. The design's light green `#A9CDB3` failed the chart-colour checks (lightness, chroma, contrast 1.7:1), so `chartSales` replaces it (T20) |
 | Settings & staff | fee, minimum order, store open/closed, staff and drivers, PIN reset (§2.6, §2.7) |
 
@@ -135,4 +136,23 @@ Differences, all deliberate:
    same 60 s polling the settings page already uses.
 8. **Stuck notifications** are not on the Home screen: neither the approved design nor SPEC-admin §2.0 has them
    (the admin-only indicator stays on the settings page).
+
+## Ratings screen: deviations from the approved design (T26)
+Design source: `project/Ratings.dc.html`. Implemented as drawn (average with stars, distribution bars with the
+design's colours, filter chips, review cards with the star pill, order link and date, Iraqi wording).
+1. **Date range.** SPEC-admin §2.8 and the task require a date range applied to the header and the list; the design has
+   none. Added two native date inputs ("من" / "إلى") and a "كل المدة" reset next to the chips.
+2. **Extra chip "نجمة ونجمتان"** (1-2 stars) next to the design's "3 وأقل", because the task's acceptance scenario filters
+   1-2 stars. The design's chips and order are unchanged.
+3. **Filters change the header too.** The chips and the range apply to the average, count and distribution as well as the
+   list (the task's rule). All of it is computed by `ratings_summary` / `ratings_list`, never in the browser.
+4. **Date text.** "اليوم 10:20 ص" / "أمس" / "13 تشرين الثاني" (Baghdad day, Latin digits; the year is added for another
+   year). The header drops the mock-up's "بيانات تجريبية" suffix.
+5. **Stars in the header:** the whole part of the average is filled (4.6 → 4 full + 1 pale), as drawn.
+6. **Paging.** "عرض المزيد" button for the keyset pages of 50 (the design shows 5 sample cards).
+7. **No moderation.** The design has no hide/delete for ratings or comments, so none was built, and there is nothing
+   to audit in `admin_audit`. Comments are plain text everywhere (escaped by React; stored trimmed, control characters
+   removed, at most 500 characters).
+8. **Customer app:** the rating screen (T14) is unchanged; it now shows "التعليق أطول من 500 حرف" if the server rejects a
+   comment (`COMMENT_TOO_LONG`).
 

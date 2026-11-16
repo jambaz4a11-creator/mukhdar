@@ -83,3 +83,20 @@ export async function placeOrder(note = 'طلب اختبار Playwright'): Promi
   }
   throw new Error('every demo customer is at the open-orders limit');
 }
+
+/** يقود طلباً بالمسار الحقيقي حتى "تم التوصيل" بدوال الأدمن (تعيين أول سائق قابل للتعيين). */
+export async function deliverOrder(admin: SupabaseClient, orderId: string): Promise<void> {
+  const { data: drivers, error: dErr } = await admin.rpc('list_drivers');
+  if (dErr) throw dErr;
+  const driver = (drivers as { id: string; is_active: boolean; must_change_pin: boolean }[]).find(
+    (x) => x.is_active && !x.must_change_pin,
+  );
+  if (!driver) throw new Error('no assignable demo driver for e2e');
+  for (const step of ['preparing', 'assign', 'ready', 'out_for_delivery', 'delivered']) {
+    const { error } =
+      step === 'assign'
+        ? await admin.rpc('assign_driver', { p_order_id: orderId, p_driver_id: driver.id })
+        : await admin.rpc('set_order_status', { p_order_id: orderId, p_status: step });
+    if (error) throw new Error(`${step}: ${error.message}`);
+  }
+}

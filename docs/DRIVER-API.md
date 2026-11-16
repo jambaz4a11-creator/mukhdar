@@ -20,6 +20,10 @@ Short version to send to the driver-app developer. Backend migrations `202611230
 `20261125000001` (both applied to the development project). Details are in the sections linked below.
 Migration `20261124000001` (review session B: stuck-notification counters, building numbers 1..100,
 rate-limit table) has **no driver-facing change**.
+Migrations `20261127000001` (admin Home dashboard) and `20261128000001` (ratings: stricter `rate_order`,
+`ratings_summary` / `ratings_list`, stuck-notification count) also have **no driver-facing change**: ratings are not linked
+to drivers (`ratings` has no `driver_id`), drivers still have no access to `ratings` (§ table below), and the new functions are
+staff/admin only (drivers get `NOT_ALLOWED`).
 
 1. **Admin-created driver accounts (§2).** Besides self sign-up (`signup` + admin promotion), the
    admin can now create a driver account directly from the panel with a **temporary PIN**, sent to

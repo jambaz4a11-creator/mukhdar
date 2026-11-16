@@ -100,26 +100,23 @@ export async function fetchReport(supabase: MukhdarClient, r: DayRange): Promise
   return { summary, daily, top, drivers, waste, comments };
 }
 
-/** آخر 20 تعليقاً بالمدى (RLS: الأدمن يقرأ التقييمات). حدود يوم بغداد (+03:00، بلا توقيت صيفي). */
+/** آخر 20 تعليقاً بالمدى: من ratings_list نفسها (شاشة التقييمات) فلا يختلف المتوسط ولا القائمة بين الصفحتين. */
 export async function fetchComments(
   supabase: MukhdarClient,
   r: DayRange,
 ): Promise<RatingComment[]> {
-  const rows = await unwrap<Record<string, unknown>[]>(
-    supabase
-      .from('ratings')
-      .select('order_id, stars, comment, created_at, orders(order_number)')
-      .not('comment', 'is', null)
-      .gte('created_at', `${r.from}T00:00:00+03:00`)
-      .lte('created_at', `${r.to}T23:59:59.999+03:00`)
-      .order('created_at', { ascending: false })
-      .limit(20),
-  );
-  return rows.map((x) => ({
-    order_id: x.order_id as string,
-    order_number: (x.orders as { order_number: number } | null)?.order_number ?? null,
-    stars: x.stars as number,
-    comment: x.comment as string,
-    created_at: x.created_at as string,
+  const { data, error } = await supabase.rpc('ratings_list', {
+    p_from: r.from,
+    p_to: r.to,
+    p_with_comment: true,
+    p_limit: 20,
+  });
+  if (error) throw error;
+  return (data ?? []).map((x) => ({
+    order_id: x.order_id,
+    order_number: x.order_number,
+    stars: x.stars,
+    comment: x.comment ?? '',
+    created_at: x.created_at,
   }));
 }

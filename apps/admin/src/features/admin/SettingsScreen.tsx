@@ -227,7 +227,7 @@ function StuckIndicator() {
     );
   const { stuck: n, failed } = health.data;
   return (
-    <div className="flex flex-col gap-2">
+    <div id="notifications" className="flex scroll-mt-4 flex-col gap-2">
       <StuckLine n={n} />
       {failed > 0 && (
         <div

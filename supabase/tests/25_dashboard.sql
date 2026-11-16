@@ -3,7 +3,7 @@
 --     اليوم 03-11: [03-10 21:00Z, 03-11 09:31Z) (نهاية الدقيقة الحالية)، أمس 03-10: [03-09 21:00Z, 03-10 09:31Z).
 --   المال للأدمن فقط ومحذوف بالدالة للموظف (مفاتيحه موجودة بقيمة null)؛ الزبون والسائق والزائر والمعطّل
 --   والأدمن برمز مؤقت يُرفضون. الأيام 2020-03-09..13 خالية من بيانات أخرى.
-select plan(28);
+select plan(31);
 
 -- ================================================================ التجهيز
 update public.app_settings set delivery_fee_iqd = 1000, min_order_iqd = 0, store_open = true;
@@ -29,6 +29,15 @@ update public.products set name = 'عادي T25' where id = tests.id('pok');
 
 -- لقطة قبل أي طلب: المفتوحة الآن حالة حالية (بلا يوم)، فنقيسها بفرق عن هذه اللقطة
 create table tests.base as select private.dashboard_at('2020-03-11 09:30:20Z', true) as j;
+
+-- إشعارات (T26): العالقة = لم تُرسل، attempts < 5، لم تُصرف، أقدم من 5 دقائق. هنا 2 عالقة من 6
+insert into public.notification_outbox (audience, title, body, created_at, attempts, sent_at, dismissed_at) values
+  ('admins', 't', 'b', now() - interval '10 minutes', 0, null, null),                      -- عالقة
+  ('admins', 't', 'b', now() - interval '10 minutes', 4, null, null),                      -- عالقة (ما زالت تُعاد)
+  ('admins', 't', 'b', now() - interval '10 minutes', 5, null, null),                      -- فاشلة نهائياً
+  ('admins', 't', 'b', now() - interval '10 minutes', 0, null, now()),                     -- مصروفة
+  ('admins', 't', 'b', now(), 0, null, null),                                              -- حديثة
+  ('admins', 't', 'b', now() - interval '10 minutes', 1, now(), null);                    -- أُرسلت
 
 -- طلب بكمية p_qty من المنتج p يُقاد للحالة النهائية (كأدمن، بسائق إن تجاوز pending)
 create function tests.mk(p_qty int, p_final public.order_status) returns uuid language plpgsql as $$
@@ -108,7 +117,7 @@ select is(
   array['as_of', 'avg_order_iqd', 'avg_order_prev_iqd', 'cancelled_count', 'cancelled_count_prev',
         'day', 'delivered_count', 'delivered_count_prev', 'low_stock_count', 'low_stock_items',
         'net_profit_iqd', 'net_profit_prev_iqd', 'open', 'placed_count', 'placed_count_prev',
-        'sales_iqd', 'sales_prev_iqd', 'waste_cost_iqd'],
+        'sales_iqd', 'sales_prev_iqd', 'stuck_notifications', 'waste_cost_iqd'],
   'fixed key set (staff has the same keys, money values null)');
 
 -- ================================================================ 2) اليوم حتى الآن (الأدمن، 12:30:20 بغداد)
@@ -190,6 +199,7 @@ select is(
 -- نتيجة كل دور تُحفظ بإعداد GUC للمعاملة (لا جدول: authenticated لا ينشئ جداولاً)
 select tests.as_user(tests.id('admin'));
 select set_config('tests.admin_j', public.dashboard_today()::text, true);
+select set_config('tests.admin_cnt', public.stuck_notifications_count()::text, true);
 select isnt(public.dashboard_today() -> 'sales_iqd', 'null'::jsonb, 'admin: sales present');
 select isnt(public.dashboard_today() -> 'net_profit_iqd', 'null'::jsonb, 'admin: net profit present');
 select tests.as_user(tests.id('staff'));
@@ -199,9 +209,9 @@ select tests.as_postgres();
 select is(
   (select array_agg(k order by k) from jsonb_each(current_setting('tests.staff_j')::jsonb) e(k, v)
     where k in ('sales_iqd', 'sales_prev_iqd', 'avg_order_iqd', 'avg_order_prev_iqd', 'waste_cost_iqd',
-                'net_profit_iqd', 'net_profit_prev_iqd') and jsonb_typeof(v) = 'null'),
+                'net_profit_iqd', 'net_profit_prev_iqd', 'stuck_notifications') and jsonb_typeof(v) = 'null'),
   array['avg_order_iqd', 'avg_order_prev_iqd', 'net_profit_iqd', 'net_profit_prev_iqd', 'sales_iqd',
-        'sales_prev_iqd', 'waste_cost_iqd'],
+        'sales_prev_iqd', 'stuck_notifications', 'waste_cost_iqd'],
   'staff: every money field is null (present, but removed by the function)');
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(current_setting('tests.staff_j')::jsonb) k),
@@ -209,13 +219,21 @@ select is(
   'staff and admin get the same keys');
 select is(
   current_setting('tests.admin_j')::jsonb - 'sales_iqd' - 'sales_prev_iqd' - 'avg_order_iqd' - 'avg_order_prev_iqd'
-    - 'waste_cost_iqd' - 'net_profit_iqd' - 'net_profit_prev_iqd',
+    - 'waste_cost_iqd' - 'net_profit_iqd' - 'net_profit_prev_iqd' - 'stuck_notifications',
   current_setting('tests.staff_j')::jsonb - 'sales_iqd' - 'sales_prev_iqd' - 'avg_order_iqd' - 'avg_order_prev_iqd'
-    - 'waste_cost_iqd' - 'net_profit_iqd' - 'net_profit_prev_iqd',
+    - 'waste_cost_iqd' - 'net_profit_iqd' - 'net_profit_prev_iqd' - 'stuck_notifications',
   'staff gets exactly the admin counts and lists (same moment); only money differs');
 select is(
   (current_setting('tests.staff_j')::jsonb -> 'open' ->> 'pending')::int - (select (j -> 'open' ->> 'pending')::int from tests.base),
   2, 'staff sees the open-order counts (not money)');
+
+select is((current_setting('tests.admin_j')::jsonb -> 'stuck_notifications'), to_jsonb(current_setting('tests.admin_cnt')::int),
+  'admin: the Home stuck badge equals stuck_notifications_count() (one shared definition)');
+select is(
+  (select (private.dashboard_at('2020-03-11 09:30:20Z', true) ->> 'stuck_notifications')::int - (b.j ->> 'stuck_notifications')::int from tests.base b),
+  2, 'stuck = retryable (attempts < 5), unsent, not dismissed, older than 5 minutes: 2 of the 6 rows');
+select is(private.dashboard_at('2020-03-11 09:30:20Z', false) -> 'stuck_notifications', 'null'::jsonb,
+  'staff payload: stuck_notifications is null (key present)');
 
 -- ================================================================ 8) الرفض
 select tests.as_user(tests.id('cust'));

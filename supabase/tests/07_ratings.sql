@@ -27,7 +27,7 @@ select tests.as_user(tests.id('cust2'));
 select is_empty(format($$ select 1 from public.ratings where order_id = %L $$, tests.id('o_del')),
   'another customer cannot read the rating');
 select throws_ok(format($$ select public.rate_order(%L, 3, %L) $$, tests.id('o_del2'), repeat('x', 501)),
-  '23514', null, 'comment over 500 chars is rejected');
+  'COMMENT_TOO_LONG', 'comment over 500 chars is rejected');
 
 select tests.as_user(tests.id('staff'));
 select isnt_empty(format($$ select 1 from public.ratings where order_id = %L $$, tests.id('o_del')), 'staff reads ratings');

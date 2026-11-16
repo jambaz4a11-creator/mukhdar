@@ -92,6 +92,18 @@ export function DashboardScreen() {
             </span>
           )}
         </div>
+        {d?.stuck_notifications ? (
+          <Link
+            href="/settings#notifications"
+            data-testid="stuck-badge"
+            className="flex h-10 items-center gap-2 rounded-full bg-warning-soft px-3.5 text-sm font-semibold text-warning-text no-underline"
+          >
+            <span aria-hidden="true">!</span>
+            <span>
+              <span className="num">{d.stuck_notifications}</span> إشعار عالق
+            </span>
+          </Link>
+        ) : null}
         {store.data !== undefined && (
           <span
             className={`flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-semibold ${

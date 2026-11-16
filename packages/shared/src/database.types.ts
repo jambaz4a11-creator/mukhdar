@@ -1271,6 +1271,36 @@ export type Database = {
         Args: { p_comment?: string; p_order_id: string; p_stars: number };
         Returns: undefined;
       };
+      ratings_list: {
+        Args: {
+          p_before_created?: string;
+          p_before_order?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_max_stars?: number;
+          p_min_stars?: number;
+          p_to?: string;
+          p_with_comment?: boolean;
+        };
+        Returns: {
+          comment: string | null;
+          created_at: string;
+          customer_name: string | null;
+          order_id: string;
+          order_number: number;
+          stars: number;
+        }[];
+      };
+      ratings_summary: {
+        Args: {
+          p_from?: string;
+          p_max_stars?: number;
+          p_min_stars?: number;
+          p_to?: string;
+          p_with_comment?: boolean;
+        };
+        Returns: Json;
+      };
       recompute_daily_stats: { Args: { p_from: string; p_to: string }; Returns: number };
       record_pin_reset: {
         Args: { p_kind?: string; p_reset_by: string; p_user_id: string };
