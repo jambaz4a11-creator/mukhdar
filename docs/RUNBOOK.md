@@ -132,6 +132,7 @@ pnpm exec supabase db advisors --remote
    - يطبع المشروع المستهدف والرقم ويسأل `[y/N]`؛ مشروع غير mukhdar-dev يتطلب كتابة معرّفه كاملاً أولاً. **يقبل حساب أدمن فقط** (غيره: "إعادة ضبط رمز الدخول" من اللوحة).
    - يولّد رمزاً عشوائياً من 6 أرقام، يضبطه، **يبطل كل جلسات الحساب**، يضبط `must_change_pin` (يُجبر على تغييره أول دخول)، ويكتب سطر تدقيق `pin_resets` بـ `kind = 'break_glass'` (بلا `reset_by`). الرمز يظهر **مرة واحدة على الشاشة فقط** ويُمسح بـ Enter؛ لا يُكتب بأي ملف ولا سجل ولا بسطر الأوامر.
    - **سلّم الرمز للأدمن بمكالمة هاتفية**، لا واتساب ولا رسالة ولا SQL Editor ولا لقطة شاشة. فشل بعد تغيير الرمز يطبع الخطوة الفاشلة بلا الرمز: أعد التشغيل (آمن؛ يولّد رمزاً جديداً).
+   - **طرفية حقيقية فقط (جلسة C، M4):** السكربت **يرفض العمل** إن لم يكن `stdin` و`stdout` كلاهما طرفية حقيقية (لا `echo y |` ولا `| tee` ولا `> ملف` ولا CI ولا مسجّل شاشة)، وإن وُجد متغير `CI`؛ فلا يبقى الرمز بسجل ولا يُؤكَّد برمجياً. الاستثناء الوحيد للاختبار: `MUKHDAR_BREAK_GLASS_TEST=1` **مع** مشروع mukhdar-dev (يستعمله `it:break-glass`). انقطاع الشبكة بأي خطوة يطبع "فشلت الخطوة" بلا الرمز (أعد التشغيل).
    - **التحقق (التطوير):** `pnpm it:break-glass` ينشئ أدمناً مؤقتاً (بادئة 9647007) ويشغّل السكربت عملياً ثم يحذف كل شيء.
    - **آخر ملاذ بلا جهاز المالك:** لا SQL بنص الرمز. من جهاز المالك فقط، بنفس السكربت. (قديماً: `update auth.users set encrypted_password = crypt(...)` بـ SQL Editor؛ أُلغي لأنه يترك الرمز بسجل الاستعلامات ولا يدقّق ولا يبطل الجلسات إلا بسطر ثانٍ.)
 4. نسيان رمز زبون أو موظف أو سائق: من لوحة الأدمن، "إعادة ضبط رمز الدخول" (`admin-reset-pin`، T19).
@@ -401,7 +402,10 @@ pnpm exec supabase functions deploy admin-create-user --remote=<ref> --use-api -
 ### التشغيل
 - **نسيان الرمز:** الشخص يراسل واتساب المتجر **من نفس الرقم المسجّل** ← الأدمن: الموظفون والسواق ← بحث بالرقم ← "تصفير الرمز" ← رمز عشوائي ← يظهر مرة واحدة ← "إرسال بالواتساب". التصفير يطلّعه من كل الأجهزة (رمز الوصول الحالي يبقى ≤ ساعة).
 - **رمز أدمن:** لا يُصفَّر من اللوحة (`ADMIN_ACCOUNT`): صاحبه يغيّره من "تغيير الرمز"، أو صاحب المشروع بسكربت الطوارئ `pnpm admin:break-glass-reset` (§7).
-- **الحد:** 20 محاولة تصفير و20 محاولة إنشاء بالساعة لكل أدمن؛ **الفاشلة تُحسب أيضاً** (من `admin_function_hits`، تُحذف بعد يوم). إن وصل أدمن شرعي للحد فانتظر ساعة. سجل التدقيق: `select * from public.pin_resets order by created_at desc` (بلا الرمز).
+- **الحد:** 20 محاولة تصفير و20 محاولة إنشاء بالساعة لكل أدمن؛ **كل محاولة تصل لمرحلة التغيير تُحسب**، ومنها الفاشلة مثل `PHONE_TAKEN` (من `admin_function_hits`، تُحذف بعد يوم)؛ ما يُرفض قبلها (`INVALID_REQUEST`، `USER_NOT_FOUND`، `ADMIN_ACCOUNT`، `PIN_INVALID`) لا يغيّر شيئاً ولا يُحسب. إن وصل أدمن شرعي للحد فانتظر ساعة. سجل التدقيق: `select * from public.pin_resets order by created_at desc` (بلا الرمز).
+
+- **بعد أي ترقية لـ Supabase Auth (GoTrue):** شغّل `pnpm it:admin-users` على dev. الفحص الذي يثبت أن **الدخول بالرمز المؤقت لا يمسح `must_change_pin`** هو المرجع: الـ trigger يمسح العلامة عند أي تغيير لـ `encrypted_password`، فلو رفع إصدار جديد كلفة الـ hash عند الدخول لمُسحت العلامة بأول دخول (مراجعة AB، L6).
+- **`RESET_INCOMPLETE` بلوحة الأدمن:** الرمز لم يُرسَل لأحد ولا تُرسله: أعد "ضبط الرمز" (الحقل يُمسح تلقائياً). السبب عادةً انقطاع لحظي بقاعدة البيانات.
 
 ### الحالة على mukhdar-dev (2026-11-16)
 migration `20261122000001` مطبّقة، والدالتان منشورتان (`verify_jwt = true`)، و`pnpm it:admin-users` نجح (19 فحصاً) والحسابات المؤقتة حُذفت.
@@ -410,20 +414,22 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 
 **مراجعة T16-T19 جلسة B:** migration `20261124000001` مطبّقة، والدالتان `admin-create-user` و`admin-reset-pin` **أُعيد نشرهما على mukhdar-dev فقط** (`verify_jwt = true`؛ أدمن برمز مؤقت مرفوض، وحد المعدل يعدّ المحاولات، وسجل بلا الرمز). `pnpm it:admin-users` (35 فحصاً) و`pnpm it:break-glass` (20 فحصاً) نجحا على dev، وحُذفت حساباتهما المؤقتة. **قبل الإنتاج:** تطبيق `20261124000001` ثم نشر الدالتين بالموافقة (الترتيب مهم: الدالتان الجديدتان تستدعيان `admin_rate_hit`).
 
+**مراجعة الإصلاحات AB، جلسة C (2026-11-16):** migrations `20261125000001` و`20261125000002` (تدقيق إعادة تسمية/إخفاء القطاع والوحدة والعمارة بـ `admin_audit`، `action = 'address'`) **مطبّقتان على mukhdar-dev فقط** (فُحصت أولاً بـ `db:test:remote --prelude` داخل معاملة ملغاة، ثم `db push`)، و`admin-reset-pin` **أُعيد نشرها على mukhdar-dev فقط** (`verify_jwt = true`، رد 401 بلا JWT). لم يُنشر غيرها ولم يُغيَّر شيء سحابي آخر. `pnpm db:test:remote`: 23 ملفاً و872 تأكيداً. حالة CI مرجع لاختبار التزامن (`db:concurrency`، حالة تخفيض السائق أثناء القبول) ولاختبارات اللوحة.
+
 ### اختبارات الكتابة بالواجهة (T7)
 اختبارات Playwright التي **تكتب** (حفظ الإعدادات، ترقية، تصفير رمز، إنشاء سائق، عمارات، طلبات) تعمل **بـ CI فقط** (`E2E_ALLOW_WRITES=1` على Supabase محلي مؤقت)؛ محلياً ضد mukhdar-dev تعمل القراءة وما يُرفض بلا كتابة، وهذا مقصود (لا نكتب ببيانات التطوير من اختبارات). حالة CI هي المرجع: لا دمج بلا نجاح وظيفة `admin-e2e`.
 
 ### التشغيل بعد الجلسة A
 - **تعطيل سائق:** إن رُفض بـ "السائق عنده طلبات لم تنتهِ: … الطلبات: #12" ← افتح كل طلب ← "نقل الطلب لسائق آخر" (يعمل حتى والطلب بالطريق) ← ثم عطّله.
 - **طلب بالطريق والبضاعة ضاعت/تلفت:** إلغاء (أدمن) مع خانة "البضاعة طلعت مع السائق" ← تُسجَّل هدراً بكلفة الطلب.
-- **سجل التدقيق:** `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
+- **سجل التدقيق:** (يشمل منذ جلسة C تغيير اسم/رقم/تفعيل القطاع والوحدة والعمارة: `action = 'address'`، الجدول والمعرّف داخل before/after) `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
 
 ## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعة الجلستين A وB، 2026-11-16)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm exec supabase migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
-> إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (migration جديدة لـ H1/M1 وإعادة نشر `admin-reset-pin`) تُضاف لهذه القائمة حين تُنجز، **قبل** الإطلاق.
+> إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (جلسة C: migration `20261125000001` لـ H1/M1 والبنود Low، وإعادة نشر `admin-reset-pin`) مدرجة أدناه (الصفان 24 و25).
 
-### 1. الـ migrations بالترتيب
+### 1. الـ migrations بالترتيب (25 ملفاً)
 | # | الملف |
 |---|---|
 | 1 | `20261110000001_init.sql` |
@@ -449,6 +455,10 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 | 21 | `20261122000001_admin_settings_staff.sql` |
 | 22 | `20261123000001_account_lifecycle.sql` |
 | 23 | `20261124000001_review_session_b.sql` |
+| 24 | `20261125000001_review_session_c.sql` |
+| 25 | `20261125000002_address_audit.sql` |
+
+**قاعدة إلزامية (2):** طبّق migration **`20261125000001`** قبل نشر **`admin-reset-pin`** بنسخته الحالية (الجلسة C)؛ الدالة نفسها تعمل بدونها، لكن `record_pin_reset` الجديدة هي التي تحذف رموز الإشعارات (H1)، فلا يكتمل قطع الجهاز الضائع بغيرها. وهي تحذف `admin_actions_last_hour` (غير مستعملة).
 
 **قاعدة إلزامية:** طبّق migration **`20261124000001`** قبل نشر **`admin-create-user`** و**`admin-reset-pin`**. النسخة الحالية من الدالتين تستدعي `admin_rate_hit` و`record_pin_reset(..., p_kind)`، وهما غير موجودتين قبل هذه الـ migration: لو نُشرت الدالتان أولاً، فكل إنشاء حساب وكل إعادة ضبط رمز يفشل بـ 500.
 
@@ -459,14 +469,14 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
 
 ### 2. الترتيب الكامل
 1. أنشئ المشروع بمنطقة **`eu-central-1`** (§1)، ثم اربطه: `pnpm exec supabase link --project-ref <prod-ref>`. (سكربتات التطوير `db:test:remote` و`seed:*` ترفض المشروع المربوط إن لم يكن mukhdar-dev، وهذا مقصود؛ أعد ربط التطوير بعد الانتهاء.)
-2. `pnpm exec supabase db push --remote --dry-run` ← يجب أن يعرض الـ 23 ملفاً بالترتيب أعلاه ← `pnpm exec supabase db push --remote --yes`.
+2. `pnpm exec supabase db push --remote --dry-run` ← يجب أن يعرض الـ 25 ملفاً بالترتيب أعلاه ← `pnpm exec supabase db push --remote --yes`.
 3. إعدادات Auth من اللوحة: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7. **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
 4. الدوال، بالترتيب (كلها بعد الخطوة 2، فالقاعدة أعلاه محققة تلقائياً):
    ```bash
    pnpm exec supabase functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt --yes
    pnpm exec supabase functions deploy delete-account    --remote=<prod-ref> --use-api --yes   # verify_jwt = true
    pnpm exec supabase functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt --yes
-   pnpm exec supabase functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261124000001
+   pnpm exec supabase functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261125000001 (يحتوي إعادة المحاولة وRESET_INCOMPLETE، جلسة C)
    pnpm exec supabase functions deploy admin-create-user --remote=<prod-ref> --use-api --yes   # verify_jwt = true، بعد 20261124000001
    ```
    ثم `push_dispatch_url` بـ Vault (§11).

@@ -7,6 +7,7 @@
 //   1) 40 زبوناً يطلبون نفس المنتج (رصيد 10) بنفس اللحظة: 10 تنجح بالضبط، الرصيد 0،
 //      الباقي INSUFFICIENT_STOCK، صفر deadlocks.
 //   2) 8 سائقين يقبلون نفس الطلب بنفس اللحظة: واحد ينجح، الباقي ORDER_NOT_AVAILABLE.
+//   2b) سائق يُخفَّض أثناء accept_order: يُرفض بعد القفل (الدور يُفحص تحت القفل).
 // "نفس اللحظة": كل عامل ينتظر قفلاً استشارياً يمسكه المنسّق، ثم يُطلق الجميع معاً.
 // البيانات تُنشأ فعلاً (commit) ثم تُحذف بالنهاية، لذلك يُرفض أي هدف غير محلي.
 import pg from 'pg';
@@ -201,6 +202,57 @@ try {
     drivers.includes(assigned[0].driver_id),
     'the order is assigned to one of the racing drivers',
   );
+
+  // 2b) تخفيض سائق أثناء قبوله (مراجعة جلسة C، M1): المدير يقفل صف السائق بـ set_user_role ولم يُثبّت بعد،
+  // والسائق يستدعي accept_order فيمرّ فحص الدور الأول ثم ينتظر قفل الصف. بعد التثبيت يجب أن يُرفض (لا يملك
+  // الدور الآن)، لا أن يقبل الطلب لأن is_active بقي true.
+  const raceOrder = ids.orders[1];
+  await q('begin');
+  await q(`select set_config('request.jwt.claims', $1, true)`, [
+    JSON.stringify({ sub: adminId, role: 'authenticated' }),
+  ]);
+  await q(`select public.set_order_status($1, 'preparing')`, [raceOrder]);
+  await q(`select public.set_order_status($1, 'ready')`, [raceOrder]);
+  await q('commit');
+  const demotedDriver = drivers[1];
+  const adminConn = await newClient();
+  const driverConn = await newClient();
+  const as = async (c, uid) => {
+    await c.query('begin');
+    await c.query(`select set_config('request.jwt.claims', $1, true)`, [
+      JSON.stringify({ sub: uid, role: 'authenticated' }),
+    ]);
+    await c.query('set local role authenticated');
+  };
+  await as(adminConn, adminId);
+  await adminConn.query(`select public.set_user_role($1, 'customer', true)`, [demotedDriver]);
+  await as(driverConn, demotedDriver);
+  const acceptRun = driverConn
+    .query(`select public.accept_order($1)`, [raceOrder])
+    .then(() => 'OK')
+    .catch((err) => err.message);
+  // انتظر حتى يتعطل قبول السائق على القفل
+  let blocked = false;
+  for (let i = 0; i < 100 && !blocked; i++) {
+    const { rows } = await q(
+      `select count(*)::int as n from pg_stat_activity
+        where pid = $1 and wait_event_type = 'Lock'`,
+      [driverConn.processID],
+    );
+    blocked = rows[0].n === 1;
+    if (!blocked) await new Promise((r) => setTimeout(r, 50));
+  }
+  await adminConn.query('commit');
+  const raceOutcome = await acceptRun;
+  await driverConn.query('rollback').catch(() => {});
+  await Promise.all([adminConn.end(), driverConn.end()]);
+  const { rows: raced } = await q(`select driver_id from public.orders where id = $1`, [raceOrder]);
+  check(blocked, 'accept_order waits on the driver row lock while the demotion is uncommitted');
+  check(
+    raceOutcome === 'NOT_ALLOWED',
+    'the demoted driver is refused after the lock (NOT_ALLOWED)',
+  );
+  check(raced[0].driver_id === null, 'the order is not held by the demoted driver');
 
   // 3) push-dispatch: 4 عمال (service_role) يحجزون من الصندوق بنفس اللحظة ← مجموعات منفصلة
   const { rows: pendingRows } = await q(

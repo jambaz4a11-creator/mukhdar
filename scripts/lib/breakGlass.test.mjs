@@ -1,7 +1,13 @@
 // node --test: مساعدات سكربت الطوارئ لإعادة ضبط رمز الأدمن (مراجعة T16-T19 M4)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEV_PROJECT_REF, projectRef, randomPin, storedPhone } from './breakGlass.mjs';
+import {
+  DEV_PROJECT_REF,
+  interactiveGuard,
+  projectRef,
+  randomPin,
+  storedPhone,
+} from './breakGlass.mjs';
 
 test('storedPhone: accepts the usual spellings, rejects the rest', () => {
   assert.equal(storedPhone('07701234567'), '9647701234567');
@@ -37,4 +43,35 @@ test('projectRef: only https://<ref>.supabase.co hosts', () => {
   assert.equal(projectRef(`https://${DEV_PROJECT_REF}.supabase.co`), DEV_PROJECT_REF);
   assert.equal(projectRef('https://evil.example.com'), null);
   assert.equal(projectRef('not a url'), null);
+});
+
+test('interactiveGuard: only a real terminal on both ends', () => {
+  const tty = { stdinTTY: true, stdoutTTY: true, env: {}, ref: 'prodref' };
+  assert.equal(interactiveGuard(tty), null);
+  for (const piped of [
+    { stdinTTY: false, stdoutTTY: true }, // echo y | ...
+    { stdinTTY: true, stdoutTTY: false }, // > file, | tee, script/CI capture
+    { stdinTTY: false, stdoutTTY: false },
+  ])
+    assert.match(interactiveGuard({ ...tty, ...piped }) ?? '', /real terminal/);
+});
+
+test('interactiveGuard: CI refuses even on a terminal and even with the test escape', () => {
+  const env = { CI: 'true', MUKHDAR_BREAK_GLASS_TEST: '1' };
+  assert.match(
+    interactiveGuard({ stdinTTY: true, stdoutTTY: true, env, ref: DEV_PROJECT_REF }) ?? '',
+    /CI is set/,
+  );
+});
+
+test('interactiveGuard: the test escape needs the flag AND the dev project', () => {
+  const piped = { stdinTTY: false, stdoutTTY: false };
+  const flag = { MUKHDAR_BREAK_GLASS_TEST: '1' };
+  assert.equal(interactiveGuard({ ...piped, env: flag, ref: DEV_PROJECT_REF }), null);
+  assert.notEqual(interactiveGuard({ ...piped, env: flag, ref: 'prodref' }), null);
+  assert.notEqual(interactiveGuard({ ...piped, env: {}, ref: DEV_PROJECT_REF }), null);
+  assert.notEqual(
+    interactiveGuard({ ...piped, env: { MUKHDAR_BREAK_GLASS_TEST: 'true' }, ref: DEV_PROJECT_REF }),
+    null,
+  );
 });

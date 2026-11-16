@@ -7,7 +7,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '../test-utils/queryClient';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
-import { Alert, type AlertButton, Linking } from 'react-native';
+import { Alert, type AlertButton, BackHandler, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AccountScreen from '../app/(tabs)/account';
 import EditNameScreen from '../app/account/name';
@@ -404,6 +404,61 @@ describe('change PIN', () => {
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/orders'));
     expect(auth.updateUser).toHaveBeenCalledWith({ password: '739164' });
     mockSearchParams = {};
+  });
+
+  describe('forced: the only ways out are change and sign out (M3)', () => {
+    let handlers: (() => boolean)[];
+    let spy: jest.SpyInstance;
+    beforeEach(() => {
+      handlers = [];
+      spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(((
+        _event: string,
+        handler: () => boolean,
+      ) => {
+        handlers.push(handler);
+        return { remove: jest.fn() };
+      }) as never);
+      useAuth.setState({ mustChangePin: true });
+    });
+    afterEach(() => {
+      spy.mockRestore();
+      mockSearchParams = {};
+      useAuth.setState({ mustChangePin: false });
+    });
+
+    it('Android hardware back is swallowed', async () => {
+      mockSearchParams = { forced: '1' };
+      setup();
+      await renderUi(<ChangePinScreen />);
+      expect(handlers).toHaveLength(1);
+      expect(handlers[0]?.()).toBe(true); // true = handled: the app does not go back
+    });
+
+    it('the normal change-PIN screen does not trap back and has no sign-out shortcut', async () => {
+      mockSearchParams = {};
+      setup();
+      await renderUi(<ChangePinScreen />);
+      expect(handlers).toHaveLength(0);
+      expect(screen.queryByTestId('pin-sign-out')).toBeNull();
+    });
+
+    it('sign out ends this device session only and returns home', async () => {
+      mockSearchParams = { forced: '1' };
+      const { auth } = setup();
+      await renderUi(<ChangePinScreen />);
+      await fireEvent.press(screen.getByTestId('pin-sign-out'));
+      await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
+      await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    });
+
+    it('a successful change lifts the forced state', async () => {
+      mockSearchParams = { forced: '1', redirect: '/orders' };
+      setup();
+      await renderUi(<ChangePinScreen />);
+      await fill('482915', '739164');
+      await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/orders'));
+      expect(useAuth.getState().mustChangePin).toBe(false);
+    });
   });
 
   it('same PIN as the current one is rejected', async () => {

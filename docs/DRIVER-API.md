@@ -16,8 +16,10 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 
 ## Changes for the driver app (2026-11-16)
 
-Short version to send to the driver-app developer. Backend migration `20261123000001` (applied to
-the development project). Details are in the sections linked below.
+Short version to send to the driver-app developer. Backend migrations `20261123000001` and
+`20261125000001` (both applied to the development project). Details are in the sections linked below.
+Migration `20261124000001` (review session B: stuck-notification counters, building numbers 1..100,
+rate-limit table) has **no driver-facing change**.
 
 1. **Admin-created driver accounts (§2).** Besides self sign-up (`signup` + admin promotion), the
    admin can now create a driver account directly from the panel with a **temporary PIN**, sent to
@@ -34,11 +36,13 @@ the development project). Details are in the sections linked below.
    are revoked: the next token refresh fails (HTTP 400). Sign out locally and show the sign-in
    screen. The old access token keeps working for at most 1 hour, but the server already refuses
    driver functions while the flag above is set.
-4. **Deactivated or demoted driver (§2).** Deactivation or a role change by the admin now also
-   **revokes all sessions** (same handling as 3). Before the refresh fails, driver functions return
-   `NOT_ALLOWED` / `NOT_AUTHENTICATED` and order reads return nothing: re-read the profile and show
-   "account not active". The admin **cannot** deactivate or demote a driver who still holds an order
-   in `preparing`/`ready`/`out_for_delivery`; such orders are moved to another driver first.
+4. **Deactivated or demoted driver (§2).** **Deactivation and a role _downgrade_** (driver →
+   customer) by the admin **revoke all sessions** (same handling as 3). A _promotion_ (driver →
+   staff/admin) does **not** revoke sessions, but the account is no longer a driver, so driver
+   functions refuse it. Before the refresh fails, driver functions return `NOT_ALLOWED` /
+   `NOT_AUTHENTICATED` and order reads return nothing: re-read the profile and show "account not
+   active". The admin **cannot** deactivate or demote a driver who still holds an order in
+   `preparing`/`ready`/`out_for_delivery`; such orders are moved to another driver first.
 5. **An order can be moved to another driver while `out_for_delivery` (§3.3, §5, §6, §7).**
    Staff/admin may now reassign an order that is already on the way (driver unreachable, vehicle broke
    down).
@@ -46,8 +50,28 @@ the development project). Details are in the sections linked below.
      disappears from reads; no Realtime event).
    - The new driver gets the `assigned` push, titled `نُقل لك طلب بالطريق #<number>`, and the order is
      **already `out_for_delivery`**: show it in current orders with "Delivered" as the next step.
+   - Assigning an order to the driver who already holds it does nothing (no push, no history row).
 6. **`set_order_status` has a new optional 4th parameter `p_return_stock` (admin only, §3.3).**
    Drivers must not send it. Calls with three named arguments keep working unchanged.
+7. **`order_status_history` has rows that are not status changes (§4).** Rows with
+   `from_status = to_status` and `note` = `driver_assigned`, `driver_reassigned` or `driver_accepted`
+   record who holds the order. A timeline must **not** render them as status changes (filter on
+   `from_status <> to_status`, or show the note as its own event).
+8. **Push notifications and the temporary PIN (migration `20261125000001`, §3.4, §6).**
+   - **No push is sent to an account while `must_change_pin = true`** (a lost phone whose PIN the
+     admin reset gets nothing, nor does anyone holding a temporary PIN they have not changed).
+   - `register_push_token` **refuses** a flagged account with `PIN_CHANGE_REQUIRED` (SQLSTATE 42501).
+     Do not register at sign-in while the flag is set; **register after the PIN change** (re-read the
+     profile, flag false, then call it).
+   - A PIN reset, a deactivation and a downgrade **delete the user's `push_tokens` rows**. After the
+     driver signs in again (and has changed a temporary PIN), register the token again. Registering on
+     every start (§3.4) already does this.
+   - On sign-out, **delete this device's `push_tokens` row first, then `signOut()`**: after the
+     session is revoked the app can no longer delete it.
+9. **Assigning a driver who has not changed the temporary PIN is refused (§3.2).** `assign_driver`
+   returns `DRIVER_PIN_PENDING`, so a new driver receives orders only after the first PIN change.
+   `accept_order` re-checks role, active and flag under the driver's row lock: a driver demoted or
+   deactivated at the same moment gets `NOT_ALLOWED`, never the order.
 
 ---
 
@@ -138,8 +162,8 @@ own session; RLS and the functions enforce what a driver may see and do.
      the administration" with **Refresh** and **Sign out**. Do not call the driver functions.
 4. A deactivated or demoted driver is rejected by every driver function (`NOT_ALLOWED` /
    `NOT_AUTHENTICATED`) even with a valid session, so handle those errors by re-checking the profile.
-   **Since 2026-11-16 deactivation or a role change also revokes every session** (as does a PIN reset
-   by the admin): the next token refresh fails (HTTP 400). On a refresh failure, sign out locally and
+   **Since 2026-11-16 deactivation or a role _downgrade_ also revokes every session** (as does a PIN
+   reset by the admin; a promotion to staff/admin does not): the next token refresh fails (HTTP 400). On a refresh failure, sign out locally and
    show the sign-in screen. The admin cannot deactivate or demote a driver who still holds an order in
    `preparing`/`ready`/`out_for_delivery` (the orders are moved to another driver first), so a driver
    never loses access in the middle of a delivery without first receiving the `unassigned` push.
@@ -183,7 +207,7 @@ After success the driver can read the full order (section 4).
 
 | Error | SQL state | When |
 |---|---|---|
-| `NOT_ALLOWED` | 42501 | caller is not an active driver |
+| `NOT_ALLOWED` | 42501 | caller is not an active driver (role, active and `must_change_pin = false` are re-checked under the driver's row lock, so a driver demoted at the same instant is refused) |
 | `ORDER_NOT_AVAILABLE` | P0001 | not `ready` (still `pending`/`preparing`, out for delivery, delivered, cancelled), already taken by another driver, or not found. Show "taken by another driver" and refresh the list |
 
 ### 3.3 `set_order_status(p_order_id uuid, p_status order_status, p_reason text default null, p_return_stock boolean default true)` → `orders` row
@@ -224,11 +248,14 @@ customer, and on `delivered` the daily reports are updated.
 `expo-notifications`) or `'fcm'` (a raw FCM registration token; **reserved**, see section 6).
 Call after sign-in, after the token changes, and on app start.
 If the same token was registered by another account (shared device), it moves to the current user.
-The driver can also `select`/`delete` their own rows in `push_tokens` (e.g. delete on sign-out).
+The driver can also `select`/`delete` their own rows in `push_tokens`: **delete this device's row before
+`signOut()`**. The admin resetting the PIN, deactivating or downgrading the account deletes all of the
+user's rows (register again after signing back in).
 
 | Error | SQL state | When |
 |---|---|---|
 | `NOT_AUTHENTICATED` | 28000 | no session |
+| `PIN_CHANGE_REQUIRED` | 42501 | the account still has `must_change_pin = true`: register after the PIN change (2026-11-16, session C) |
 | `INVALID_TOKEN` | P0001 | empty/blank token, token longer than 255 characters, missing platform or provider, or an `expo` token not in the `ExponentPushToken[...]` / `ExpoPushToken[...]` format |
 
 See section 6 for which providers are delivered today.
@@ -248,7 +275,7 @@ All writes go through the functions above; there are no insert/update/delete gra
 |---|---|
 | `orders` | only rows where `driver_id = auth.uid()` **and** the account is an active driver (all columns, including `customer_name`, `customer_phone`, `address_snapshot`). **Not** unassigned orders (use `available_orders`), not other drivers' orders. Losing the assignment, deactivation, or a role change removes access immediately (also for `order_items`, `order_status_history` and Realtime events) |
 | `order_items` | items of orders they can read |
-| `order_status_history` | history of orders they can read |
+| `order_status_history` | history of orders they can read. Includes non-status rows (`from_status = to_status`, `note` = `driver_assigned` / `driver_reassigned` / `driver_accepted`): do not render them as status changes |
 | `profiles` | own row only |
 | `push_tokens` | own rows: select and delete only. Insert/update only through `register_push_token` (since 2026-11-14) |
 | `app_settings`, `cities`, `sectors`, `subsections`, `buildings`, active `categories` / `products` | public catalog data |
@@ -326,7 +353,7 @@ Limits to design around:
 
 Functions write to `notification_outbox`; the Edge Function `push-dispatch` (T07) sends them,
 usually within a few seconds (a database trigger calls it on every insert; `pg_cron` retries every
-minute). Notifications a driver receives:
+minute). Nothing is sent to an account whose `must_change_pin` is true. Notifications a driver receives:
 
 | Trigger | Audience | Title (Arabic) | `data` |
 |---|---|---|---|

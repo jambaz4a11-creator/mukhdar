@@ -125,7 +125,7 @@ describe('initAuth', () => {
     await Promise.resolve();
     expect(useAuth.getState()).toMatchObject({ ready: true, session: { user: { id: 'u1' } } });
     listener?.('SIGNED_OUT', null);
-    expect(useAuth.getState()).toEqual({ ready: true, session: null });
+    expect(useAuth.getState()).toEqual({ ready: true, session: null, mustChangePin: false });
     stop();
     expect(unsubscribe).toHaveBeenCalled();
   });
@@ -133,6 +133,6 @@ describe('initAuth', () => {
   it('without a configured client: ready, no session', () => {
     useAuth.setState({ session: null, ready: false });
     initAuth(null);
-    expect(useAuth.getState()).toEqual({ ready: true, session: null });
+    expect(useAuth.getState()).toEqual({ ready: true, session: null, mustChangePin: false });
   });
 });

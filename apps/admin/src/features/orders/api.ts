@@ -74,6 +74,8 @@ export interface Driver {
   full_name: string;
   phone: string;
   is_active: boolean;
+  /** رمز مؤقت لم يُغيَّر: لا يُسند له طلب (DRIVER_PIN_PENDING) */
+  must_change_pin: boolean;
 }
 
 export const ordersKeys = {

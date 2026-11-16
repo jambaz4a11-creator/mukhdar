@@ -13,19 +13,21 @@ import { routeForNotification } from './routing';
 
 export function NotificationsBridge() {
   const userId = useAuth((s) => s.session?.user.id);
+  // رمز مؤقت: الخادم يرفض تسجيل الرمز (PIN_CHANGE_REQUIRED)؛ نسجّله بعد تغيير الرمز (H1، جلسة C)
+  const mustChangePin = useAuth((s) => s.mustChangePin);
   const response = Notifications.useLastNotificationResponse();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     const client = getSupabase();
-    if (!userId || !client || !canUseRemotePush()) return;
+    if (!userId || mustChangePin || !client || !canUseRemotePush()) return;
     // بدون نافذة إذن: يسجّل فقط إن كان الإذن ممنوحاً (الطلب الأول يسأل، askAfterFirstOrder)
     void registerPushToken(client, { ask: false });
     const sub = Notifications.addPushTokenListener(() => {
       void registerPushToken(client, { ask: false });
     });
     return () => sub.remove();
-  }, [userId]);
+  }, [userId, mustChangePin]);
 
   // إشعار تغيّر حالة طلب والتطبيق بالواجهة: "طلباتي" وشاشة الطلب تتحدثان فوراً (لا انتظار Realtime أو التركيز)
   useEffect(() => {

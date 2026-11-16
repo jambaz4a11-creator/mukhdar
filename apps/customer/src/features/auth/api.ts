@@ -10,6 +10,7 @@ import {
 } from '@mukhdar/shared';
 import { router } from 'expo-router';
 import { CHANGE_PIN, NAME } from './redirect';
+import { useAuth } from './store';
 
 export type Outcome = { ok: true; userId: string } | { ok: false; error: AuthError };
 
@@ -82,6 +83,8 @@ export async function goAfterAuth(
   };
   try {
     profile = await fetchSignInProfile(client, userId);
+    // القراءة نجحت فقط: عند الفشل لا نمسح علامة معروفة
+    useAuth.setState({ mustChangePin: profile.mustChangePin });
   } catch {
     // تعذّرت القراءة: لا نوقف المستخدم؛ الاسم يُطلب لاحقاً من "حسابي"، والخادم يرفض الطلب برمز مؤقت
   }

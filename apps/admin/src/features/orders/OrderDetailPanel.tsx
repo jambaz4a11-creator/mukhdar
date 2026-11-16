@@ -31,6 +31,7 @@ import {
   fullAddress,
   phoneLinks,
 } from './format';
+import { driverOptions } from './drivers';
 import { StatusBadge } from './StatusBadge';
 
 interface Props {
@@ -104,7 +105,7 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
   const links = phoneLinks(order.customer_phone);
   const actions = orderActions(order.status, role);
   const currentDriver = order.driver_id ? drivers.find((d) => d.id === order.driver_id) : undefined;
-  const activeDrivers = drivers.filter((d) => d.is_active && d.id !== order.driver_id);
+  const assignable = driverOptions(drivers, order.driver_id);
   const money = costs ? costAndProfit(order.order_items, costs, order.subtotal_iqd) : null;
   const reasonError = cancelling ? validateCancelReason(reason) : null;
 
@@ -274,9 +275,9 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
                 className="h-11 min-w-0 flex-1 rounded-control border border-border bg-surface px-2.5 text-sm"
               >
                 <option value="">اختر سائقاً</option>
-                {activeDrivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.full_name}
+                {assignable.map((d) => (
+                  <option key={d.id} value={d.id} disabled={d.disabled}>
+                    {d.label}
                   </option>
                 ))}
               </select>

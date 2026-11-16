@@ -113,7 +113,15 @@ function runScript(phoneArg, answers, env) {
   });
 }
 
-const baseEnv = { ...process.env, SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: serviceKey };
+// الاختبار يمرّر stdin بأنبوب، فيحتاج الاستثناء الصريح (مشروع التطوير فقط)؛ وCI يُزال من بيئة السكربت الفرعي
+// (حالة CI نفسها مُختبَرة أدناه وبـ scripts/lib/breakGlass.test.mjs).
+const baseEnv = {
+  ...process.env,
+  SUPABASE_URL: url,
+  SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+  MUKHDAR_BREAK_GLASS_TEST: '1',
+};
+delete baseEnv.CI;
 
 try {
   const adminPhone = newPhone();
@@ -139,6 +147,24 @@ try {
   check(
     (await signIn(adminPhone, oldPin)).status === 200,
     'refusal changed nothing (old PIN still works)',
+  );
+
+  // M4: بلا استثناء الاختبار، stdin المُمرَّر (echo y |) مرفوض ولا يتغير شيء؛ ومع CI مرفوض حتى بالاستثناء
+  const piped = { ...baseEnv };
+  delete piped.MUKHDAR_BREAK_GLASS_TEST;
+  const pipedRun = await runScript(`+${adminPhone}`, 'y\n\n', piped);
+  check(
+    pipedRun.code !== 0 && /real terminal/.test(pipedRun.out) && !pipedRun.pin,
+    'refuses piped stdin/stdout (no scripted confirmation, no PIN in a captured log)',
+  );
+  const inCi = await runScript(`+${adminPhone}`, 'y\n\n', { ...baseEnv, CI: 'true' });
+  check(
+    inCi.code !== 0 && /CI is set/.test(inCi.out) && !inCi.pin,
+    'refuses when CI is set, even with the test escape',
+  );
+  check(
+    (await signIn(adminPhone, oldPin)).status === 200,
+    'terminal refusals changed nothing (old PIN still works)',
   );
 
   // رقم غير صالح

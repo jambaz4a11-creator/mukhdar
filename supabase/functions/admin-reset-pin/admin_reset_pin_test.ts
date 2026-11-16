@@ -185,7 +185,7 @@ Deno.test(
       await arabic.handler(post({ user_id: CUSTOMER, new_pin: '٤٨٢٩١٥' })),
       500,
       {
-        error: 'INTERNAL',
+        error: 'RESET_INCOMPLETE',
       },
     );
     assert.ok(arabic.logs.every((l) => !l.includes('482915') && !l.includes('٤٨٢٩١٥')));
@@ -201,8 +201,8 @@ Deno.test(
     assert.deepEqual(calls, [
       'rate',
       `update:${CUSTOMER}:482915`, // أرقام عربية تُحوَّل
-      `revoke:${CUSTOMER}`,
       `record:${CUSTOMER}:${ADMIN}`,
+      `revoke:${CUSTOMER}`,
     ]);
     assert.ok(logs.every((l) => !l.includes('482915')));
     // موظف (غير أدمن) يُعاد ضبطه أيضاً
@@ -220,22 +220,75 @@ Deno.test('admin-reset-pin: update failure → 500, no revoke/audit', async () =
   assert.deepEqual(calls, ['rate']);
 });
 
-Deno.test('admin-reset-pin: revoke failure → 500 but the reset is still audited', async () => {
-  const { handler, calls } = setup({
-    revokeSessions: () => Promise.reject(new Error('db down')),
-  });
-  await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
-    error: 'INTERNAL',
-  });
-  assert.deepEqual(calls, ['rate', `update:${CUSTOMER}:482915`, `record:${CUSTOMER}:${ADMIN}`]);
-});
+Deno.test(
+  'admin-reset-pin: revoke failure → RESET_INCOMPLETE after retries, still audited+flagged',
+  async () => {
+    let tries = 0;
+    const { handler, calls } = setup({
+      revokeSessions: () => {
+        tries++;
+        return Promise.reject(new Error('db down'));
+      },
+    });
+    await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
+      error: 'RESET_INCOMPLETE',
+    });
+    assert.equal(tries, 3); // المحاولة الأولى + محاولتان
+    assert.deepEqual(calls, ['rate', `update:${CUSTOMER}:482915`, `record:${CUSTOMER}:${ADMIN}`]);
+  },
+);
 
-Deno.test('admin-reset-pin: audit failure → 500 (after revoking)', async () => {
-  const { handler, calls } = setup({
-    recordReset: () => Promise.reject(new Error('db down')),
-  });
-  await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
-    error: 'INTERNAL',
-  });
-  assert.deepEqual(calls, ['rate', `update:${CUSTOMER}:482915`, `revoke:${CUSTOMER}`]);
-});
+Deno.test(
+  'admin-reset-pin: a transient audit failure is retried and the reset succeeds',
+  async () => {
+    let tries = 0;
+    const { handler, calls } = setup({
+      recordReset: (u, a) => {
+        tries++;
+        if (tries < 3) return Promise.reject(new Error('blip'));
+        calls.push(`record:${u}:${a}`);
+        return Promise.resolve();
+      },
+    });
+    await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 200, {
+      ok: true,
+    });
+    assert.equal(tries, 3);
+    assert.deepEqual(calls.slice(-2), [`record:${CUSTOMER}:${ADMIN}`, `revoke:${CUSTOMER}`]);
+  },
+);
+
+Deno.test(
+  'admin-reset-pin: audit failure → the typed PIN is overwritten with an unknown random one (no live known PIN)',
+  async () => {
+    const { handler, calls, logs } = setup({
+      recordReset: () => Promise.reject(new Error('db down')),
+    });
+    await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
+      error: 'RESET_INCOMPLETE',
+    });
+    // 1) الرمز المكتوب، 2) بعد فشل التدقيق رمز عشوائي مختلف؛ لا إبطال جلسات ولا ردّ للرمز
+    const updates = calls.filter((c) => c.startsWith('update:'));
+    assert.equal(updates.length, 2);
+    assert.equal(updates[0], `update:${CUSTOMER}:482915`);
+    assert.match(updates[1], /:\d{6}$/);
+    assert.ok(updates[1].startsWith(`update:${CUSTOMER}:`));
+    assert.ok(!calls.some((c) => c.startsWith('revoke:')));
+    assert.ok(logs.every((l) => !l.includes('482915')));
+  },
+);
+
+Deno.test(
+  'admin-reset-pin: audit AND rollback fail → still RESET_INCOMPLETE (never ok)',
+  async () => {
+    let n = 0;
+    const { handler } = setup({
+      updatePassword: () =>
+        ++n === 1 ? Promise.resolve() : Promise.reject(new Error('auth down')),
+      recordReset: () => Promise.reject(new Error('db down')),
+    });
+    await expectResponse(await handler(post({ user_id: CUSTOMER, new_pin: '482915' })), 500, {
+      error: 'RESET_INCOMPLETE',
+    });
+  },
+);

@@ -10,13 +10,21 @@
 //   4) يولّد رمزاً عشوائياً من 6 أرقام، ويضبطه (auth.admin)، ثم يُبطل كل جلسات الحساب (revoke_user_sessions)،
 //      ثم يسجّل pin_resets (kind = 'break_glass'، reset_by فارغ) ويضبط must_change_pin (record_pin_reset):
 //      أول دخول يُجبر على تغيير الرمز.
+//   0) يرفض التشغيل ما لم يكن stdin وstdout طرفية حقيقية (لا أنبوب ولا tee ولا تحويل لملف)، ويرفض مع CI؛
+//      استثناء الاختبار: MUKHDAR_BREAK_GLASS_TEST=1 مع مشروع التطوير فقط (it:break-glass).
 //   5) الرمز يظهر مرة واحدة على الشاشة فقط، ثم يُمسح عند الضغط على Enter. لا يُكتب بملف ولا بسجل ولا
 //      بسطر أوامر ولا بـ SQL. أي فشل بعد تغيير الرمز يطبع الخطوة الفاشلة بلا الرمز: أعد التشغيل (آمن).
 // تُسلَّم النتيجة للأدمن بمكالمة هاتفية، لا واتساب ولا رسالة.
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { DEV_PROJECT_REF, projectRef, randomPin, storedPhone } from './lib/breakGlass.mjs';
+import {
+  DEV_PROJECT_REF,
+  interactiveGuard,
+  projectRef,
+  randomPin,
+  storedPhone,
+} from './lib/breakGlass.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 function readEnv(name) {
@@ -27,6 +35,8 @@ function readEnv(name) {
   const m = fs.readFileSync(file, 'utf8').match(new RegExp(`^${name}=(.*)$`, 'm'));
   return m ? m[1].trim() : undefined;
 }
+
+const httpLabel = (status) => (status === 0 ? 'network error' : `HTTP ${status}`);
 
 function fail(message) {
   console.error(`\nخطأ: ${message}`);
@@ -45,6 +55,14 @@ async function main() {
     fail('SUPABASE_SERVICE_ROLE_KEY is missing (env or .env.local). Refusing to run.');
   const ref = projectRef(url);
   if (!ref) fail(`SUPABASE_URL is not a https://<ref>.supabase.co URL: ${url}`);
+
+  const refused = interactiveGuard({
+    stdinTTY: Boolean(process.stdin.isTTY),
+    stdoutTTY: Boolean(process.stdout.isTTY),
+    env: process.env,
+    ref,
+  });
+  if (refused) fail(refused);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const lines = rl[Symbol.asyncIterator]();
@@ -73,12 +91,19 @@ async function main() {
     'Content-Type': 'application/json',
   };
   const call = async (method, pathname, body) => {
-    const res = await fetch(`${url}${pathname}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const text = await res.text();
+    let res;
+    let text;
+    try {
+      res = await fetch(`${url}${pathname}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      text = await res.text();
+    } catch {
+      // انقطاع شبكة: يُعامل كخطوة فاشلة (بلا الرمز) لا كاستثناء غير معالج
+      return { status: 0, json: null };
+    }
     let json;
     try {
       json = text ? JSON.parse(text) : null;
@@ -91,7 +116,7 @@ async function main() {
   // الحساب: أدمن فقط
   const lookup = await call('GET', `/rest/v1/profiles?phone=eq.${phone}&select=id,role,is_active`);
   if (lookup.status !== 200)
-    fail(`profile lookup failed (HTTP ${lookup.status}). Nothing changed.`);
+    fail(`profile lookup failed (${httpLabel(lookup.status)}). Nothing changed.`);
   const profile = lookup.json?.[0];
   if (!profile) fail('no account with this phone. Nothing changed.');
   if (profile.role !== 'admin') {
@@ -127,9 +152,9 @@ async function main() {
   ];
   for (const [label, run] of steps) {
     const res = await run();
-    if (res.status >= 300) {
+    if (res.status === 0 || res.status >= 300) {
       fail(
-        `step "${label}" failed (HTTP ${res.status}). The PIN is NOT shown; run the command again ` +
+        `step "${label}" failed (${httpLabel(res.status)}). The PIN is NOT shown; run the command again ` +
           '(re-running is safe: it sets a new PIN).',
       );
     }

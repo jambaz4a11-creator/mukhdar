@@ -1,5 +1,5 @@
 // منطق نماذج T19 بلا واجهة (يُختبر بـ vitest): تحليل أرقام العمارات بالجملة، ونموذج الإعدادات.
-import { normalizePin } from '@mukhdar/shared';
+import { ERROR_MESSAGES, isErrorCode, normalizePin, parseBackendError } from '@mukhdar/shared';
 
 /** عمارة 1..100 داخل كل وحدة (CLAUDE.md)؛ قاعدة البيانات تفرضها أيضاً (buildings_number_format). */
 export const MAX_BUILDING_NUMBER = 100;
@@ -138,4 +138,30 @@ export function pinMessage(kind: 'reset' | 'create', pin: string): string {
   return kind === 'reset'
     ? `رمز دخولك الجديد بالمخضر: ${pin}، غيّره من حسابي`
     : `حسابك بالمخضر جاهز. رمزك المؤقت: ${pin}، غيّره من حسابي`;
+}
+
+/**
+ * فشل إعادة ضبط الرمز (مراجعة جلسة C، M2). الرفض قبل أي تغيير (رمز غير مقبول، حد المعدل، صلاحية...) يبقي الرمز
+ * بالحقل ليُصحَّح. أي فشل آخر (RESET_INCOMPLETE، خطأ داخلي، انقطاع لا نعرف نتيجته) قد يكون الرمز تغيّر فعلاً بلا
+ * علامة أو تدقيق، فيُمسح الحقل وتُعرض رسالة "لم تكتمل" كي لا يُرسل الرمز لصاحبه.
+ */
+const RESET_REJECTED_BEFORE_CHANGE = new Set([
+  'PIN_INVALID',
+  'TOO_MANY_RESETS',
+  'NOT_ALLOWED',
+  'NOT_AUTHENTICATED',
+  'PIN_CHANGE_REQUIRED',
+  'ADMIN_ACCOUNT',
+  'USER_NOT_FOUND',
+  'INVALID_REQUEST',
+]);
+
+export function resetPinFailure(error: unknown): { message: string; clearPin: boolean } {
+  // invoke() يرمي Error فيه code المقروء من جسم الرد؛ وإلا نحلّل الخطأ كما هو
+  const attached = (error as { code?: unknown } | null)?.code;
+  const code = isErrorCode(attached) ? attached : parseBackendError(error).code;
+  if (code && RESET_REJECTED_BEFORE_CHANGE.has(code)) {
+    return { message: ERROR_MESSAGES[code], clearPin: false };
+  }
+  return { message: ERROR_MESSAGES.RESET_INCOMPLETE, clearPin: true };
 }

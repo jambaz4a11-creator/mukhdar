@@ -286,15 +286,26 @@ all 23 migrations.
 
 ## Ordered fix list
 
-1. **One new migration** (`H1`, `M1`, plus `L3`, `L4(b)`, `L5`, drop `admin_actions_last_hour` from `L2`):
-   push recipients exclude flagged users; reset/deactivation/downgrade delete push tokens;
-   `accept_order` / `assign_driver` lock predicates include role and `not must_change_pin`; `list_drivers`
-   returns the flag; same-driver assign is a no-op. pgTAP for each; `db:concurrency` case for the demotion
-   race. Apply to mukhdar-dev with approval. No Edge Function redeploy.
-2. **`admin-reset-pin` redeploy + `ResetPinDialog`** (`M2`): retry, `RESET_INCOMPLETE`, clear the PIN on error.
-3. **Break-glass script** (`M4`, `L8`): TTY-only, CI refusal, test escape, caught network errors.
-4. **Customer app** (`M3`): flag check on restore/resume, root guard, no back on the forced screen,
-   checkout redirect.
-5. **Admin assign dialog** (`M1` UI): show/disable drivers with a pending PIN change.
-6. **Docs** (`L2`, `L6`, `L7`): RUNBOOK rate-limit wording and Auth-upgrade check; DRIVER-API corrections.
-7. **Decide** `L1` (accept the ≤ 1 h window or add the session check).
+Status after fix session C (2026-11-16). Migrations `20261125000001_review_session_c.sql` and `20261125000002_address_audit.sql` are applied to
+mukhdar-dev **only**; `admin-reset-pin` is redeployed to mukhdar-dev **only** (`verify_jwt = true`).
+Nothing else in the cloud changed. Production does not exist yet: RUNBOOK §17 lists both migrations (rows 24 and 25).
+
+| # | Item | Status | Where |
+|---|---|---|---|
+| 1 | **H1** push to flagged users; tokens deleted on reset/deactivation/demotion | ✅ Done | migration; `23_review_session_c.sql` (recipients per audience, `register_push_token`, reset/deactivate/demote/promote) |
+| 1 | **M1** `accept_order` role+flag under the lock; `assign_driver` refuses a flagged driver (`DRIVER_PIN_PENDING`); `list_drivers.must_change_pin` | ✅ Done | migration; pgTAP; `db:concurrency` case 2b (demotion while `accept_order` waits on the lock; runs in CI, no Docker locally) |
+| 1 | **L2** drop `admin_actions_last_hour` | ✅ Done | migration; `01_schema.sql`, `19_...` updated |
+| 1 | **L3** same-driver assign is a no-op | ✅ Done | migration; pgTAP (no history row, no second push, no audit) |
+| 1 | **L4(b)** waste of an item with no cost row valued at 0 | ✅ Done | migration; pgTAP |
+| 1 | **L4(a)** item whose product was deleted is not in the waste | 📝 Accepted, documented | SPEC-backend assumption 58 |
+| 1 | **L5** `kind` ↔ `reset_by` | ✅ Done, in the function, **not** as a table check (a check would break deleting an admin account, because `reset_by` is `on delete set null`) | migration; pgTAP |
+| 2 | **M2** `admin-reset-pin` leaves no live known PIN without flag+audit | ✅ Done | handler: audit/flag first with 2 retries, then revoke with 2 retries; if the audit fails for good the typed PIN is overwritten with an unknown random one and `RESET_INCOMPLETE` is returned (revoke failing: `RESET_INCOMPLETE`, flag+audit already stored). Deno tests (retry, rollback, rollback failing, no PIN in logs). `ResetPinDialog` clears the PIN and shows "لم تكتمل إعادة الضبط: أعد المحاولة ولا ترسل الرمز" (vitest `resetPinFailure`). Optional DB-side `begin_pin_reset` variant not needed |
+| 3 | **M4 + L8(a)** break-glass TTY-only, CI refusal, test escape, network errors caught | ✅ Done | `interactiveGuard` (node tests); `it:break-glass` adds piped/CI refusal cases (**not run**: it writes throwaway accounts to dev, outside the approved scope) |
+| 4 | **M3** customer forced PIN screen | ✅ Done | store reads `must_change_pin` on restore, sign-in and resume; root `ForcedPinGuard`; Android back swallowed, `gestureEnabled: false`, sign-out button; checkout `PIN_CHANGE_REQUIRED` raises the flag; push registration waits for the PIN change. 24 new Jest tests (`forced-pin.test.tsx`, `account.test.tsx`, `cart-checkout.test.tsx`) |
+| 5 | **M1 UI** assign dialog | ✅ Done | pending-PIN drivers shown disabled with "لم يغيّر رمزه بعد" (vitest `drivers.test.ts`) |
+| 6 | **L2** wording, **L6** upgrade check, **L7** DRIVER-API | ✅ Done | RUNBOOK §16 (rate-limit wording, run `it:admin-users` after every Auth upgrade, `RESET_INCOMPLETE`); DRIVER-API "Changes for the driver app" (items 4, 7, 8, 9 corrected/added), §2, §3.2, §3.4, §4, §6 |
+| 6 | **L8(b)** address rename/hide in `admin_audit` | ✅ Done | second migration `20261125000002_address_audit.sql` (applied to mukhdar-dev only): `action = 'address'` rows for name/number/is_active changes of sectors, units, buildings (a pure reorder is not audited); pgTAP (10 assertions) |
+| 7 | **L1** ≤ 1 h access to own rows with a revoked session | 📝 Decision: accepted risk | documented (SPEC-backend 58, RUNBOOK); revisit with a short JWT expiry or `session_alive()` if the owner wants it |
+
+Also in this session: CLAUDE.md now states the sales and net-profit definitions (matching SPEC-admin and
+SPEC-backend §2), new error codes `DRIVER_PIN_PENDING` and `RESET_INCOMPLETE` (shared `errors.ts`, SPEC-backend §5/§8).

@@ -34,3 +34,21 @@ export function projectRef(url) {
     return null;
   }
 }
+
+/**
+ * هل يُسمح بالتشغيل؟ يرجع null إن سُمح، أو نص سبب الرفض (مراجعة جلسة C، M4).
+ * الرمز يُطبع على الشاشة فقط ويُؤكَّد بالكتابة، فلا يُقبل stdin أو stdout مُحوَّل (أنبوب أو ملف أو tee أو CI):
+ * سطر الرمز يبقى بالسجل والتأكيد يمكن تمريره بـ echo y |.
+ *  - CI مضبوط ← رفض دائماً.
+ *  - stdin وstdout كلاهما طرفية حقيقية ← مسموح.
+ *  - غير ذلك ← مسموح فقط للاختبار: MUKHDAR_BREAK_GLASS_TEST=1 **ومعه** مشروع التطوير المعروف.
+ */
+export function interactiveGuard({ stdinTTY, stdoutTTY, env, ref }) {
+  if (env.CI) return 'CI is set: break-glass must be run by a person on their own machine.';
+  if (stdinTTY && stdoutTTY) return null;
+  if (env.MUKHDAR_BREAK_GLASS_TEST === '1' && ref === DEV_PROJECT_REF) return null;
+  return (
+    'stdin and stdout must both be a real terminal (not piped, redirected, tee-ed or recorded), ' +
+    'so the PIN is never captured in a log and the confirmation cannot be scripted. Nothing changed.'
+  );
+}

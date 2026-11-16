@@ -185,7 +185,12 @@ test.describe.serial('orders (writes: live order and actions)', () => {
     await expect(panel.locator('[data-status="preparing"]')).toBeVisible();
 
     const select = panel.getByLabel('تعيين سائق');
-    await select.selectOption({ index: 1 });
+    // أول سائق قابل للتعيين: من لم يغيّر رمزه المؤقت (حسابات الاختبارات الأخرى) يظهر معطّلاً (M1)
+    const firstAssignable = await select
+      .locator('option:not([disabled]):not([value=""])')
+      .first()
+      .getAttribute('value');
+    await select.selectOption(firstAssignable ?? '');
     const driverName = (await select.locator('option:checked').innerText()).trim();
     await panel.getByRole('button', { name: 'تعيين', exact: true }).click();
     await expect(panel.getByText(`السائق: ${driverName}`)).toBeVisible();

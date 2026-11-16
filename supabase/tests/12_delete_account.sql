@@ -97,7 +97,7 @@ delete from auth.users where id in (tests.id('cust'), tests.id('drv'));
 select is_empty(format($$ select 1 from public.profiles where id = %L $$, tests.id('cust')), 'profile is deleted');
 select is_empty(format($$ select 1 from private.account_deletions where user_id = %L $$, tests.id('cust')),
   'stored deletion state goes with the profile');
-select ok(pg_get_functiondef('public.accept_order(uuid)'::regprocedure) ~ 'from public\.profiles where id = v_uid and is_active for share',
+select ok(pg_get_functiondef('public.accept_order(uuid)'::regprocedure) ~ 'from public\.profiles\s+where id = v_uid and role = ''driver'' and is_active and not must_change_pin for share',
   'accept_order locks the driver profile (serialised with begin_account_deletion, N1)');
 select is_empty(format($$ select 1 from public.addresses where customer_id = %L $$, tests.id('cust')),
   'addresses are deleted');

@@ -4,6 +4,7 @@ import {
   compactRanges,
   parseBuildingNumbers,
   pinMessage,
+  resetPinFailure,
   splitNew,
   validateBuildingNumber,
   validateSettings,
@@ -152,5 +153,35 @@ describe('validateBuildingNumber', () => {
   });
   it.each(['', '0', '101', '012', '1000', '12a', '1.5', '-3'])('rejects %p', (input) => {
     expect(validateBuildingNumber(input)).toContain('من 1 إلى 100');
+  });
+});
+
+describe('resetPinFailure (admin-reset-pin errors)', () => {
+  const coded = (code: string) => Object.assign(new Error('x'), { code });
+
+  it('RESET_INCOMPLETE clears the PIN and says not to send it', () => {
+    const r = resetPinFailure(coded('RESET_INCOMPLETE'));
+    expect(r.clearPin).toBe(true);
+    expect(r.message).toContain('ولا ترسل الرمز');
+  });
+
+  it('an unknown outcome (internal error, network, no code) is treated like incomplete', () => {
+    for (const e of [coded('INTERNAL'), new Error('Failed to fetch'), null]) {
+      const r = resetPinFailure(e);
+      expect(r.clearPin).toBe(true);
+      expect(r.message).toContain('ولا ترسل الرمز');
+    }
+  });
+
+  it('a rejection before any change keeps the PIN and shows the specific reason', () => {
+    const r = resetPinFailure(coded('TOO_MANY_RESETS'));
+    expect(r.clearPin).toBe(false);
+    expect(r.message).toContain('20');
+    expect(resetPinFailure(coded('PIN_INVALID')).clearPin).toBe(false);
+  });
+
+  it('reads a code from a raw backend body too', () => {
+    expect(resetPinFailure({ error: 'RESET_INCOMPLETE' }).clearPin).toBe(true);
+    expect(resetPinFailure({ error: 'NOT_ALLOWED' }).clearPin).toBe(false);
   });
 });

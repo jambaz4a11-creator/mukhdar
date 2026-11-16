@@ -93,7 +93,7 @@ select is(
       and p.prorettype <> 'trigger'::regtype and left(p.proname::text, 1) <> '_'
       and has_function_privilege('service_role', p.oid, 'execute')
       and not has_function_privilege('authenticated', p.oid, 'execute')),
-  array['abort_account_deletion', 'admin_actions_last_hour', 'admin_rate_hit', 'begin_account_deletion',
+  array['abort_account_deletion', 'admin_rate_hit', 'begin_account_deletion',
         'finish_user_creation', 'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions',
         'signup_rate_hit'],
   'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19/B PIN reset, account creation, rate limit)');

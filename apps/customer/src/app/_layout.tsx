@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { ForcedPinGuard } from '../features/auth/ForcedPinGuard';
 import { initAuth } from '../features/auth/store';
 import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
 import { configureNotificationHandler } from '../features/notifications/push';
@@ -81,12 +82,16 @@ function RootLayout() {
         <StatusBar style="dark" />
         <NotificationsBridge />
         <OfflineBanner />
+        <ForcedPinGuard />
         <Stack
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: colors.background },
           }}
-        />
+        >
+          {/* شاشة تغيير الرمز: بلا سحب للرجوع (الإجباري لا يُترك؛ العادي فيه زر رجوع) */}
+          <Stack.Screen name="account/pin" options={{ gestureEnabled: false }} />
+        </Stack>
       </PersistQueryClientProvider>
     </SafeAreaProvider>
   );

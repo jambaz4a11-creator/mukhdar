@@ -1165,7 +1165,6 @@ export type Database = {
         };
         Returns: number;
       };
-      admin_actions_last_hour: { Args: { p_admin: string; p_kind: string }; Returns: number };
       admin_rate_hit: { Args: { p_admin: string; p_kind: string }; Returns: number };
       admin_save_product: { Args: { p: Json }; Returns: string };
       assign_driver: {
@@ -1258,6 +1257,7 @@ export type Database = {
           full_name: string;
           id: string;
           is_active: boolean;
+          must_change_pin: boolean;
           phone: string;
         }[];
       };

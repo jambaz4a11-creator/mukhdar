@@ -88,12 +88,10 @@ select is(tests.try($$ select public.stuck_notifications_count() $$), 'NOT_ALLOW
 
 -- ---------------------------------------------------------------- service_role helpers: الصلاحيات
 select tests.as_postgres();
-select ok(has_function_privilege('service_role', 'public.admin_actions_last_hour(text, uuid)', 'execute')
-      and has_function_privilege('service_role', 'public.record_pin_reset(uuid, uuid, text)', 'execute')
+select ok(has_function_privilege('service_role', 'public.record_pin_reset(uuid, uuid, text)', 'execute')
       and has_function_privilege('service_role', 'public.finish_user_creation(uuid, uuid, public.user_role, text)', 'execute'),
   'service_role can call the three helper functions');
-select ok(not has_function_privilege('authenticated', 'public.admin_actions_last_hour(text, uuid)', 'execute')
-      and not has_function_privilege('authenticated', 'public.record_pin_reset(uuid, uuid, text)', 'execute')
+select ok(not has_function_privilege('authenticated', 'public.record_pin_reset(uuid, uuid, text)', 'execute')
       and not has_function_privilege('authenticated', 'public.finish_user_creation(uuid, uuid, public.user_role, text)', 'execute'),
   'authenticated cannot call them');
 select ok(not has_function_privilege('anon', 'public.finish_user_creation(uuid, uuid, public.user_role, text)', 'execute'),
@@ -105,12 +103,12 @@ select lives_ok(format($$ select public.record_pin_reset(%L, %L) $$, tests.id('c
   'service_role records a reset');
 select lives_ok(format($$ select public.record_pin_reset(%L, %L) $$, tests.id('driver'), tests.id('admin')),
   'second reset');
-select is(public.admin_actions_last_hour('pin_reset', tests.id('admin')), 2, 'hourly count per admin');
-select is(public.admin_actions_last_hour('pin_reset', tests.id('staff')), 0, 'other admins are counted apart');
 select tests.as_postgres();
+select is((select count(*)::int from public.pin_resets where reset_by = tests.id('admin')), 2, 'resets recorded per admin');
+select is((select count(*)::int from public.pin_resets where reset_by = tests.id('staff')), 0, 'other admins are counted apart');
 update public.pin_resets set created_at = now() - interval '61 minutes' where user_id = tests.id('driver');
+select is((select count(*)::int from public.pin_resets where reset_by = tests.id('admin') and created_at > now() - interval '1 hour'), 1, 'older than an hour is outside the window');
 select tests.as_service();
-select is(public.admin_actions_last_hour('pin_reset', tests.id('admin')), 1, 'older than an hour does not count');
 select throws_ok($$ select count(*) from public.pin_resets $$, '42501', null,
   'service_role has no direct table access (functions only)');
 
@@ -140,8 +138,8 @@ select lives_ok(format($$ select public.finish_user_creation(%L, %L, 'driver', '
 select tests.as_postgres();
 select is((select row(role, full_name, is_active)::text from public.profiles where id = tests.id('new')),
   '(driver,"سائق جديد",t)', 'profile has the driver role and trimmed name');
-select tests.as_service();
-select is(public.admin_actions_last_hour('user_creation', tests.id('admin')), 1, 'creation counted for the admin');
+select tests.as_postgres();
+select is((select count(*)::int from public.user_creations where created_by = tests.id('admin')), 1, 'creation recorded for the admin');
 
 select tests.as_user(tests.id('admin'));
 select is((select role::text from public.user_creations where user_id = tests.id('new')), 'driver',

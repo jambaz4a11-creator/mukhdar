@@ -181,7 +181,7 @@ select is((select count(*)::int from public.list_drivers() where id in (tests.id
 select is((select count(*)::int from public.list_drivers() where id = tests.id('cust')), 0,
   'list_drivers returns drivers only');
 select is(pg_get_function_result('public.list_drivers()'::regprocedure),
-  'TABLE(id uuid, full_name text, phone text, is_active boolean)', 'list_drivers returns only id, name, phone, active');
+  'TABLE(id uuid, full_name text, phone text, is_active boolean, must_change_pin boolean)', 'list_drivers returns only id, name, phone, active, must_change_pin (no email, role or money)');
 select tests.as_user(tests.id('d1'));
 select throws_ok($$ select * from public.list_drivers() $$, 'NOT_ALLOWED', 'driver cannot list drivers');
 select tests.as_user(tests.id('cust'));

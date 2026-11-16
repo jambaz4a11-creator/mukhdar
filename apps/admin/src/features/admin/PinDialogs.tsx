@@ -17,7 +17,7 @@ import { usePanel } from '@/components/PanelProviders';
 import { displayPhone } from '@/features/orders/format';
 import { Field, Modal, inputClass } from '@/features/catalog/ui';
 import { adminKeys, createStaffUser, resetPin, type UserRow } from './api';
-import { pinMessage } from './forms';
+import { pinMessage, resetPinFailure } from './forms';
 
 function PinInput({
   id,
@@ -141,6 +141,10 @@ export function ResetPinDialog({ user, onClose }: { user: UserRow; onClose: () =
         setPin('');
       }
     },
+    // فشل لا نعرف نتيجته ← قد يكون الرمز تغيّر بلا علامة: يُمسح الحقل فلا يُرسل (M2)
+    onError: (e) => {
+      if (resetPinFailure(e).clearPin) setPin('');
+    },
   });
 
   const close = () => {
@@ -188,7 +192,7 @@ export function ResetPinDialog({ user, onClose }: { user: UserRow; onClose: () =
               role="alert"
               className="m-0 rounded-control bg-danger-soft px-3 py-2 text-sm text-danger"
             >
-              {errorMessage(reset.error)}
+              {resetPinFailure(reset.error).message}
             </p>
           )}
           <button

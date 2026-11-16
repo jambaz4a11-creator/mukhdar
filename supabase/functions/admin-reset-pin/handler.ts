@@ -6,7 +6,8 @@
 //         401 NOT_AUTHENTICATED | 403 NOT_ALLOWED | 403 PIN_CHANGE_REQUIRED (المستدعي برمز مؤقت) |
 //         400 INVALID_REQUEST | 404 USER_NOT_FOUND |
 //         403 ADMIN_ACCOUNT | 400 PIN_INVALID (detail = PIN_LENGTH/PIN_TRIVIAL/PIN_MATCHES_PHONE) |
-//         429 TOO_MANY_RESETS | 500 INTERNAL
+//         429 TOO_MANY_RESETS | 500 RESET_INCOMPLETE (الرمز تغيّر لكن التدقيق أو إبطال الجلسات فشل؛ لا يُرسل
+//         الرمز، وأعد المحاولة) | 500 INTERNAL
 // الرمز لا يرجع بالرد ولا يُسجَّل (لا الجسم ولا الرمز بأي سجل). قواعد الرمز من packages/shared (لا نسخة).
 import { normalizePin, validatePin } from '../../../packages/shared/src/pin.ts';
 import {
@@ -20,6 +21,27 @@ import {
 } from '../_shared/admin.ts';
 
 export const RESETS_PER_HOUR = 20;
+/** محاولات إضافية لخطوات ما بعد تغيير الرمز (مراجعة جلسة C، M2). */
+export const STEP_RETRIES = 2;
+
+async function withRetries(step: () => Promise<void>): Promise<void> {
+  let last: unknown;
+  for (let i = 0; i <= STEP_RETRIES; i++) {
+    try {
+      return await step();
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}
+
+/** رمز عشوائي من 6 أرقام لا يراه أحد: يُتلف الرمز المكتوب إن تعذّر تسجيل إعادة الضبط. */
+function randomPin(): string {
+  const buf = new Uint32Array(6);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => n % 10).join('');
+}
 
 export interface ResetPinDeps extends AdminAuthDeps {
   /** admin_rate_hit('pin_reset', admin): يسجّل المحاولة ويرجع عدد محاولات آخر ساعة شاملة هذه */
@@ -81,21 +103,28 @@ export function createResetPinHandler(deps: ResetPinDeps): (req: Request) => Pro
       return fail(500, 'INTERNAL');
     }
 
-    // الرمز تغيّر: إبطال الجلسات والتدقيق يُحاولان كلاهما حتى لو فشل أحدهما.
-    let ok = true;
+    // الرمز تغيّر الآن، والعلامة (must_change_pin) مسحها الـ trigger؛ record_pin_reset وحده يعيدها مع سجل التدقيق.
+    // لذا: التدقيق أولاً مع إعادة المحاولة. إن فشل نهائياً نُتلف الرمز الذي كتبه الأدمن برمز عشوائي لا يعرفه
+    // أحد (لا يبقى رمز حي معروف بلا علامة ولا سجل)، ونرجع RESET_INCOMPLETE فيُعاد الضبط من جديد.
     try {
-      await deps.revokeSessions(userId);
+      await withRetries(() => deps.recordReset(userId, admin));
     } catch (e) {
-      ok = false;
-      logErr('admin-reset-pin revoke failed', e);
-    }
-    try {
-      await deps.recordReset(userId, admin);
-    } catch (e) {
-      ok = false;
       logErr('admin-reset-pin audit failed', e);
+      try {
+        await deps.updatePassword(userId, randomPin());
+      } catch (e2) {
+        logErr('admin-reset-pin rollback failed', e2);
+      }
+      return fail(500, 'RESET_INCOMPLETE');
     }
-    if (!ok) return fail(500, 'INTERNAL');
+    // العلامة والتدقيق ثابتان: أي فشل بعدهما لا يترك رمزاً حياً بلا علامة. إبطال الجلسات يُعاد، وإن فشل
+    // نخبر الأدمن أن الضبط لم يكتمل (الأجهزة القديمة ما زالت داخلة) فلا يرسل الرمز قبل إعادة المحاولة.
+    try {
+      await withRetries(() => deps.revokeSessions(userId));
+    } catch (e) {
+      logErr('admin-reset-pin revoke failed', e);
+      return fail(500, 'RESET_INCOMPLETE');
+    }
 
     deps.log?.('admin-reset-pin done', { user_id: userId, by: admin });
     return json(200, { ok: true });

@@ -21,6 +21,7 @@ import { getSupabase } from '../../lib/supabase';
 import { APP_SETTINGS_KEY } from '../settings/useAppSettings';
 import { cartSignature, useCart } from '../cart/store';
 import { useSelectedAddress } from '../addresses/selected';
+import { useAuth } from '../auth/store';
 import { askAfterFirstOrder } from '../notifications/push';
 
 /** بعدها نعتبر الطلب منقطعاً (الرد قد يصل للخلفية؛ إعادة المحاولة بنفس المفتاح آمنة). */
@@ -171,6 +172,9 @@ export function usePlaceOrder() {
           .flag(detail, code === 'INSUFFICIENT_STOCK' ? 'insufficient' : 'unavailable');
         void queryClient.invalidateQueries({ queryKey: ['products'] });
         router.navigate('/cart');
+      } else if (code === 'PIN_CHANGE_REQUIRED') {
+        // رمز مؤقت لم تلتقطه القراءة (لا شبكة وقتها، أو أعاد المتجر الضبط الآن): الحارس يفتح شاشة التغيير (M3)
+        useAuth.setState({ mustChangePin: true });
       } else if (code === 'STORE_CLOSED' || code === 'BELOW_MIN_ORDER') {
         void queryClient.invalidateQueries({ queryKey: APP_SETTINGS_KEY });
       } else if (code === 'ADDRESS_INACTIVE' || code === 'ADDRESS_NOT_FOUND') {

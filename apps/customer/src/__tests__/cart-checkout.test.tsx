@@ -527,6 +527,22 @@ describe('checkout', () => {
     expect(useCart.getState().items).toEqual({ t: 2, c: 3 });
   });
 
+  it('PIN_CHANGE_REQUIRED turns on the forced PIN state (the root guard opens the change screen)', async () => {
+    setup({
+      placeOrder: () => ({
+        data: null,
+        error: { message: 'PIN_CHANGE_REQUIRED', details: null, code: '42501' },
+      }),
+    });
+    await ready();
+    expect(useAuth.getState().mustChangePin).toBe(false);
+    await fireEvent.press(screen.getByTestId('checkout-confirm'));
+    expect(await screen.findByText(ERROR_MESSAGES.PIN_CHANGE_REQUIRED)).toBeTruthy();
+    expect(useAuth.getState().mustChangePin).toBe(true);
+    expect(screen.queryByText(ar.checkout.retry)).toBeNull();
+    useAuth.setState({ mustChangePin: false });
+  });
+
   it.each<[ErrorCode, string | undefined, string]>([
     ['TOO_MANY_ACTIVE_ORDERS', '3', ERROR_MESSAGES.TOO_MANY_ACTIVE_ORDERS],
     ['STORE_CLOSED', undefined, ERROR_MESSAGES.STORE_CLOSED],
