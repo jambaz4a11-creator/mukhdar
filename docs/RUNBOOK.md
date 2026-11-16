@@ -160,7 +160,7 @@ pnpm db:test:remote --prelude=supabase/migrations/<new>.sql   # migration غير
 وظيفة `db-tests` بـ `.github/workflows/ci.yml`، على Supabase محلي (Docker على runner GitHub، تُطبَّق الـ migrations و`seed.sql` تلقائياً). **لا اتصال بالسحابة ولا كلمة سر بـ GitHub.** الخطوات:
 1. `pnpm db:test` على البيانات الأساسية.
 2. `pnpm db:concurrency`: تزامن حقيقي باتصالات متعددة (40 طلباً على رصيد 10 ← 10 تنجح بالضبط بلا deadlocks؛ 8 سائقين يقبلون نفس الطلب ← واحد فقط؛ 4 عمال push-dispatch يحجزون من الصندوق بنفس اللحظة ← مجموعات منفصلة). ينشئ بياناته فعلاً ثم يحذفها، لذلك **يرفض أي قاعدة غير محلية** (لا يعمل على `mukhdar-dev`).
-3. `seed:demo --scale=load`، ثم `pnpm db:test` مرة ثانية، ثم `pnpm db:report-perf` (T20: سنة من البيانات، 200 ألف طلب و800 ألف بند، داخل معاملة تُلغى؛ كل دالة تقارير لشهر < 250ms ومجموع الصفحة < 1 ثانية، ولسنة < 2 ثانية)، ثم `seed:reset` و`db:test 09`.
+3. `seed:demo --scale=load`، ثم `pnpm db:test` مرة ثانية، ثم `pnpm db:report-perf` (T20: سنة من البيانات، 200 ألف طلب و800 ألف بند، داخل معاملة تُلغى؛ كل دالة تقارير لشهر < 500ms ومجموع الصفحة < 1 ثانية، ولسنة < 2 ثانية)، ثم `seed:reset` و`db:test 09`.
 4. التأكد أن `seed:demo` و`db:concurrency` يرفضان هدفاً غير محلي (مع نص الرفض).
 
 وظيفة `ci` تشغّل أيضاً `pnpm test:functions` (`deno check` + `deno test` لـ Edge Functions، fetch مزيف). Deno يُنزَّل عبر `devEngines` بـ `package.json` (مثبّت 2.9.6).

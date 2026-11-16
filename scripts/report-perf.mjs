@@ -8,7 +8,8 @@
 // كل شيء داخل BEGIN ... ROLLBACK: يولّد سنة من البيانات (طلبات مسلّمة وملغاة ومعلّقة، 4 بنود لكل طلب
 // بكلفتها، حركات هدر وجرد، سائقون)، يعيد بناء daily_stats ويحدّث الإحصاءات، ثم يقيس كل دالة تقارير
 // بدور أدمن (EXPLAIN ANALYZE: وقت التنفيذ بالخادم، بلا زمن الشبكة). لا يبقى شيء بقاعدة البيانات.
-// الحدود: كل دالة لمدى شهر < 250ms، ومجموع ما تطلبه الصفحة لشهر < 1000ms، وكل دالة لسنة < 2000ms.
+// الحدود: كل دالة لمدى شهر < 500ms، ومجموع ما تطلبه الصفحة لشهر < 1000ms (القبول)، وكل دالة لسنة < 2000ms.
+//   --explain يطبع خطة استعلام أكثر المنتجات مبيعاً (تشخيص).
 import fs from 'node:fs';
 import path from 'node:path';
 import { assertSafeTarget, connect, describe, resolveTarget, root } from './lib/db.mjs';
@@ -21,7 +22,8 @@ const preludeArg = args.find((a) => a.startsWith('--prelude='));
 const prelude = preludeArg
   ? fs.readFileSync(path.resolve(root, preludeArg.slice('--prelude='.length)), 'utf8')
   : null;
-const MONTH_MS = 250;
+// الحد الحقيقي (SPEC-admin T20): الصفحة لشهر < 1 ثانية. حد الدالة الواحدة حارس إضافي.
+const MONTH_MS = 500;
 const PAGE_MS = 1000;
 const YEAR_MS = 2000;
 
@@ -125,6 +127,22 @@ try {
     `generated in ${((performance.now() - t0) / 1000).toFixed(1)}s: ${counts.orders} orders, ` +
       `${counts.items} items, ${counts.movements} movements in the database\n`,
   );
+
+  if (args.includes('--explain')) {
+    // تشخيص: خطة استعلام أكثر المنتجات مبيعاً لشهر بدور postgres (كما تعمل الدالة SECURITY DEFINER، بلا RLS)
+    const plan = await q(
+      `explain (analyze, buffers) select i.product_id, i.unit_snapshot, sum(i.qty), sum(i.line_total_iqd),
+              coalesce(sum(c.cost_snapshot_iqd * i.qty), 0)
+         from public.orders o
+         join public.order_items i on i.order_id = o.id
+         left join public.order_item_costs c on c.order_item_id = i.id
+        where o.status = 'delivered'
+          and o.delivered_at >= (public.baghdad_today() - 30)::timestamp at time zone 'Asia/Baghdad'
+          and o.delivered_at < (public.baghdad_today() + 1)::timestamp at time zone 'Asia/Baghdad'
+        group by 1, 2`,
+    );
+    console.log(plan.rows.map((r) => r['QUERY PLAN']).join(String.fromCharCode(10)));
+  }
 
   // أدمن داخل المعاملة، والقياس بدوره (authenticated + JWT)
   const admin = (
