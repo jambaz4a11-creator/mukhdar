@@ -233,7 +233,7 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     await page.getByRole('button', { name: '+ إضافة موظف أو سائق' }).click();
     const dialog = page.getByTestId('create-user-dialog');
     await dialog.getByLabel('رقم الهاتف').fill(phone);
-    await dialog.getByLabel('الاسم').fill('موظف Playwright');
+    await dialog.getByLabel('الاسم', { exact: true }).fill('موظف Playwright');
     await dialog.getByLabel('موظف', { exact: true }).check();
     await dialog.getByRole('button', { name: 'رمز عشوائي' }).click();
     await dialog.getByRole('button', { name: 'إنشاء الحساب' }).click();
@@ -269,8 +269,8 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     await page.getByRole('button', { name: '+ إضافة موظف أو سائق' }).click();
     const dialog = page.getByTestId('create-user-dialog');
     await dialog.getByLabel('رقم الهاتف').fill(phone);
-    await dialog.getByLabel('الاسم').fill('سائق Playwright');
-    await dialog.getByLabel('سائق').check();
+    await dialog.getByLabel('الاسم', { exact: true }).fill('سائق Playwright');
+    await dialog.getByLabel('سائق', { exact: true }).check();
     await dialog.getByRole('button', { name: 'رمز عشوائي' }).click();
     await dialog.getByRole('button', { name: 'إنشاء الحساب' }).click();
     const pin = (await dialog.getByTestId('pin-value').innerText()).trim();
@@ -284,7 +284,7 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
 
     await page.getByRole('button', { name: '+ إضافة موظف أو سائق' }).click();
     await dialog.getByLabel('رقم الهاتف').fill(phone);
-    await dialog.getByLabel('الاسم').fill('مكرر');
+    await dialog.getByLabel('الاسم', { exact: true }).fill('مكرر');
     await dialog.getByRole('button', { name: 'رمز عشوائي' }).click();
     await dialog.getByRole('button', { name: 'إنشاء الحساب' }).click();
     await expect(dialog.getByRole('alert')).toContainText('الرقم مسجّل');

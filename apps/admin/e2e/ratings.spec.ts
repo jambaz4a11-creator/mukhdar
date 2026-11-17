@@ -109,8 +109,8 @@ test.describe.serial('ratings (admin)', () => {
     await page.goto('/ratings');
     await expect(page.getByTestId('rating-count')).not.toHaveText('…');
     await page.getByRole('button', { name: '4', exact: true }).click();
-    await page.getByLabel('من').fill('2026-01-01');
-    await page.getByLabel('إلى').fill('2026-12-31');
+    await page.getByLabel('من', { exact: true }).fill('2026-01-01');
+    await page.getByLabel('إلى', { exact: true }).fill('2026-12-31');
     await expect
       .poll(() => {
         const sp = new URL(page.url()).searchParams;

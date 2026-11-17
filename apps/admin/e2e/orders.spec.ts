@@ -110,7 +110,7 @@ test.describe.serial('orders (admin, read)', () => {
     const day = '2026-11-10';
     // سائق ثم يوم بلا انتظار بينهما: الاثنان بالرابط
     await select.selectOption(driverId);
-    await page.getByLabel('التاريخ').fill(day);
+    await page.getByLabel('التاريخ', { exact: true }).fill(day);
     await expect
       .poll(
         () =>
