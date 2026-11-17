@@ -327,7 +327,29 @@ async function seedDemo() {
       `admin/staff 2FA: the dev-only TOTP secret (scripts/lib/totp.mjs)`,
   );
 
-  const { rows: products } = await q('select id from public.products where is_active');
+  const { rows: products } = await q('select id, price_iqd from public.products where is_active');
+  const priceOf = new Map(products.map((p) => [p.id, Number(p.price_iqd)]));
+  // T23 F M3: حد قيمة طلب الحساب الجديد (حتى أول تسليم). place_order يرفض ما فوقه، فالمولّد يقصّ أول طلب للزبون
+  // ليبقى تحته (المجموع مع التوصيل)، بدل تخفيف الحد بقاعدة البيانات.
+  const { rows: caps } = await q(
+    `select delivery_fee_iqd::bigint as fee, least(max_order_iqd, new_account_max_order_iqd)::bigint as new_cap,
+            max_order_iqd::bigint as max_cap
+       from public.app_settings`,
+  );
+  const fee = Number(caps[0].fee);
+  const established = new Set(); // زبائن لهم طلب مسلَّم بهذا التشغيل (البيانات قبل التشغيل: لا طلبات عرض)
+  const fitCap = (items, cap) => {
+    const total = () =>
+      items.reduce((sum, it) => sum + priceOf.get(it.product_id) * it.qty, 0) + fee;
+    while (total() > cap) {
+      const big = items.reduce((a, b) =>
+        priceOf.get(b.product_id) * b.qty > priceOf.get(a.product_id) * a.qty ? b : a,
+      );
+      if (big.qty > 1) big.qty--;
+      else if (items.length > 1) items.splice(items.indexOf(big), 1);
+      else break;
+    }
+  };
   await q(RUNNER_SQL);
 
   // توزيع 500 طلب على 30 يوماً (أكثر قليلاً بنهاية الأسبوع: الخميس والجمعة)
@@ -365,6 +387,7 @@ async function seedDemo() {
       const lines = randInt(1, 5);
       while (chosen.size < lines) chosen.add(pick(products).id);
       for (const id of chosen) items.push({ product_id: id, qty: randInt(1, 6) });
+      fitCap(items, established.has(cust.id) ? Number(caps[0].max_cap) : Number(caps[0].new_cap));
 
       const steps = [];
       const t = {};
@@ -446,6 +469,8 @@ async function seedDemo() {
           }
         }
       }
+      if (steps.some((st) => st.action === 'status' && st.arg === 'delivered'))
+        established.add(cust.id);
       specs.push({
         i,
         customer: cust.id,
