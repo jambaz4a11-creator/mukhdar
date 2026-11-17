@@ -79,6 +79,8 @@ pnpm sb db advisors --remote
 
 **آخر فحص (2026-11-15، للقراءة فقط، بعد كل migrations حتى `20261119000001`): 11 تحذيراً، نفس المقصودة أدناه بلا جديد** (`set_default_address` security invoker، و`revoke_user_sessions` لـ service_role فقط، فلا تظهران). دوال `private.*` و`begin/abort_account_deletion` و`claim/finish_push_notifications` لا تظهر (غير قابلة للتنفيذ من `authenticated`).
 
+**آخر فحص (جلسة F، 2026-11-17، mukhdar-dev بعد `20261202000001`): 34 تحذيراً (WARN) + 5 ملاحظات INFO**: الـ 34 كما بالسطر التالي بلا تغيير (`panel_session_alive` الجديدة security invoker، و`claim_push_notifications` صارت definer لكنها service_role فقط، فلا تظهران)؛ والـ INFO هي `rls_enabled_no_policy` على جداول مقصود أنها بلا سياسة (لا وصول إلا من دوال definer): `private.deployment` (جديد، L3)، `private.panel_sessions`، `private.signup_rate_limits`، `public.admin_function_hits`، `public.notification_outbox`.
+
 **العدد المتوقع بعد T23 (جلسة E2، 2026-11-17): 34 تحذيراً** = 33 دالة RPC مقصودة (`authenticated_security_definer_function_executable`؛ القائمة بـ `supabase/tests/01_schema.sql`، وأُضيف لها `admin_reset_mfa` بجلسة E1 و`admin_cancel_customer_orders` و`touch_panel_session` بجلسة E2) + `auth_leaked_password_protection`. أي رقم غير 34 أو تحذير باسم آخر = يُفحص قبل الإطلاق (L11).
 
 نتيجة بعد مراجعة T01–T05 (2026-11-11): **10 تحذيرات مقصودة**: `authenticated_security_definer_function_executable` على دوال RPC العشر (`place_order`، `set_order_status`، `available_orders`، `accept_order`، `assign_driver`، `list_drivers`، `rate_order`، `register_push_token`، `adjust_stock`، `set_user_role`). هذه هي الواجهة الوحيدة للكتابة الحساسة (SPEC-backend §5)، وكل دالة تتحقق من `auth.uid()` والدور بداخلها.
@@ -162,7 +164,8 @@ pnpm sb db advisors --remote
    - **الموظف والسائق:** لا ضبط من الرسالة وحدها؛ **اتصل بالرقم المسجّل** وتأكد منه بالمكالمة ثم اضبط.
    - "عندي رقم جديد" ليس سبباً للضبط: يفتح حساباً جديداً، وتغيير رقم حساب قائم يتطلب تحققاً مباشراً (مكالمة) ثم عملاً يدوياً.
    - سلّم الرمز المؤقت بـ **"نسخ الرمز"** والصقه بنفس المحادثة (رابط واتساب يترك الرمز بسجل المتصفح)، وأبلغ الشخص أن الضبط أخرجه من كل أجهزته؛ إن لم يكن هو من طلب، عطّل الحساب فوراً.
-5. **موظف فقد هاتف تطبيق المصادقة (T23 C1):** بعد التحقق منه بمكالمة، الأدمن: الموظفون والسائقون ← سطر الموظف ← **"إعادة ضبط المصادقة الثنائية"** ← تأكيد. يحذف عوامله (`admin_reset_mfa`)، يخرجه من كل الأجهزة، ويُسجَّل بـ `admin_audit` (`mfa_reset`، `after.via = 'panel'`). أول دخول بعدها يسجّل تطبيقاً جديداً. إن نسي الـ PIN أيضاً: "تصفير الرمز" كذلك (مستقلان). السائق والزبون بلا مصادقة ثنائية.
+5. **ترقية حساب قائم لموظف أو أدمن (T23 F M2، قرار المالك 2026-11-17):** `set_user_role` يرفض ترقية زبون أو سائق بـ `PIN_RESET_REQUIRED` ما لم يكن رمزه مؤقتاً. الترتيب: (1) تحقق من الشخص بمكالمة؛ (2) الموظفون والسواق ← "تصفير الرمز"؛ (3) غيّر الدور (الترقية تحذف أي عامل TOTP قديم ورموز إشعاراته)؛ (4) سلّمه الرمز المؤقت **حضورياً إن أمكن**؛ (5) أول دخول ← `/change-pin` (بلا رمز تطبيق) ← ثم `/mfa` يسجّل التطبيق، ويفضّل أن يكون ذلك أمامك. أي عامل TOTP سُجّل أثناء الرمز المؤقت يُحذف عند تغيير الرمز (`mfa_reset`، `via = 'temporary_pin_window'`). الحساب الجديد من "إضافة موظف" يمر بنفس المسار تلقائياً. لأدمن جديد بالترقية: نفس الترتيب، ثم سكربت الطوارئ بـ `--with-mfa` مستحسن إن شُك بالجهاز.
+6. **موظف فقد هاتف تطبيق المصادقة (T23 C1):** بعد التحقق منه بمكالمة، الأدمن: الموظفون والسائقون ← سطر الموظف ← **"إعادة ضبط المصادقة الثنائية"** ← تأكيد. يحذف عوامله (`admin_reset_mfa`)، يخرجه من كل الأجهزة، ويُسجَّل بـ `admin_audit` (`mfa_reset`، `after.via = 'panel'`). أول دخول بعدها يسجّل تطبيقاً جديداً. إن نسي الـ PIN أيضاً: "تصفير الرمز" كذلك (مستقلان). السائق والزبون بلا مصادقة ثنائية.
 
 ## 7b) اختبار الحمل (T22)
 `pnpm load:run` (كامل ~55 دقيقة؛ `-- --smoke` للفحص السريع) و`pnpm load:cleanup` عند انقطاعه. على mukhdar-dev فقط، ببيانات مؤقتة تُحذف وتُثبت بلقطة قبل/بعد. التفاصيل: `scripts/load/README.md`، النتائج: `docs/reviews/load-test-T22.md`.
@@ -292,7 +295,7 @@ select vault.create_secret('https://<ref>.supabase.co/functions/v1/push-dispatch
 -- لتغييره: select vault.update_secret((select id from vault.secrets where name = 'push_dispatch_url'), '<url>');
 ```
 - **السر المشترك** `push_dispatch_secret` يولّده الـ migration داخل Vault (32 بايت عشوائية)؛ لا يُنسخ لأي مكان. لتدويره: `vault.update_secret` بقيمة جديدة عشوائية (الدالة تقرؤه من القاعدة بكل طلب، فلا حاجة لإعادة النشر).
-- **أسرار الدالة:** `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase تلقائياً. `EXPO_ACCESS_TOKEN` **اختياري**: يُضبط فقط إن فُعّل "Enhanced push security" بحساب Expo (`supabase secrets set EXPO_ACCESS_TOKEN=... --remote=<ref>`؛ يضبطه صاحب المشروع بنفسه).
+- **أسرار الدالة:** `SUPABASE_URL` والمفاتيح تحقنها Supabase تلقائياً (الجديد `SUPABASE_SECRET_KEYS` أولاً والقديم احتياطاً، T23 F H2). نداء `pg_net` لا يحمل أي مفتاح (سر `x-dispatch-secret` فقط)، فلا يتأثر بإطفاء المفاتيح القديمة. `EXPO_ACCESS_TOKEN` **اختياري**: يُضبط فقط إن فُعّل "Enhanced push security" بحساب Expo (`supabase secrets set EXPO_ACCESS_TOKEN=... --remote=<ref>`؛ يضبطه صاحب المشروع بنفسه).
 - محلياً و CI: لا `push_dispatch_url` ← لا طلبات HTTP (الـ trigger والـ cron لا يفعلان شيئاً).
 
 ### الحالة على mukhdar-dev (2026-11-12)
@@ -322,7 +325,7 @@ select status, return_message, start_time from cron.job_run_details
 
 ```bash
 pnpm sb db push --remote --yes          # migration 20261112000004
-pnpm sb functions deploy delete-account --remote=<ref> --use-api --yes   # verify_jwt = true
+pnpm sb functions deploy delete-account --remote=<ref> --use-api --no-verify-jwt --yes   # T23 F H2: التحقق بالدالة (auth.getUser)
 ```
 
 ### اختبار التكامل (مشروع التطوير فقط)
@@ -424,8 +427,8 @@ select bucket, hits, window_start from private.signup_rate_limits
 ### النشر (لكل بيئة، بموافقة صاحب المشروع)، بالترتيب
 ```sh
 pnpm sb db push --remote --yes          # migration 20261122000001 (update_app_settings، pin_resets، user_creations، add_buildings)
-pnpm sb functions deploy admin-reset-pin --remote=<ref> --use-api --yes     # verify_jwt = true
-pnpm sb functions deploy admin-create-user --remote=<ref> --use-api --yes   # verify_jwt = true
+pnpm sb functions deploy admin-reset-pin --remote=<ref> --use-api --no-verify-jwt --yes     # T23 F H2: التحقق بالدالة
+pnpm sb functions deploy admin-create-user --remote=<ref> --use-api --no-verify-jwt --yes   # T23 F H2: التحقق بالدالة
 ```
 `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase. **سر واحد (T23 H1):** `ALLOWED_ORIGINS` = أصول اللوحة المسموحة لـ CORS، مفصولة بفواصل، **بلا `*`** وبلا `/` أخيرة. Supabase المستضاف لا يضيف CORS للدوال، فالدالة ترد على الـ preflight بنفسها (`_shared/cors.ts`)؛ بدون السر لا يستطيع أي متصفح استدعاءها (الـ preflight ← 403):
 ```sh
@@ -454,6 +457,8 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 
 **مراجعة الإصلاحات AB، جلسة C (2026-11-16):** migrations `20261125000001` و`20261125000002` (تدقيق إعادة تسمية/إخفاء القطاع والوحدة والعمارة بـ `admin_audit`، `action = 'address'`) **مطبّقتان على mukhdar-dev فقط** (فُحصت أولاً بـ `db:test:remote --prelude` داخل معاملة ملغاة، ثم `db push`)، و`admin-reset-pin` **أُعيد نشرها على mukhdar-dev فقط** (`verify_jwt = true`، رد 401 بلا JWT). لم يُنشر غيرها ولم يُغيَّر شيء سحابي آخر. `pnpm db:test:remote`: 23 ملفاً و872 تأكيداً. حالة CI مرجع لاختبار التزامن (`db:concurrency`، حالة تخفيض السائق أثناء القبول) ولاختبارات اللوحة.
 
+**T23 جلسة F (2026-11-17):** الدوال الخمس أُعيد نشرها على mukhdar-dev فقط بـ `--no-verify-jwt` (`verify_jwt: false` مؤكد من قائمة الدوال)، وتقرأ المفاتيح الجديدة: سجل الدوال يُظهر `keys {"secret":"new","publishable":"new"}`. `pnpm it:admin-users` و`it:signup` و`it:delete-account` و`it:break-glass` نجحت كلها على dev بعد النشر. المفاتيح القديمة على dev **لم تُطفأ** (لم يلزم للاختبار: الدوال تستعمل الجديدة أصلاً، والتطبيقات والسكربتات بمفاتيح `sb_publishable_`/`sb_secret_`).
+
 ### اختبارات الكتابة بالواجهة (T7)
 اختبارات Playwright التي **تكتب** (حفظ الإعدادات، ترقية، تصفير رمز، إنشاء سائق، عمارات، طلبات) تعمل **بـ CI فقط** (`E2E_ALLOW_WRITES=1` على Supabase محلي مؤقت)؛ محلياً ضد mukhdar-dev تعمل القراءة وما يُرفض بلا كتابة، وهذا مقصود (لا نكتب ببيانات التطوير من اختبارات). حالة CI هي المرجع: لا دمج بلا نجاح وظيفة `admin-e2e`.
 
@@ -462,12 +467,12 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 - **طلب بالطريق والبضاعة ضاعت/تلفت:** إلغاء (أدمن) مع خانة "البضاعة طلعت مع السائق" ← تُسجَّل هدراً بكلفة الطلب.
 - **سجل التدقيق:** (يشمل منذ جلسة C تغيير اسم/رقم/تفعيل القطاع والوحدة والعمارة: `action = 'address'`، الجدول والمعرّف داخل before/after) `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
 
-## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلستا E1 وE2، 2026-11-17)
+## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسات E1 وE2 وF، 2026-11-17)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
 > إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (جلسة C: migration `20261125000001` لـ H1/M1 والبنود Low، وإعادة نشر `admin-reset-pin`) مدرجة أدناه (الصفان 24 و25).
 
-### 1. الـ migrations بالترتيب (31 ملفاً)
+### 1. الـ migrations بالترتيب (32 ملفاً)
 | # | الملف |
 |---|---|
 | 1 | `20261110000001_init.sql` |
@@ -501,6 +506,9 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 | 29 | `20261129000001_ratings_privacy.sql` (مراجعة C جلسة D، L2–L4: `rate_order` يزيل محارف bidi والعرض الصفري وC1 ويحوّل CR إلى LF؛ `ratings_list` يُرجع `customer_name = null` لزبون محذوف؛ حذف `ratings_created_idx`. لا Edge Function تعتمد عليها؛ توقيعات الدوال لم تتغير) |
 | 30 | `20261130000001_security_t23.sql` (T23 جلسة E1: **C1** `current_user_role()` يطلب `aal2` للأدمن والموظف، `admin_reset_mfa` و`break_glass_reset_mfa`، `admin_audit.action` يقبل `mfa_reset`؛ **H2** `app_settings.max_line_qty` (20) و`max_order_lines` (30)، `place_order` يفرضهما (`QTY_LIMIT`، `TOO_MANY_ITEMS`)، `update_app_settings` يعدّلهما. **قبلها:** TOTP مفعّل بـ Auth (§6 الخطوة 8)، وإلا يُقفل الأدمن عن اللوحة. لوحة الأدمن الحالية (صفحة `/mfa`) والدالتان الإداريتان تحتاجانها) |
 | 31 | `20261201000001_security_t23_e2.sql` (T23 جلسة E2: **H2** `app_settings.new_account_max_active_orders` (افتراضي 1) وفحص `place_order` للحساب الجديد وإعادة فحص الحساب الفعّال، و`admin_cancel_customer_orders`؛ **M5** محو بيانات الزبون من طلباته عند حذف حسابه (trigger `BEFORE DELETE` + تنظيف الطلبات السابقة)؛ **M6** `orders_read` للموظف: المفتوح وآخر 7 أيام؛ **M7** `private.panel_sessions` و`touch_panel_session` وفحص الخمول 12 ساعة بـ `current_user_role()`؛ **L2** حد 5 رموز إشعار و`purge_push_history` يحذف رموزاً لم تُشاهد 60 يوماً؛ **L3** `private.clean_user_text` وحد 20 عنواناً. **بعد `20261130000001`، وقبل نشر `admin-reset-pin` و`admin-create-user` بنسختيهما الحاليتين** (تستدعيان `touch_panel_session`) |
+| 32 | `20261202000001_security_f.sql` (T23 جلسة F: **H1** الإشعارات للأدمن/الموظف بجلسة aal2 فقط (`push_tokens.session_id`، `register_push_token` يطلب aal2، `claim_push_notifications` definer يفحص الجلسة، حذف رموز الأدمن/الموظف القديمة)؛ **M1** التقييمات للموظف آخر 7 أيام؛ **M2** `pin_reset_at` وحذف عامل TOTP المسجَّل أثناء الرمز المؤقت، و`set_user_role` يطلب إعادة ضبط الرمز قبل الترقية (`PIN_RESET_REQUIRED`)؛ **M3** `max_order_iqd` (200000) و`new_account_max_order_iqd` (50000) و`ORDER_TOO_LARGE`/`NEW_ACCOUNT_ORDER_LIMIT`؛ **M4** `panel_session_alive()`؛ **L3** جدول `private.deployment` (بلا صف)؛ **L4/L8** الإيقاف لا يلغي `out_for_delivery` وقفل بترتيب ثابت؛ **L5** تنظيف سبب الإلغاء وتجهيل أوسع؛ **L6** حذف جلسات Auth الخاملة؛ **L7** الموظف لا يحذف حسابه من التطبيق. **بعد `20261201000001`.** لا Edge Function تعتمد عليها؛ اللوحة الحالية تستدعي `panel_session_alive` (فطبّقها قبل نشر اللوحة)، وتطبيق الزبون الحالي يعرض الرسالتين الجديدتين (القديم يعرض رسالة عامة) |
+
+**قاعدة إلزامية (5، T23 F):** طبّق `20261202000001` قبل نشر اللوحة بإصدار جلسة F (تستدعي `panel_session_alive`؛ بدونها كل فحص يفشل فتُخرج اللوحة المستخدم إلى `/login?reason=idle`). **لا تُدرج صف `private.deployment` على الإنتاج أبداً** (العلامة للتطوير والمحلي فقط؛ غيابها هو ما يمنع سكربتات البيانات التجريبية). الـ migration تحذف رموز إشعار الأدمن والموظف، فيعيد كل منهم التسجيل بأول دخول aal2 (تلقائي).
 
 **قاعدة إلزامية (4، T23 E2):** طبّق `20261201000001` **قبل** إعادة نشر `admin-reset-pin` و`admin-create-user` (النسخة الجديدة تستدعي `touch_panel_session` وتفشل مغلقة `500 INTERNAL` بدونها)، وقبل نشر اللوحة (`proxy.ts` يستدعيها؛ غيابها لا يكسر الدخول لكنه يعطّل فحص الخمول). **ملاحظة تطبيق:** الميزة تحتاج لوحة (CSP، `IdleGuard`، زر الإلغاء الجماعي) وتطبيق زبون (نص حد الطلب الواحد) بإصدار بعد هذا الـ commit؛ الـ migration نفسها متوافقة مع الإصدار القديم (ترفض الزائد برمز يفهمه).
 
@@ -523,16 +531,16 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
    pnpm sb link --project-ref <prod-ref>      # يعرض لافتة PRODUCTION
    ```
    كل أوامر الإنتاج بالخطوات التالية تُشغَّل من `../mukhdar-prod` فقط، بـ `MUKHDAR_TARGET=prod pnpm sb …`، وتكتب الـ ref عند السؤال. لا حاجة لـ "إعادة ربط التطوير": نسخة التطوير لم تُمس. (سكربتات `seed:*` و`db:concurrency` و`it:*` ترفض أي مشروع غير mukhdar-dev، **وترفض ref الإنتاج دائماً حتى لو أُضيف خطأً لقائمة التطوير** (T23 H3، `scripts/seed-guard.test.mjs`)، وهذا مقصود. اختبار الحمل على الإنتاج له مسار صريح منفصل: §17.4.)
-2. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 31 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد).
-3. إعدادات Auth من اللوحة: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7، **8 (TOTP: Enabled)**. **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`. (الخطوة 8 قبل `db push` بالخطوة 2 أفضل؛ وإن طُبّقت الـ migrations أولاً ففعّلها فوراً بعدها، قبل أي دخول للوحة.)
-4. الدوال، بالترتيب (كلها بعد الخطوة 2، فالقاعدة أعلاه محققة تلقائياً):
+2. إعدادات Auth من اللوحة **أولاً**: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7، و**8 (TOTP: Enabled) قبل أي migration** (`20261130000001` تقفل الأدمن عن اللوحة بلا TOTP). **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
+3. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 32 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد). **لا** `insert into private.deployment` على الإنتاج (علامة التطوير فقط، L3؛ تُضاف على mukhdar-dev مرة واحدة يدوياً وبـ `seed.sql` محلياً).
+4. الدوال، بالترتيب (كلها بعد الخطوة 3، فالقواعد أعلاه محققة تلقائياً؛ **كلها `--no-verify-jwt`** منذ T23 F H2: التحقق من المستخدم داخل الدالة):
    ```bash
    pnpm sb functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt
-   pnpm sb functions deploy delete-account    --remote=<prod-ref> --use-api   # verify_jwt = true
+   pnpm sb functions deploy delete-account    --remote=<prod-ref> --use-api --no-verify-jwt
    pnpm sb functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt
    MUKHDAR_TARGET=prod pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain> --project-ref <prod-ref>   # T23 H1: نطاق لوحة الإنتاج فقط، قبل الدالتين
-   pnpm sb functions deploy admin-reset-pin   --remote=<prod-ref> --use-api   # verify_jwt = true، بعد 20261125000001 (يحتوي إعادة المحاولة وRESET_INCOMPLETE، جلسة C)
-   pnpm sb functions deploy admin-create-user --remote=<prod-ref> --use-api   # verify_jwt = true، بعد 20261124000001
+   pnpm sb functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --no-verify-jwt   # بعد 20261125000001
+   pnpm sb functions deploy admin-create-user --remote=<prod-ref> --use-api --no-verify-jwt   # بعد 20261124000001
    ```
    ثم `push_dispatch_url` بـ Vault (§11).
 5. §6 الخطوة 3: **Allow new users to sign up: OFF**، وفحص يدوي: حساب تجريبي من التطبيق ثم احذفه (§14).
@@ -571,13 +579,19 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 - [ ] **Auth ← Sessions/JWT:** عمر JWT **3600 ثانية** (قرار المالك: يبقى؛ المخاطرة L1 مقبولة، ADR 0003)؛ دوران refresh-token مفعّل وفترة إعادة الاستخدام 10 ثوان. **خمول جلسة اللوحة (12 ساعة) يفرضه التطبيق بقاعدة البيانات (M7)** فلا تفعّل Time-box ولا Inactivity timeout هنا (تؤثر على تطبيق الزبون والسائق أيضاً).
 - [ ] **Auth ← URL configuration:** Site URL = نطاق اللوحة؛ قائمة Redirect المسموحة = نطاق اللوحة فقط.
 - [ ] **CAPTCHA:** معطّل عند الإطلاق؛ Turnstile فقط عند علامة التشغيل (§6 مراقبة التخمين).
-- [ ] **API keys:** استعمل مفتاحي publishable/secret الجديدين؛ أنشئ مفتاح secret باسم `break-glass` (L7، §7)؛ بعد أن تستعمل الدوال والتطبيقات المفاتيح الجديدة عطّل مفاتيح `anon`/`service_role` القديمة (JWT)؛ فعّل مفاتيح توقيع JWT غير المتماثلة.
+- [ ] **API keys ومفاتيح توقيع JWT (T23 F H2) — بهذا الترتيب بالضبط:**
+  1. **انشر الدوال الخمس أولاً** بالنسخة الحالية (§17.2 الخطوة 4، كلها `--no-verify-jwt`). تقرأ المفتاح الجديد (`SUPABASE_SECRET_KEYS`) وترجع للقديم، وتتحقق من JWT المستخدم بنفسها (`auth.getUser`)، فلا تعتمد على بوابة `verify_jwt` التي لا تفهم المفاتيح الجديدة. تأكد من قائمة الدوال أن `verify_jwt = false` للخمس.
+  2. أنشئ مفتاحي publishable وsecret الجديدين (Settings ← API Keys)، ومفتاح secret ثانياً باسم `break-glass` (L7، §7). ضع `sb_publishable_…` فقط بـ Vercel وEAS (§17.2 الخطوة 8، والتطبيقات)، وانشر اللوحة والتطبيقات بها.
+  3. فعّل **مفاتيح توقيع JWT غير المتماثلة** (JWT Keys ← ES256) ودوّرها لتصير المستعملة. الرموز القديمة HS256 تبقى صالحة حتى تنتهي (≤ ساعة).
+  4. **تحقق قبل الإطفاء:** سجل الدوال يُظهر `keys {"secret":"new",...}` (لا `legacy`)؛ دخول اللوحة بـ aal2 وإعادة ضبط رمز وإنشاء حساب ينجحان؛ تسجيل وحذف حساب تجريبي من التطبيق؛ إشعار يصل (push-dispatch بسر Vault، لا مفتاح بـ `pg_net`)؛ ولا 401 غير مفسّرة بسجل الدوال ولا بسجل Auth (Logs ← Auth).
+  5. بعدها فقط **عطّل مفاتيح `anon`/`service_role` القديمة** (Settings ← API Keys ← Legacy). أعد فحص البند 4 فوراً؛ إن فشل شيء فأعد تفعيلها (الإطفاء قابل للتراجع من نفس الصفحة) وافحص السبب.
+  على mukhdar-dev (2026-11-17): الخطوات 1–4 مُثبتة (المفاتيح الجديدة وES256 مستعملة)، والقديمة لم تُطفأ.
 - [ ] **Data API:** المخططات المكشوفة `public` فقط (و`graphql_public` إن لزم؛ `pg_graphql` غير مثبّت)؛ max rows 1000.
 - [ ] **Database:** SSL إجباري **مفعّل**؛ كلمة سر قوية بمدير كلمات سر فقط؛ قيود الشبكة لـ IP المالك إن كان ثابتاً (وإلا تبقى مفتوحة وكلمة السر هي الحارس).
 - [ ] **Realtime (L4):** `public.orders` فقط بـ `supabase_realtime`؛ إن وُجد مفتاح "Allow public access" فعطّله **بعد اختباره على dev** (لوحة الأدمن وتطبيق الزبون والسائق تبقى تتصل بـ postgres_changes)، وإلا راقب استهلاك Realtime.
 - [ ] **Storage:** سلة `product-images` عامة، 512 KB، `image/jpeg,image/webp,image/png` (تُنشأ بـ migration `20261110000002`؛ تحقق بالإعدادات).
-- [ ] **Edge Functions:** `verify_jwt` = false لـ `push-dispatch` و`signup`، و true للثلاث الأخرى؛ الأسرار: `ALLOWED_ORIGINS` (§16؛ **ليس** `ADMIN_ORIGINS`)، و`EXPO_ACCESS_TOKEN` اختيارياً؛ لا شيء غيرها. `push_dispatch_url` بـ Vault (§11).
-- [ ] **Advisors:** `pnpm sb db advisors --remote` ← **34 تحذيراً** المعروفة بالضبط (§5)، 0 أخطاء.
+- [ ] **Edge Functions:** `verify_jwt` = **false للخمس** (T23 F H2؛ التحقق داخل الدوال)؛ الأسرار: `ALLOWED_ORIGINS` (§16؛ **ليس** `ADMIN_ORIGINS`)، و`EXPO_ACCESS_TOKEN` اختيارياً؛ لا شيء غيرها. `push_dispatch_url` بـ Vault (§11).
+- [ ] **Advisors:** `pnpm sb db advisors --remote` ← **34 تحذيراً** المعروفة بالضبط + 5 INFO `rls_enabled_no_policy` المقصودة (§5)، 0 أخطاء.
 - [ ] **النسخ الاحتياطي:** Pro اليومي (7 أيام) مؤكد؛ **PITR**: قرار المالك (إضافة مدفوعة)؛ تجربة استعادة واحدة لمشروع مؤقت قبل الإطلاق (SPEC-backend §11).
 - [ ] **السجلات/المراقبة:** استعلام محفوظ لـ `invalid_credentials` المتكررة لكل رقم وموجات 429 (M1، §6)؛ نظرة أسبوعية على `signup_rate_limits` و`pin_resets` و`admin_audit` (فيها `customer_lockdown`).
 

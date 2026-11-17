@@ -14,6 +14,39 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 
 ---
 
+## Changes for the driver app (2026-11-17, security review T23 sessions E1, E2 and F)
+
+Short version to send to the driver-app developer. Migrations `20261130000001`, `20261201000001` and
+`20261202000001` (all applied to the development project). **No function signature changed and no
+driver call needs to change.** What you may notice:
+
+1. **Demo login on mukhdar-dev:** demo driver accounts `07000000011`, `07000000012`, `07000000013` use
+   their own dev-only PIN **`739164`** (not the admin/staff/customer demo PIN). Development only; never
+   valid on production.
+2. **Push tokens:** at most **5 tokens per account**; registering a 6th removes the oldest. Tokens whose
+   device has not been seen for **60 days** are deleted by the daily cleanup. Keep calling
+   `register_push_token` on every app start (that refreshes `last_seen_at`) and after sign-in (§3.4).
+3. **Customer lockdown by the admin** ("cancel all orders and disable") cancels only the customer's
+   `pending` / `preparing` / `ready` orders, with `cancel_reason = 'إلغاء من الأدمن: حساب موقوف'`.
+   **An order already `out_for_delivery` is no longer cancelled by it** (changed in session F): it stays
+   with you and the admin decides about it separately (they may still cancel it normally, which you
+   receive as a regular cancellation, §5/§7). Before session F such an order was cancelled too.
+4. **Deleted customers, anonymized history:** when a customer deletes their account, their old orders
+   (including your delivered history) keep the order but lose personal data: `customer_name`,
+   `customer_phone`, `note` become `null`, and `address_snapshot` keeps **only** `sector` and
+   `subsection` (no `building`, `apartment`, `note`, `address_id`; example in §4). A cancellation reason
+   the customer wrote is removed too. Render missing fields as absent, never crash on them.
+5. **Cleaned text:** customer names (`profiles.full_name`, so `customer_name` on new orders), address
+   text and notes, order notes and cancellation reasons have control and invisible characters
+   (zero-width, bidi overrides) removed by the server; cancellation reasons are cut to 300 characters.
+   Display them as plain text.
+6. **Not driver-facing:** two-factor (TOTP) and the 12-hour idle timeout apply to admin/staff panel
+   sessions only; order value caps (`ORDER_TOO_LARGE`, `NEW_ACCOUNT_ORDER_LIMIT`) and per-order item/qty
+   caps apply to `place_order` (customers) only; staff ratings window and admin push rules do not touch
+   drivers.
+
+---
+
 ## Changes for the driver app (2026-11-16)
 
 Short version to send to the driver-app developer. Backend migrations `20261123000001` and
@@ -105,7 +138,7 @@ own session; RLS and the functions enforce what a driver may see and do.
 > admin panel. **Drivers are not affected:** phone + PIN only, same calls, same RLS, no change in the
 > driver app. Order caps added to `place_order` (customers only) do not touch driver functions.
 >
-> **2026-11-17 (T23 fix session E2):** still no driver-side change. Demo driver accounts `07000000011..13` on mukhdar-dev now have their **own dev-only PIN** (RUNBOOK §6); the shared `DEMO_PIN` stays admin/staff/customer-only and is never given to you. Panel idle timeout (12 h) applies to admin and staff sessions only, not drivers. Deleting a customer account anonymizes their old orders (name, phone, building, apartment removed): you may see `customer_name`/`customer_phone` null on a delivered order of a deleted customer; drivers only ever see those for orders they hold, which are never final.
+> **2026-11-17 (T23 fix session E2):** still no driver-side change. Demo driver accounts `07000000011..13` on mukhdar-dev now have their **own dev-only PIN** (RUNBOOK §6); the shared `DEMO_PIN` stays admin/staff/customer-only and is never given to you. Panel idle timeout (12 h) applies to admin and staff sessions only, not drivers. Deleting a customer account anonymizes their old orders: you **will** see such orders in your delivered history (the history query in §4 reads your final orders), with `customer_name`, `customer_phone` and `note` set to `null` and an `address_snapshot` reduced to `sector` and `subsection` (example in §4). *(Corrected 2026-11-17, session F: an earlier note said drivers never see anonymized orders, which was wrong.)*
 
 1. **Phone number + 6-digit PIN** via Supabase Auth, same as the customer app (changed 2026-11-14:
    **no SMS/OTP at all**, nothing is ever sent). The PIN is the account password.
@@ -272,6 +305,10 @@ user's rows (register again after signing back in).
 | `PIN_CHANGE_REQUIRED` | 42501 | the account still has `must_change_pin = true`: register after the PIN change (2026-11-16, session C) |
 | `INVALID_TOKEN` | P0001 | empty/blank token, token longer than 255 characters, missing platform or provider, or an `expo` token not in the `ExponentPushToken[...]` / `ExpoPushToken[...]` format |
 
+Limits (2026-11-17, T23 E2): at most 5 tokens per account (the oldest is removed when a 6th is
+registered) and tokens not seen for 60 days are deleted. `MFA_REQUIRED` (session F) is raised only for
+admin/staff accounts without a two-factor session; a driver never receives it.
+
 See section 6 for which providers are delivered today.
 
 ### 3.5 Not for drivers
@@ -300,6 +337,12 @@ All writes go through the functions above; there are no insert/update/delete gra
 { "address_id": "uuid", "sector": "قطاع A", "subsection": "A3", "building": "12",
   "apartment": "5", "note": "optional text or null" }
 ```
+After the customer deletes their account (T23 E2/F), the same order's snapshot is reduced to:
+```json
+{ "sector": "قطاع A", "subsection": "A3" }
+```
+and `customer_name`, `customer_phone`, `note` are `null`. Treat every key except `sector` and
+`subsection` as optional.
 
 **Address layout (Bismayah):** two sectors, `قطاع A` and `قطاع B`. Sector A has units `A1`–`A9`, sector B
 has units `B1`–`B8` (table `subsections`), and each unit has buildings `1`–`100` (table `buildings`).

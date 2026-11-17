@@ -100,6 +100,13 @@ Two things still need fixing before launch:
   are rejected in `Authorization: Bearer`; they go in `apikey`).
 - **Needs:** Edge Function change + redeploy (all five) + `config.toml` + RUNBOOK. Test on dev with a disposable
   secret key first (cloud change: owner approval).
+- **Correction (fix session F, 2026-11-17):** point (4) was not an issue: `private.push_kick_post` sends **no API key**
+  (only `Content-Type` and `x-dispatch-secret` from Vault), and `push-dispatch` already had `verify_jwt = false`, so
+  turning the legacy keys off does not affect the `pg_net` call. The "test with legacy off" step was replaced by the
+  owner's decision: dev keeps the legacy keys on; the functions were verified on dev to **use** the new keys
+  (function log `keys {"secret":"new","publishable":"new"}`) with ES256 signing keys already active there, which is the
+  state after the legacy keys are switched off. `signup` and `push-dispatch` were already `verify_jwt = false`; now all
+  five are.
 
 ---
 
@@ -259,20 +266,20 @@ Two things still need fixing before launch:
 
 ## Ordered fix list
 
-| # | Item | Severity | Needs |
-|---|---|---|---|
-| 1 | **H1** `register_push_token` refuses aal1/idle admin/staff; purge their tokens; MFA reset deletes tokens | High | Migration |
-| 2 | **H2** Edge Functions read the new keys (fallback to legacy), `verify_jwt = false` for the 3 user-JWT functions, RUNBOOK §17.5 key/JWT order, test on dev with legacy off | High | Function change + redeploy (5), `config.toml`, RUNBOOK; dev test needs owner approval |
-| 3 | **M1** ratings follow the staff 7-day window (`ratings_list`/`summary`, `ratings_read`) | Medium | Migration + panel text |
-| 4 | **M2** promotion to staff/admin resets factors; in-person enrolment; break-glass `--with-mfa` recommended | Medium | Migration + RUNBOOK (+ optional panel badge) |
-| 5 | **M4** read-only `panel_session_alive()` checked by the poll → sign out instead of an empty screen | Medium | Migration + panel |
-| 6 | **M5** DRIVER-API "Changes (2026-11-17)" block, §2 correction, anonymized `address_snapshot` example | Medium | Docs (send to driver developer) |
-| 7 | **M3** per-order unit/subtotal cap for new accounts (owner numbers) | Medium | Migration + customer app text (rebuild) + settings field |
-| 8 | **L5 + L6 + L7** anonymize `cancel_reason`/history note/outbox, clean `p_reason`, purge idle sessions, staff self-deletion | Low | One migration + RUNBOOK |
-| 9 | **L1** RUNBOOK §17.2 TOTP before `db push`; §5 INFO lints | Low | Docs |
-| 10 | **L2** dynamic public pages (or documented + Playwright CSP check) | Low | Panel rebuild |
-| 11 | **L3** DB-side `app.mukhdar_env = 'dev'` marker for data scripts | Low | Scripts + one dev setting (approval) |
-| 12 | **L4, L8** lockdown on the way / lock order | Low | Owner decision; optional migration |
+| # | Item | Severity | Needs | Status |
+|---|---|---|---|---|
+| 1 | **H1** `register_push_token` refuses aal1/idle admin/staff; purge their tokens; MFA reset deletes tokens | High | Migration | ✅ Fixed (F): migration `20261202000001`, `31_security_f.sql` |
+| 2 | **H2** Edge Functions read the new keys (fallback to legacy), `verify_jwt = false` for the 3 user-JWT functions, RUNBOOK §17.5 key/JWT order, test on dev with legacy off | High | Function change + redeploy (5), `config.toml`, RUNBOOK; dev test needs owner approval | ✅ Fixed (F): `_shared/keys.ts`, all five `verify_jwt = false`, redeployed on dev, `it:*` pass; RUNBOOK §17.5 ordered steps |
+| 3 | **M1** ratings follow the staff 7-day window (`ratings_list`/`summary`, `ratings_read`) | Medium | Migration + panel text | ✅ Fixed (F): `staff_window_start`, ratings RPCs + policy, panel note |
+| 4 | **M2** promotion to staff/admin resets factors; in-person enrolment; break-glass `--with-mfa` recommended | Medium | Migration + RUNBOOK (+ optional panel badge) | ✅ Fixed (F): PIN before TOTP (`pin_reset_at`, panel `/change-pin` first), `PIN_RESET_REQUIRED` on promotion, RUNBOOK §7 |
+| 5 | **M4** read-only `panel_session_alive()` checked by the poll → sign out instead of an empty screen | Medium | Migration + panel | ✅ Fixed (F): `panel_session_alive()`, 60 s poll, sign-out to `/login?reason=idle` |
+| 6 | **M5** DRIVER-API "Changes (2026-11-17)" block, §2 correction, anonymized `address_snapshot` example | Medium | Docs (send to driver developer) | ✅ Fixed (F): DRIVER-API change block (incl. demo PIN 739164), §2 corrected, §4 example |
+| 7 | **M3** per-order unit/subtotal cap for new accounts (owner numbers) | Medium | Migration + customer app text (rebuild) + settings field | ✅ Fixed (F): `max_order_iqd` 200,000 / `new_account_max_order_iqd` 50,000, settings + audit, Arabic app messages, race tests (`db:concurrency` §4) |
+| 8 | **L5 + L6 + L7** anonymize `cancel_reason`/history note/outbox, clean `p_reason`, purge idle sessions, staff self-deletion | Low | One migration + RUNBOOK | ✅ Fixed (F): migration + RUNBOOK |
+| 9 | **L1** RUNBOOK §17.2 TOTP before `db push`; §5 INFO lints | Low | Docs | ✅ Fixed (F): RUNBOOK §17.2 order, §5 INFO lints |
+| 10 | **L2** dynamic public pages (or documented + Playwright CSP check) | Low | Panel rebuild | ✅ Fixed (F): `force-dynamic` root layout + Playwright nonce/CSP check per public page |
+| 11 | **L3** DB-side `app.mukhdar_env = 'dev'` marker for data scripts | Low | Scripts + one dev setting (approval) | ✅ Fixed (F), changed: table marker `private.deployment.env = 'dev'` instead of a setting (set on mukhdar-dev; never on prod) |
+| 12 | **L4, L8** lockdown on the way / lock order | Low | Owner decision; optional migration | ✅ Fixed (F): lockdown leaves `out_for_delivery` (listed for the admin), admin rows locked first |
 
 Items 1–2 should be done before T24 / go-live. Items 1, 3, 4, 5 and 8 fit in one new migration (plus the panel bits).
 Item 2 does not touch the database.
