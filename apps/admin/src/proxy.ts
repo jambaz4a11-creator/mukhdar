@@ -15,7 +15,7 @@ import {
   safeNext,
 } from './lib/access';
 import { readPublicEnv } from './lib/env';
-import { getPanelUser } from './lib/panelUser';
+import { getPanelUser, pinBeforeMfa } from './lib/panelUser';
 import {
   TOUCH_COOKIE,
   TOUCH_THROTTLE_S,
@@ -67,9 +67,8 @@ async function handle(request: NextRequest): Promise<NextResponse> {
 
   if (pathname === LOGIN_PATH) {
     if (user.state !== 'ok') return response;
-    return withCookies(
-      NextResponse.redirect(new URL(user.mfaRequired ? MFA_PATH : '/', request.url)),
-    );
+    const home = !user.mfaRequired ? '/' : pinBeforeMfa(user) ? CHANGE_PIN_PATH : MFA_PATH;
+    return withCookies(NextResponse.redirect(new URL(home, request.url)));
   }
   if (user.state === 'anonymous') {
     if (pathname === NOT_AUTHORIZED_PATH) {
@@ -109,7 +108,13 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       }
     }
   }
-  // المصادقة الثنائية أولاً (T23 C1): بالـ PIN وحده (aal1) كل صفحة ← /mfa (الخادم يرفض دوال الدور أصلاً)
+  // T23 F M2: رمز مؤقت بلا عامل TOTP ← تغيير الرمز أولاً (بجلسة aal1)، ثم تسجيل التطبيق. من يعرف الرمز
+  // المؤقت فقط لا يسجّل تطبيقه قبل صاحب الحساب (وقاعدة البيانات تحذف أي عامل سُجّل أثناء الرمز المؤقت).
+  if (user.mfaRequired && pinBeforeMfa(user)) {
+    if (pathname === CHANGE_PIN_PATH) return response;
+    return withCookies(NextResponse.redirect(new URL(CHANGE_PIN_PATH, request.url)));
+  }
+  // المصادقة الثنائية (T23 C1): بالـ PIN وحده (aal1) كل صفحة ← /mfa (الخادم يرفض دوال الدور أصلاً)
   if (user.mfaRequired) {
     if (pathname === MFA_PATH) return response;
     const mfa = new URL(MFA_PATH, request.url);

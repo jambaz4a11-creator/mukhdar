@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { LOGIN_PATH, NOT_AUTHORIZED_PATH, safeNext } from '@/lib/access';
-import { getPanelUser } from '@/lib/panelUser';
+import { CHANGE_PIN_PATH, LOGIN_PATH, NOT_AUTHORIZED_PATH, safeNext } from '@/lib/access';
+import { getPanelUser, pinBeforeMfa } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 import { MfaForm } from './MfaForm';
 
@@ -17,6 +17,8 @@ export default async function MfaPage({
   const user = await getPanelUser(await createClient());
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
+  // T23 F M2: لا تسجيل لتطبيق المصادقة برمز مؤقت: تغيير الرمز أولاً
+  if (pinBeforeMfa(user)) redirect(CHANGE_PIN_PATH);
   const { next } = await searchParams;
   const target = safeNext(next);
 

@@ -57,6 +57,16 @@ describe('changePanelPin (ADR 0001 flow)', () => {
     expect(wrong.auth.updateUser).not.toHaveBeenCalled();
   });
 
+  it('T23 F M2: an account without a factor (first temporary PIN) changes the PIN without a TOTP code', async () => {
+    const { client, auth } = fakeClient();
+    expect(await changePanelPin(client, PHONE, '482915', null, '583926', '583926')).toEqual({
+      ok: true,
+      othersSignedOut: true,
+    });
+    expect(auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: '583926' });
+  });
+
   it('rejects before any call: easy PIN, mismatch, same as current, no phone', async () => {
     const { client, auth } = fakeClient();
     expect((await changePanelPin(client, PHONE, '482915', CODE, '123456', '123456')).ok).toBe(

@@ -38,6 +38,30 @@ test.describe('security headers (M3)', () => {
     expect(await a.text()).toContain(`nonce="${nonce(a)}"`);
   });
 
+  // T23 F L2: الصفحات العامة كانت مبنية مسبقاً بلا nonce، فكل سكربتاتها محجوبة. الآن تُعرض بالطلب.
+  for (const path of ['/privacy', '/terms', '/delete-account', '/not-authorized']) {
+    test(`${path}: every script carries this request's nonce, no CSP violation`, async ({
+      page,
+    }) => {
+      const violations: string[] = [];
+      page.on('console', (m) => {
+        if (/Content Security Policy|Content-Security-Policy/i.test(m.text())) {
+          violations.push(m.text());
+        }
+      });
+      const res = await page.goto(path);
+      const nonce = /'nonce-([^']+)'/.exec(res?.headers()['content-security-policy'] ?? '')?.[1];
+      expect(nonce).toBeTruthy();
+      const scripts = await page
+        .locator('script')
+        .evaluateAll((els) => els.map((e) => (e as HTMLScriptElement).nonce));
+      expect(scripts.length).toBeGreaterThan(0);
+      expect(scripts.every((n) => n === nonce)).toBe(true);
+      await page.waitForLoadState('networkidle');
+      expect(violations).toEqual([]);
+    });
+  }
+
   test('a redirect (/ → /login) carries the headers too', async ({ request }) => {
     const res = await request.get('/', { maxRedirects: 0 });
     expect([307, 308]).toContain(res.status());

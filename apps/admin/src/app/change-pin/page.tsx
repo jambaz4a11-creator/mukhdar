@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
-import { getPanelUser } from '@/lib/panelUser';
+import { getPanelUser, pinBeforeMfa } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 import { ChangePinForm } from './ChangePinForm';
 
@@ -12,7 +12,8 @@ export default async function ChangePinPage() {
   const user = await getPanelUser(await createClient());
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
-  if (user.mfaRequired) redirect(MFA_PATH);
+  // T23 F M2: رمز مؤقت بلا عامل TOTP ← التغيير هنا بجلسة aal1 (التسجيل بعده)؛ غير ذلك المصادقة أولاً
+  if (user.mfaRequired && !pinBeforeMfa(user)) redirect(MFA_PATH);
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-5">
@@ -30,7 +31,7 @@ export default async function ChangePinPage() {
             اكتب رمزك الحالي، ثم رمزاً جديداً من 6 أرقام. أجهزتك الأخرى تخرج بعد التغيير.
           </p>
         )}
-        <ChangePinForm phone={user.phone} forced={user.mustChangePin} />
+        <ChangePinForm phone={user.phone} forced={user.mustChangePin} hasTotp={user.hasTotp} />
       </div>
     </main>
   );

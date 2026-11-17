@@ -89,6 +89,8 @@ describe('validateSettings', () => {
     new_account_max_active_orders: '1',
     max_line_qty: '20',
     max_order_lines: '30',
+    max_order_iqd: '200000',
+    new_account_max_order_iqd: '50000',
     store_open: true,
     closed_message: '',
   };
@@ -102,6 +104,8 @@ describe('validateSettings', () => {
         new_account_max_active_orders: 1,
         max_line_qty: 20,
         max_order_lines: 30,
+        max_order_iqd: 200000,
+        new_account_max_order_iqd: 50000,
         store_open: true,
         closed_message: 'نرجع 8 الصبح',
       },
@@ -140,6 +144,12 @@ describe('validateSettings', () => {
     [{ max_line_qty: '' }, 'max_line_qty'],
     [{ max_order_lines: '51' }, 'max_order_lines'],
     [{ max_order_lines: '0' }, 'max_order_lines'],
+    // T23 F M3: حدا قيمة الطلب (مضاعفات 250، 250 على الأقل)
+    [{ max_order_iqd: '200100' }, 'max_order_iqd'],
+    [{ max_order_iqd: '0' }, 'max_order_iqd'],
+    [{ max_order_iqd: '' }, 'max_order_iqd'],
+    [{ new_account_max_order_iqd: '50001' }, 'new_account_max_order_iqd'],
+    [{ new_account_max_order_iqd: 'abc' }, 'new_account_max_order_iqd'],
     [{ closed_message: 'x'.repeat(201) }, 'closed_message'],
   ] as const)('rejects %p', (patch, field) => {
     const r = validateSettings({ ...base, ...patch });

@@ -29,6 +29,8 @@ function toValues(s: AppSettings): SettingsValues {
     new_account_max_active_orders: String(s.new_account_max_active_orders),
     max_line_qty: String(s.max_line_qty),
     max_order_lines: String(s.max_order_lines),
+    max_order_iqd: String(s.max_order_iqd),
+    new_account_max_order_iqd: String(s.new_account_max_order_iqd),
     store_open: s.store_open,
     closed_message: s.closed_message ?? '',
   };
@@ -98,7 +100,9 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
       | 'max_active_orders'
       | 'new_account_max_active_orders'
       | 'max_line_qty'
-      | 'max_order_lines',
+      | 'max_order_lines'
+      | 'max_order_iqd'
+      | 'new_account_max_order_iqd',
     label: string,
   ) => (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -182,10 +186,13 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
           {numberField('new_account_max_active_orders', 'حد الطلبات المفتوحة للحساب الجديد')}
           {numberField('max_line_qty', 'أقصى كمية لكل منتج بالطلب')}
           {numberField('max_order_lines', 'أقصى عدد منتجات بالطلب')}
+          {numberField('max_order_iqd', 'أقصى مجموع للطلب (د.ع)')}
+          {numberField('new_account_max_order_iqd', 'أقصى مجموع لطلب الحساب الجديد (د.ع)')}
         </div>
         <span className="text-xs text-text-muted">
           المبالغ لازم تكون من مضاعفات 250. الكمية بوحدة البيع: 20 = 10 كيلو للخضار والفواكه (نص
           كيلو). الحساب الجديد (بلا طلب مُسلَّم بعد) يُطبَّق عليه حد الحساب الجديد ثم الحد العادي.
+          المجموع يشمل أجرة التوصيل.
         </span>
         {save.error && (
           <p

@@ -12,6 +12,7 @@ import {
   type OrdersTab,
   type QueryConditions,
 } from './filters';
+import { assertPanelSessionAlive } from '@/lib/panelSession';
 
 export const ORDERS_PAGE_SIZE = 50;
 
@@ -127,6 +128,8 @@ export async function fetchOrdersPage(
     .limit(ORDERS_PAGE_SIZE);
   if (error) throw error;
   const rows = (data ?? []) as unknown as OrderRow[];
+  // T23 F M4: جلسة خاملة تُرجع قائمة فارغة (RLS لا يرمي): لا نعرضها قبل التأكد أن الجلسة حيّة
+  if (rows.length === 0 && !cursor) await assertPanelSessionAlive(client);
   const last = rows.at(-1);
   return {
     rows,
@@ -155,6 +158,7 @@ export async function fetchTabCounts(
       return [tab, count ?? 0] as const;
     }),
   );
+  if (results.every(([, n]) => n === 0)) await assertPanelSessionAlive(client); // T23 F M4
   return Object.fromEntries(results) as Record<OrdersTab, number>;
 }
 

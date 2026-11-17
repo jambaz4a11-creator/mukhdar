@@ -30,7 +30,7 @@ export function fetchSettings(supabase: MukhdarClient): Promise<AppSettings> {
     supabase
       .from('app_settings')
       .select(
-        'delivery_fee_iqd, min_order_iqd, max_active_orders, new_account_max_active_orders, max_line_qty, max_order_lines, store_open, closed_message, updated_at',
+        'delivery_fee_iqd, min_order_iqd, max_active_orders, new_account_max_active_orders, max_line_qty, max_order_lines, max_order_iqd, new_account_max_order_iqd, store_open, closed_message, updated_at',
       )
       .eq('id', 1)
       .single(),
@@ -131,7 +131,9 @@ async function invoke<T>(supabase: MukhdarClient, name: string, body: object): P
  */
 export interface LockdownResult {
   cancelled: number;
+  /** T23 F L4: طلبات بالطريق تُركت للأدمن (لا تُلغى ولا تُهدر هنا) */
   out_for_delivery: number;
+  out_for_delivery_numbers: number[];
 }
 
 /** T23 H2: يلغي كل الطلبات المفتوحة لزبون ويعطّل حسابه (أدمن فقط، مُدقَّق). */

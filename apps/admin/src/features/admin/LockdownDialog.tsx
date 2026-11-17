@@ -1,7 +1,8 @@
 'use client';
 // T23 H2: "إلغاء كل طلباته وتعطيل الحساب" لزبون مشبوه (طلبات وهمية تحجز المخزون). أدمن فقط (الدالة تتحقق).
-// تأكيد صريح قبل التنفيذ؛ يُدقَّق بـ admin_audit (customer_lockdown). الطلب بالطريق: البضاعة طلعت مع السائق فلا
-// ترجع للمخزون وتُسجَّل هدراً؛ ما عداه يرجع للمخزون.
+// تأكيد صريح قبل التنفيذ؛ يُدقَّق بـ admin_audit (customer_lockdown). T23 F L4: الطلب بالطريق لا يُلغى هنا (البضاعة
+// مع السائق وقد ترجع)؛ تُعرض أرقامه ليقرر الأدمن من صفحة الطلبات (تسليم، أو إلغاء بإرجاع أو بلا إرجاع).
+import Link from 'next/link';
 import { errorMessage } from '@mukhdar/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePanel } from '@/components/PanelProviders';
@@ -34,16 +35,30 @@ export function LockdownDialog({
       {run.data ? (
         <div className="flex flex-col gap-3" data-testid="lockdown-done">
           <p role="status" className="m-0 text-[15px]">
-            انعطّل الحساب وانلغى <strong className="num">{run.data.cancelled}</strong> طلب
-            {run.data.out_for_delivery > 0 && (
-              <>
-                {' '}
-                (منها <span className="num">{run.data.out_for_delivery}</span> كان بالطريق: سُجّل
-                هدراً بدل إرجاعه للمخزون)
-              </>
-            )}
-            . المخزون رجع للطلبات الأخرى، وانسجّل الإجراء بسجل التدقيق.
+            انعطّل الحساب وانلغى <strong className="num">{run.data.cancelled}</strong> طلب ورجع
+            مخزونها. انسجّل الإجراء بسجل التدقيق.
           </p>
+          {run.data.out_for_delivery_numbers.length > 0 && (
+            <div
+              data-testid="lockdown-on-the-way"
+              className="flex flex-col gap-1.5 rounded-control bg-warning-soft px-3 py-2 text-sm leading-6"
+            >
+              <span>
+                طلبات بالطريق لم تُلغَ (البضاعة مع السائق): قرّر لكل طلب من صفحته، تسليم أو إلغاء.
+              </span>
+              <span className="flex flex-wrap gap-2">
+                {run.data.out_for_delivery_numbers.map((n) => (
+                  <Link
+                    key={n}
+                    href={`/orders?q=${n}`}
+                    className="num font-semibold text-primary underline"
+                  >
+                    #{n}
+                  </Link>
+                ))}
+              </span>
+            </div>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -56,8 +71,8 @@ export function LockdownDialog({
         <div className="flex flex-col gap-3">
           <p className="m-0 text-[15px] font-semibold">{label}</p>
           <ul className="m-0 flex list-disc flex-col gap-1 ps-5 text-sm leading-6">
-            <li>تُلغى كل طلباته المفتوحة فوراً ويصله إشعار الإلغاء.</li>
-            <li>المخزون يرجع إلا للطلب الذي بالطريق (تُسجَّل بضاعته هدراً بكلفتها).</li>
+            <li>تُلغى طلباته المفتوحة (قيد الانتظار والتحضير والجاهزة) ويرجع مخزونها.</li>
+            <li>الطلب الذي بالطريق لا يُلغى: تظهر أرقامه لتقرر أنت (تسليم أو إلغاء).</li>
             <li>يتعطّل حسابه ويطلع من كل أجهزته، ولا يقدر يطلب أو يدخل.</li>
             <li>الإجراء يُسجَّل بسجل التدقيق باسمك. تقدر تعيد تفعيل الحساب لاحقاً من الموظفين.</li>
           </ul>

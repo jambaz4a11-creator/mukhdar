@@ -184,6 +184,10 @@ export const ar = {
     oneActiveOrder: 'لديك طلب جارٍ. انتظر وصوله ثم اطلب من جديد',
     qtyLimit: (n: number) => `(الحد ${n} لكل منتج، يعني ${n / 2} كيلو للخضار والفواكه)`,
     linesLimit: (n: number) => `(الحد ${n} منتجاً بالطلب)`,
+    // T23 F M3: حد قيمة الطلب (المجموع مع التوصيل)، المبلغ منسّق بـ formatIQD
+    orderCap: (amount: string) => `(الحد ${amount} للطلب الواحد مع التوصيل)`,
+    newAccountCap: (amount: string) =>
+      `(حد أول طلب ${amount} مع التوصيل، ويرتفع بعد تسليم أول طلب لك)`,
   },
   order: {
     title: (n: number | string) => `الطلب #${n}`,

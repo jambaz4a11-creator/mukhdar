@@ -2,7 +2,8 @@
 // 1) الجديد (مرتين) ← validatePin برقم الشخص، ولا يساوي الحالي (الرمز المؤقت لا يُعاد).
 // 2) signInWithPassword بالرقم والرمز الحالي: تحقق + جلسة جديدة (فلا يُطلب reauthenticate عبر SMS المرفوض).
 // 2ب) T23 C1: الدخول من جديد يرجع الجلسة لـ aal1، وAuth يرفض تغيير كلمة السر لحساب له عامل TOTP
-//     بلا aal2، فرمز تطبيق المصادقة مطلوب قبل التحديث (verifyTotp).
+//     بلا aal2، فرمز تطبيق المصادقة مطلوب قبل التحديث (verifyTotp). T23 F M2: حساب بلا عامل (رمز مؤقت أول
+//     مرة، التسجيل يأتي بعد التغيير) يمرر totp = null فلا يُطلب.
 // 3) updateUser ← قاعدة البيانات تمسح must_change_pin بنفسها (trigger على كلمة السر).
 // 4) signOut({ scope: 'others' }): بقية الأجهزة تخرج. فشله لا يلغي التغيير.
 import {
@@ -32,7 +33,7 @@ export async function changePanelPin(
   client: AuthClient,
   phone: string | null,
   current: string,
-  totp: string,
+  totp: string | null,
   next: string,
   confirm: string,
 ): Promise<ChangePinResult> {
@@ -46,7 +47,9 @@ export async function changePanelPin(
   }
   const currentPin = normalizePin(current);
   if (nextPin === currentPin) return { ok: false, field: 'next', message: CHANGE_PIN_TEXT.same };
-  if (!normalizeTotpCode(totp)) return { ok: false, field: 'totp', message: MFA_TEXT.invalidCode };
+  if (totp !== null && !normalizeTotpCode(totp)) {
+    return { ok: false, field: 'totp', message: MFA_TEXT.invalidCode };
+  }
 
   try {
     const signIn = await client.auth.signInWithPassword({ phone: e164, password: currentPin });
@@ -58,8 +61,10 @@ export async function changePanelPin(
         message: e.kind === 'invalid_credentials' ? CHANGE_PIN_TEXT.wrongCurrent : e.message,
       };
     }
-    const mfa = await verifyTotp(client, null, totp);
-    if (!mfa.ok) return { ok: false, field: 'totp', message: mfa.message };
+    if (totp !== null) {
+      const mfa = await verifyTotp(client, null, totp);
+      if (!mfa.ok) return { ok: false, field: 'totp', message: mfa.message };
+    }
     const { error } = await client.auth.updateUser({ password: nextPin });
     if (error) {
       const code = (error as { code?: string }).code;

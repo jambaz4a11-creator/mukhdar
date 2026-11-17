@@ -563,6 +563,18 @@ describe('checkout', () => {
     ],
     ['TOO_MANY_ITEMS', '30', `${ERROR_MESSAGES.TOO_MANY_ITEMS} (الحد 30 منتجاً بالطلب)`],
     ['TOO_MANY_ITEMS', undefined, ERROR_MESSAGES.TOO_MANY_ITEMS],
+    // T23 F M3: حد قيمة الطلب، والمبلغ بالرسالة
+    [
+      'ORDER_TOO_LARGE',
+      '200000',
+      `${ERROR_MESSAGES.ORDER_TOO_LARGE} (الحد ${formatIQD(200000)} للطلب الواحد مع التوصيل)`,
+    ],
+    [
+      'NEW_ACCOUNT_ORDER_LIMIT',
+      '50000',
+      `${ERROR_MESSAGES.NEW_ACCOUNT_ORDER_LIMIT} (حد أول طلب ${formatIQD(50000)} مع التوصيل، ويرتفع بعد تسليم أول طلب لك)`,
+    ],
+    ['ORDER_TOO_LARGE', undefined, ERROR_MESSAGES.ORDER_TOO_LARGE],
   ])(
     '%s shows its Arabic message and is not offered as a retry',
     async (code, details, message) => {

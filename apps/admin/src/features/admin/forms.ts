@@ -82,6 +82,10 @@ export interface SettingsValues {
   max_line_qty: string;
   /** T23 H2: حد عدد المنتجات بالطلب */
   max_order_lines: string;
+  /** T23 F M3: أقصى مجموع للطلب (مع التوصيل) لكل زبون، افتراضي 200,000 */
+  max_order_iqd: string;
+  /** T23 F M3: أقصى مجموع لحساب بلا طلب مُسلَّم بعد، افتراضي 50,000 */
+  new_account_max_order_iqd: string;
   store_open: boolean;
   closed_message: string;
 }
@@ -93,6 +97,8 @@ export interface SettingsPayload {
   new_account_max_active_orders: number;
   max_line_qty: number;
   max_order_lines: number;
+  max_order_iqd: number;
+  new_account_max_order_iqd: number;
   store_open: boolean;
   closed_message: string | null;
 }
@@ -131,6 +137,19 @@ export function validateSettings(
   if (lineQty === null) errors.max_line_qty = 'عدد من 1 إلى 99';
   const lines = intIn(v.max_order_lines, 1, 50);
   if (lines === null) errors.max_order_lines = 'عدد من 1 إلى 50';
+  // T23 F M3: حدا قيمة الطلب (250 .. 100,000,000، مضاعفات 250)
+  const capError = (n: number | null) =>
+    n === null || n < 250
+      ? 'اكتب مبلغاً بالدينار (250 أو أكثر)'
+      : n % 250 !== 0
+        ? 'لازم يكون من مضاعفات 250'
+        : null;
+  const maxOrder = amount(v.max_order_iqd);
+  const maxOrderError = capError(maxOrder);
+  if (maxOrderError) errors.max_order_iqd = maxOrderError;
+  const newMaxOrder = amount(v.new_account_max_order_iqd);
+  const newMaxOrderError = capError(newMaxOrder);
+  if (newMaxOrderError) errors.new_account_max_order_iqd = newMaxOrderError;
   const message = v.closed_message.trim();
   if (message.length > 200) errors.closed_message = 'الرسالة أطول من 200 حرف';
   if (Object.keys(errors).length > 0) return { payload: null, errors };
@@ -142,6 +161,8 @@ export function validateSettings(
       new_account_max_active_orders: newMax as number,
       max_line_qty: lineQty as number,
       max_order_lines: lines as number,
+      max_order_iqd: maxOrder as number,
+      new_account_max_order_iqd: newMaxOrder as number,
       store_open: v.store_open,
       closed_message: message || null,
     },

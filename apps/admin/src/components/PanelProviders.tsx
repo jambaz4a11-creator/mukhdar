@@ -1,12 +1,18 @@
 'use client';
 // مزوّدات اللوحة: TanStack Query + اشتراك Realtime واحد على orders لكل الصفحات (شارة القائمة، الطلبات،
 // والرئيسية لاحقاً). INSERT ← صوت تنبيه وإبطال استعلامات الطلبات؛ UPDATE ← إبطالها (الصفوف المعروضة تتحدث).
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import {
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { IdleGuard } from '@/components/IdleGuard';
 import { createClient } from '@/lib/supabase/browser';
 import { ordersKeys } from '@/features/orders/api';
 import { maxWaitDebounce } from '@/lib/maxWaitDebounce';
+import { PanelSessionExpiredError, leaveExpiredSession } from '@/lib/panelSession';
 import { playNewOrderSound, unlockAudio } from '@/lib/sound';
 import type { MukhdarClient } from '@mukhdar/shared';
 import type { PanelRole } from '@/lib/access';
@@ -34,7 +40,19 @@ export function PanelProviders({ children, role }: { children: React.ReactNode; 
   const [queryClient] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: true, retry: 1 } },
+        // T23 F M4: جلسة انتهت بالخمول ← صفحة الدخول برسالة (لا قائمة فارغة ولا إعادة محاولة)
+        queryCache: new QueryCache({
+          onError: (error) => {
+            if (error instanceof PanelSessionExpiredError) void leaveExpiredSession(createClient());
+          },
+        }),
+        defaultOptions: {
+          queries: {
+            staleTime: 15_000,
+            refetchOnWindowFocus: true,
+            retry: (count, error) => !(error instanceof PanelSessionExpiredError) && count < 1,
+          },
+        },
       }),
   );
   return (

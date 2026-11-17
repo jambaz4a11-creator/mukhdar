@@ -246,7 +246,23 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     const context = await browser.newContext();
     const staff = await context.newPage();
     await signIn(staff, phone, temp, null);
-    // T23 C1: أول دخول ← تسجيل تطبيق المصادقة (QR + المفتاح اليدوي) قبل أي شيء، حتى تغيير الرمز
+    // T23 F M2: أول دخول برمز مؤقت ← تغيير الرمز أولاً (بلا رمز تطبيق: لا عامل بعد)، ثم تسجيل تطبيق المصادقة.
+    // من عرف الرمز المؤقت وحده لا يسجّل تطبيقه قبل صاحب الحساب.
+    await staff.waitForURL((u) => u.pathname === '/change-pin');
+    await expect(staff.getByTestId('pin-forced')).toBeVisible();
+    await expect(staff.getByLabel('رمز تطبيق المصادقة')).toHaveCount(0);
+    await staff.goto('/mfa'); // التسجيل ممنوع قبل تغيير الرمز
+    await staff.waitForURL((u) => u.pathname === '/change-pin');
+    await staff.goto('/orders'); // أي صفحة ← تغيير الرمز
+    await staff.waitForURL((u) => u.pathname === '/change-pin');
+
+    const fresh = temp === '583926' ? '692817' : '583926';
+    await staff.getByLabel('الرمز المؤقت').fill(temp);
+    await staff.getByLabel('الرمز الجديد', { exact: true }).fill(fresh);
+    await staff.getByLabel('أعد كتابة الرمز الجديد').fill(fresh);
+    await staff.getByRole('button', { name: 'تغيير الرمز' }).click();
+
+    // بعد التغيير: تسجيل تطبيق المصادقة (QR + المفتاح اليدوي) قبل أي صفحة
     await staff.waitForURL((u) => u.pathname === '/mfa');
     await expect(staff.getByTestId('mfa-enroll-intro')).toBeVisible();
     await expect(staff.getByTestId('mfa-qr')).toBeVisible();
@@ -261,18 +277,7 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     const current = (await staff.getByTestId('mfa-secret').innerText()).trim();
     await staff.getByLabel('رمز تطبيق المصادقة').fill(await freshTotp(current));
     await staff.getByRole('button', { name: 'تفعيل ودخول' }).click();
-    await staff.waitForURL((u) => u.pathname === '/change-pin');
-    await expect(staff.getByTestId('pin-forced')).toBeVisible();
-    await staff.goto('/orders'); // أي صفحة ← تغيير الرمز
-    await staff.waitForURL((u) => u.pathname === '/change-pin');
-
-    const fresh = temp === '583926' ? '692817' : '583926';
-    await staff.getByLabel('الرمز المؤقت').fill(temp);
-    await staff.getByLabel('رمز تطبيق المصادقة').fill(await freshTotp(current));
-    await staff.getByLabel('الرمز الجديد', { exact: true }).fill(fresh);
-    await staff.getByLabel('أعد كتابة الرمز الجديد').fill(fresh);
-    await staff.getByRole('button', { name: 'تغيير الرمز' }).click();
-    await staff.waitForURL((u) => u.pathname === '/');
+    await staff.waitForURL((u) => !u.pathname.startsWith('/mfa'));
     await staff.goto('/orders');
     await expect(staff).toHaveURL(/\/orders$/);
     await context.close();

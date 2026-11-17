@@ -28,6 +28,14 @@ export function hasVerifiedTotp(user: AuthUser): boolean {
   return (user.factors ?? []).some((f) => f.factor_type === 'totp' && f.status === 'verified');
 }
 
+/**
+ * T23 F M2: رمز مؤقت ولا عامل TOTP بعد ← تغيير الرمز يسبق تسجيل تطبيق المصادقة (proxy وصفحتا /mfa و/change-pin).
+ * بعد التغيير: الجلسة aal1 بلا عامل ← /mfa للتسجيل.
+ */
+export function pinBeforeMfa(user: { mustChangePin: boolean; hasTotp: boolean }): boolean {
+  return user.mustChangePin && !user.hasTotp;
+}
+
 export async function getPanelUser(
   supabase: Pick<MukhdarClient, 'auth' | 'from'>,
 ): Promise<PanelUser> {

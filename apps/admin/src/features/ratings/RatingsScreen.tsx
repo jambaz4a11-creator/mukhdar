@@ -36,7 +36,7 @@ const chip = (active: boolean) =>
 const card = 'rounded-card border border-border bg-surface';
 
 export function RatingsScreen() {
-  const { supabase } = usePanel();
+  const { supabase, role } = usePanel();
   const params = useSearchParams();
 
   const rawFrom = params.get('from');
@@ -84,6 +84,12 @@ export function RatingsScreen() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="m-0 text-[26px] font-bold">التقييمات</h1>
+      {role === 'staff' && (
+        // T23 F M1: الموظف يرى تقييمات آخر 7 أيام (بغداد) فقط، مثل الطلبات؛ قاعدة البيانات تفرضها
+        <p className="m-0 text-xs text-text-muted" data-testid="staff-window-note">
+          تظهر لك تقييمات آخر 7 أيام فقط. الأقدم من ذلك عند المدير.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-stretch gap-4">
         <section

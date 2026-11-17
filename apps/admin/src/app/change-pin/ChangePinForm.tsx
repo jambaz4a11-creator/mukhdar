@@ -5,7 +5,16 @@ import { signOut } from '@/app/actions';
 import { changePanelPin } from '@/features/account/changePin';
 import { createClient } from '@/lib/supabase/browser';
 
-export function ChangePinForm({ phone, forced }: { phone: string | null; forced: boolean }) {
+export function ChangePinForm({
+  phone,
+  forced,
+  hasTotp,
+}: {
+  phone: string | null;
+  forced: boolean;
+  /** عنده عامل TOTP: رمز التطبيق مطلوب للتغيير (Auth يرفض بلا aal2). بلا عامل (رمز مؤقت أول مرة): لا حقل. */
+  hasTotp: boolean;
+}) {
   const router = useRouter();
   const [current, setCurrent] = useState('');
   const [totp, setTotp] = useState('');
@@ -20,7 +29,14 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await changePanelPin(createClient(), phone, current, totp, next, confirm);
+    const result = await changePanelPin(
+      createClient(),
+      phone,
+      current,
+      hasTotp ? totp : null,
+      next,
+      confirm,
+    );
     setBusy(false);
     if (!result.ok) {
       if (result.field === 'current') setCurrent('');
@@ -76,7 +92,7 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
           setCurrent,
           'current-password',
         )}
-        {field('pin-totp', 'رمز تطبيق المصادقة', totp, setTotp, 'one-time-code', 'text')}
+        {hasTotp && field('pin-totp', 'رمز تطبيق المصادقة', totp, setTotp, 'one-time-code', 'text')}
         {field('pin-new', 'الرمز الجديد', next, setNext, 'new-password')}
         {field('pin-confirm', 'أعد كتابة الرمز الجديد', confirm, setConfirm, 'new-password')}
         {error && (
@@ -96,7 +112,11 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
         <button
           type="submit"
           disabled={
-            busy || current.length < 6 || totp.length < 6 || next.length < 6 || confirm.length < 6
+            busy ||
+            current.length < 6 ||
+            (hasTotp && totp.length < 6) ||
+            next.length < 6 ||
+            confirm.length < 6
           }
           className="h-14 rounded-card bg-primary text-base font-bold text-white hover:bg-primary-pressed disabled:opacity-60"
         >
