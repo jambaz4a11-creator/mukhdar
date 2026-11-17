@@ -1,6 +1,7 @@
 // بعد `expo export -p web`: يحوّل dist/index.html إلى PWA عربية RTL.
 // (وضع output=single لا يستعمل +html.tsx، والتصيير الساكن ينهار بمكتبات الأصلي، فنعدّل القالب الناتج مباشرة.)
 import { readFileSync, writeFileSync } from 'node:fs';
+import process from 'node:process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
