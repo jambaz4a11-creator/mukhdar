@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   assertSafeTarget,
-  connect,
+  connectDev,
   describe,
   readEnvLocal,
   resolveTarget,
@@ -28,7 +28,7 @@ if (!publishableKey)
   throw new Error('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY missing (apps/customer/.env)');
 const url = `https://${target.projectRef}.supabase.co`;
 
-const db = await connect(target);
+const db = await connectDev(target);
 console.log(`target: ${describe(target)}`);
 let failures = 0;
 const check = (ok, label) => {

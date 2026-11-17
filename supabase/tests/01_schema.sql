@@ -96,9 +96,9 @@ select is(
       and has_function_privilege('service_role', p.oid, 'execute')
       and not has_function_privilege('authenticated', p.oid, 'execute')),
   array['abort_account_deletion', 'admin_rate_hit', 'begin_account_deletion', 'break_glass_reset_mfa',
-        'finish_user_creation', 'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions',
+        'claim_push_notifications', 'finish_user_creation', 'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions',
         'signup_rate_hit'],
-  'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19/B PIN reset, account creation, rate limit)');
+  'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19/B PIN reset, account creation, rate limit; T23 F: claim_push_notifications definer)');
 
 -- الدوال الجديدة لا تُنفَّذ افتراضياً (default privileges عامة، لا بالمخطط فقط)
 create function public.zz_default_acl_probe() returns int language sql set search_path = '' as 'select 1';

@@ -15,7 +15,7 @@
 // assign_driver / rate_order (لا إدخال مباشر)، لذلك daily_stats محسوبة بنفس منطق الإنتاج.
 // بعدها تُرجَع الطوابع الزمنية لليوم المقصود، وتُنقل مساهمة اليوم من daily_stats لذلك اليوم.
 // الافتراض: المنتجات والعناوين من supabase/seed.sql موجودة.
-import { assertSafeTarget, connect, describe, resolveTarget } from './lib/db.mjs';
+import { assertSafeTarget, connectDev, describe, resolveTarget } from './lib/db.mjs';
 import {
   DEMO_PHONE_PREFIX,
   DEMO_PIN,
@@ -200,7 +200,7 @@ const STAT_COLS = [
 ];
 
 // ---------------------------------------------------------------- main
-const client = await connect(target);
+const client = await connectDev(target);
 const q = (text, params) => client.query(text, params);
 console.log(`seed:demo -> ${describe(target)}`);
 

@@ -97,7 +97,8 @@ insert into public.ratings (order_id, customer_id, stars, comment, created_at) v
   (tests.id('o4'), tests.id('cust'), 2, 'ضعيف',  '2020-03-11 07:00Z'),
   (tests.id('o5'), tests.id('cust'), 1, null,    '2020-03-12 06:00Z'),
   (tests.id('o6'), tests.id('cust'), 5, 'رائع',  '2020-03-12 06:00Z');
-select tests.as_user(tests.id('staff'));
+-- الأرقام بحساب الأدمن: الموظف يرى آخر 7 أيام بغداد فقط (T23 F M1، 31_security_f.sql)، وتواريخ 2020 خارجها
+select tests.as_user(tests.id('admin'));
 
 select is(public.ratings_summary('2020-03-10', '2020-03-12'),
   '{"count": 6, "avg": 3.3, "distribution": {"1": 1, "2": 1, "3": 1, "4": 1, "5": 2}}'::jsonb,

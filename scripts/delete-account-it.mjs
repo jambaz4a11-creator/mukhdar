@@ -8,7 +8,7 @@
 // يحذف كل ما أنشأه (المستخدم والطلبين) حتى عند الفشل. لا يلمس أي مستخدم آخر.
 // يحتاج بـ .env.local: SUPABASE_DB_PASSWORD و SUPABASE_SERVICE_ROLE_KEY (مشروع التطوير).
 import crypto from 'node:crypto';
-import { assertSafeTarget, connect, describe, readEnvLocal, resolveTarget } from './lib/db.mjs';
+import { assertSafeTarget, connectDev, describe, readEnvLocal, resolveTarget } from './lib/db.mjs';
 
 const target = resolveTarget(['--remote']);
 assertSafeTarget(target);
@@ -18,7 +18,7 @@ if (!serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY missing (.env.local)
 const base = `https://${target.projectRef}.supabase.co`;
 const fnUrl = `${base}/functions/v1/delete-account`;
 
-const db = await connect(target);
+const db = await connectDev(target);
 console.log(`target: ${describe(target)}`);
 
 let failures = 0;

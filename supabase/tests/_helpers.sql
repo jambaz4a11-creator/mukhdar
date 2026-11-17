@@ -22,7 +22,8 @@ end $$;
 -- حد الطلبات غير المنتهية للزبون (افتراضي 3) يُرفع للتجهيز؛ 03_place_order يختبره بقيمته الحقيقية.
 -- حدا الطلب (T23 H2: 20 وحدة لكل منتج، 30 منتجاً) وحد الحساب الجديد (طلب مفتوح واحد حتى أول تسليم) يُرفعان لأقصاها
 -- للتجهيز؛ 29_order_caps و30_e2 يختبرانها.
-update public.app_settings set max_active_orders = 1000, new_account_max_active_orders = 1000, max_line_qty = 99, max_order_lines = 50;
+update public.app_settings set max_active_orders = 1000, new_account_max_active_orders = 1000, max_line_qty = 99, max_order_lines = 50,
+                               max_order_iqd = 100000000, new_account_max_order_iqd = 100000000;
 
 create sequence tests.phone_seq start 9647900000000;
 
@@ -41,6 +42,26 @@ end $$;
 create function tests.as_user_aal1(p_uid uuid) returns void language sql as $$
   select tests.as_user(p_uid, 'aal1')
 $$;
+
+-- T23 F H1: جلسة Auth حقيقية (aal2) لحساب أدمن/موظف: رموز إشعاراتهم تُربط بها ولا تستلم بدونها.
+-- panel_session ينشئ الصف ويرجع معرّفه (من دور postgres)، as_panel يدخل بها (claims مع session_id).
+create function tests.panel_session(p_uid uuid, p_aal text default 'aal2') returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare v_sid uuid := gen_random_uuid();
+begin
+  insert into auth.sessions (id, user_id, created_at, updated_at, aal)
+  values (v_sid, p_uid, now(), now(), p_aal::auth.aal_level);
+  return v_sid;
+end $$;
+
+create function tests.as_panel(p_uid uuid, p_sid uuid default null) returns uuid language plpgsql as $$
+declare v_sid uuid := coalesce(p_sid, tests.panel_session(p_uid));
+begin
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', p_uid, 'role', 'authenticated', 'aal', 'aal2', 'session_id', v_sid)::text, true);
+  perform set_config('role', 'authenticated', true);
+  return v_sid;
+end $$;
 
 -- زائر غير مسجل
 create function tests.as_anon() returns void language plpgsql as $$

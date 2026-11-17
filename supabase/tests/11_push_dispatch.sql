@@ -18,9 +18,12 @@ select is(
                        'private.push_kick_post(boolean)', 'private.purge_push_history()']) f(fn)
     where has_function_privilege(r.role, f.fn, 'execute')),
   0, 'anon/authenticated cannot execute any push-dispatch function');
-select ok(not (select prosecdef from pg_proc where oid = 'public.claim_push_notifications(int)'::regprocedure)
+-- T23 F H1: claim صارت definer (تقرأ auth.sessions لجلسة رمز الأدمن/الموظف)، والتنفيذ لـ service_role وحده
+select ok((select prosecdef from pg_proc where oid = 'public.claim_push_notifications(int)'::regprocedure)
+      and not has_function_privilege('authenticated', 'public.claim_push_notifications(int)', 'execute')
+      and not has_function_privilege('anon', 'public.claim_push_notifications(int)', 'execute')
       and not (select prosecdef from pg_proc where oid = 'public.finish_push_notifications(jsonb, text[])'::regprocedure),
-  'claim/finish are SECURITY INVOKER (run with service_role privileges only)');
+  'claim is definer but service_role-only; finish is SECURITY INVOKER');
 
 -- ---------------------------------------------------------------- register_push_token + provider
 select tests.remember('cust', tests.new_user('customer'));
@@ -53,12 +56,13 @@ select tests.remember('adm', tests.new_user('admin'));
 select tests.remember('stf', tests.new_user('staff'));
 update public.profiles set is_active = false where id in (tests.id('cust_off'), tests.id('drv_off'));
 
-insert into public.push_tokens (user_id, token, platform, provider) values
-  (tests.id('cust_off'), 'ExponentPushToken[t11-off]', 'ios', 'expo'),
-  (tests.id('drv'), 'ExponentPushToken[t11-drv]', 'android', 'expo'),
-  (tests.id('drv_off'), 'ExponentPushToken[t11-drv-off]', 'android', 'expo'),
-  (tests.id('adm'), 'ExponentPushToken[t11-adm]', 'ios', 'expo'),
-  (tests.id('stf'), 'ExponentPushToken[t11-stf]', 'ios', 'expo');
+insert into public.push_tokens (user_id, token, platform, provider, session_id) values
+  (tests.id('cust_off'), 'ExponentPushToken[t11-off]', 'ios', 'expo', null),
+  (tests.id('drv'), 'ExponentPushToken[t11-drv]', 'android', 'expo', null),
+  (tests.id('drv_off'), 'ExponentPushToken[t11-drv-off]', 'android', 'expo', null),
+  -- T23 F H1: رمز الأدمن/الموظف مربوط بجلسة aal2
+  (tests.id('adm'), 'ExponentPushToken[t11-adm]', 'ios', 'expo', tests.panel_session(tests.id('adm'))),
+  (tests.id('stf'), 'ExponentPushToken[t11-stf]', 'ios', 'expo', tests.panel_session(tests.id('stf')));
 
 insert into public.notification_outbox (audience, user_id, title, body) values
   ('user', tests.id('cust'), 'T-user', 'b'),

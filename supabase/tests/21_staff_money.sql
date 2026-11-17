@@ -11,6 +11,8 @@ select set_eq(
       where table_schema = 'public' and (column_name::text collate "C") ~ '(_iqd|cost|profit|revenue|price|fees?)' $$,
   $$ values
      ('app_settings.delivery_fee_iqd'), ('app_settings.min_order_iqd'),
+     -- T23 F M3: حدّا قيمة الطلب (مبالغ بيع، عامة مثل الحد الأدنى: الزبون والموظف يقرآنها)
+     ('app_settings.max_order_iqd'), ('app_settings.new_account_max_order_iqd'),
      ('daily_stats.adjust_loss_iqd'), ('daily_stats.cost_iqd'), ('daily_stats.delivery_fees_iqd'),
      ('daily_stats.gross_profit_iqd'), ('daily_stats.net_profit_iqd'), ('daily_stats.revenue_iqd'),
      ('daily_stats.waste_cost_iqd'),
@@ -47,7 +49,8 @@ select isnt_empty(format($$ select 1 from public.order_items where order_id = %L
   and line_total_iqd = 4000 $$, tests.id('o')), 'staff reads item prices and line totals');
 select isnt_empty(format($$ select 1 from public.products where id = %L and price_iqd = 2000 $$, tests.id('p')),
   'staff reads the sale price');
-select isnt_empty($$ select 1 from public.app_settings where delivery_fee_iqd is not null and min_order_iqd is not null $$,
+select isnt_empty($$ select 1 from public.app_settings where delivery_fee_iqd is not null and min_order_iqd is not null
+                      and max_order_iqd is not null and new_account_max_order_iqd is not null $$,
   'staff reads delivery fee and minimum (public, customers see them too)');
 
 -- ---------------------------------------------------------------- 3) الكلفة والربح والهدر: لا

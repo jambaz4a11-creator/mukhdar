@@ -114,12 +114,15 @@ select throws_ok(format($$ select public.admin_cancel_customer_orders(%L) $$, te
   'P0001', 'NOT_A_CUSTOMER', 'target must be a customer (driver refused)');
 select throws_ok(format($$ select public.admin_cancel_customer_orders(%L) $$, gen_random_uuid()),
   'P0001', 'USER_NOT_FOUND', 'unknown user');
-select is(public.admin_cancel_customer_orders(tests.id('bad')), '{"cancelled": 3, "out_for_delivery": 1}'::jsonb,
-  'cancel-all: 3 open orders cancelled, 1 of them already out for delivery');
+-- T23 F L4: الطلب بالطريق لا يُلغى (يُرجَع رقمه ليقرر الأدمن)
+select is(public.admin_cancel_customer_orders(tests.id('bad')),
+  jsonb_build_object('cancelled', 2, 'out_for_delivery', 1,
+    'out_for_delivery_numbers', jsonb_build_array((select order_number from public.orders where id = tests.id('o_out')))),
+  'cancel-all: 2 open orders cancelled, the one out for delivery left and listed (T23 F L4)');
 
 select tests.as_postgres();
-select is((select count(*)::int from public.orders where customer_id = tests.id('bad') and status = 'cancelled'), 3,
-  'the three open orders are cancelled');
+select is((select count(*)::int from public.orders where customer_id = tests.id('bad') and status = 'cancelled'), 2,
+  'the pending and preparing orders are cancelled');
 select is((select status::text from public.orders where id = tests.id('o_done')), 'delivered',
   'a delivered order is untouched');
 select is((select status::text from public.orders where id = tests.id('o_other')), 'pending',
@@ -129,23 +132,24 @@ select is((select s.qty - b.qty from public.stock s join lock_before b on b.prod
 select is((select s.qty - b.qty from public.stock s join lock_before b on b.product_id = s.product_id
             where b.order_id = tests.id('o_prep')), 1, 'preparing order: stock returned');
 select is((select s.qty - b.qty from public.stock s join lock_before b on b.product_id = s.product_id
-            where b.order_id = tests.id('o_out')), 0, 'out_for_delivery order: stock NOT returned');
-select is((select count(*)::int from public.inventory_movements
-            where order_id = tests.id('o_out') and type = 'waste'), 1, 'out_for_delivery order: recorded as waste');
+            where b.order_id = tests.id('o_out')), 0, 'out_for_delivery order: stock unchanged');
+select is((select status::text from public.orders where id = tests.id('o_out')), 'out_for_delivery',
+  'out_for_delivery order: left on the way, no waste booked (T23 F L4)');
 select is((select is_active from public.profiles where id = tests.id('bad')), false, 'the customer is deactivated');
 select is((select count(*)::int from auth.sessions where user_id = tests.id('bad')), 0, 'the customer''s sessions are revoked');
 select is((select count(*)::int from public.push_tokens where user_id = tests.id('bad')), 0, 'push tokens are removed');
 select ok(exists (select 1 from public.admin_audit where action = 'customer_lockdown' and target_id = tests.id('bad')
-                   and actor = tests.id('admin') and (after ->> 'cancelled') = '3'
-                   and (after ->> 'cancelled_out_for_delivery') = '1'), 'audited as customer_lockdown with the counts');
+                   and actor = tests.id('admin') and (after ->> 'cancelled') = '2'
+                   and jsonb_array_length(after -> 'left_out_for_delivery') = 1), 'audited as customer_lockdown with the counts');
 select ok(exists (select 1 from public.admin_audit where action = 'user_role' and target_id = tests.id('bad')),
   'the deactivation is audited as user_role too');
 select tests.as_user(tests.id('bad'));
 select is(tests.err_detail(tests.order_sql(tests.id('bad'), (select id from public.addresses where customer_id = tests.id('bad') limit 1))),
   'NOT_CUSTOMER:', 'the deactivated customer cannot place orders');
 select tests.as_user(tests.id('admin'));
-select is(public.admin_cancel_customer_orders(tests.id('bad')), '{"cancelled": 0, "out_for_delivery": 0}'::jsonb,
-  'running it again is harmless (nothing left open)');
+select is(public.admin_cancel_customer_orders(tests.id('bad')) - 'out_for_delivery_numbers',
+  '{"cancelled": 0, "out_for_delivery": 1}'::jsonb,
+  'running it again is harmless (nothing more cancelled; the order on the way is still listed)');
 
 -- ================================================================ M5: محو الهوية (الحالة الكاملة بـ 12_delete_account)
 select tests.as_postgres();

@@ -7,7 +7,7 @@
 //
 // لا يمس الكتالوج والعناوين من supabase/seed.sql ولا الصور.
 // يعكس أثر العرض بدقة: يطرح مساهمة طلباته من daily_stats، ويعكس حركات المخزون التي أنشأها.
-import { assertSafeTarget, connect, describe, resolveTarget } from './lib/db.mjs';
+import { assertSafeTarget, connectDev, describe, resolveTarget } from './lib/db.mjs';
 import { DEMO_PHONE_LIKE, STATS_MISMATCH_SQL } from './lib/demo.mjs';
 
 const target = resolveTarget();
@@ -64,7 +64,7 @@ const RESET_SQL = [
   `delete from auth.users where id in (select id from demo_users)`,
 ];
 
-const client = await connect(target);
+const client = await connectDev(target);
 console.log(`seed:reset -> ${describe(target)}`);
 try {
   await client.query('begin');

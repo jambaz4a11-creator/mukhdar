@@ -209,9 +209,9 @@ select public.adjust_stock(tests.id('low'), -4, 'waste');                -- 8 �
 select is(tests.low_alerts(tests.id('low')), 2, 'back above the threshold then below again: a new alert');
 
 -- المستلمون: الأدمن نعم، الموظف لا
-insert into public.push_tokens (user_id, token, platform)
-values (tests.id('admin'), 'ExponentPushToken[t18-admin]', 'ios'),
-       (tests.id('staff'), 'ExponentPushToken[t18-staff]', 'ios');
+insert into public.push_tokens (user_id, token, platform, session_id)
+values (tests.id('admin'), 'ExponentPushToken[t18-admin]', 'ios', tests.panel_session(tests.id('admin'))),
+       (tests.id('staff'), 'ExponentPushToken[t18-staff]', 'ios', tests.panel_session(tests.id('staff')));
 update public.notification_outbox set sent_at = now()
  where sent_at is null and not (data ->> 'type' = 'low_stock' and data ->> 'product_id' = tests.id('low')::text);
 select tests.as_service();

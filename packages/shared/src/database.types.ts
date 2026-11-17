@@ -153,9 +153,11 @@ export type Database = {
           id: number;
           max_active_orders: number;
           max_line_qty: number;
+          max_order_iqd: number;
           max_order_lines: number;
           min_order_iqd: number;
           new_account_max_active_orders: number;
+          new_account_max_order_iqd: number;
           store_open: boolean;
           updated_at: string;
         };
@@ -166,9 +168,11 @@ export type Database = {
           id?: number;
           max_active_orders?: number;
           max_line_qty?: number;
+          max_order_iqd?: number;
           max_order_lines?: number;
           min_order_iqd?: number;
           new_account_max_active_orders?: number;
+          new_account_max_order_iqd?: number;
           store_open?: boolean;
           updated_at?: string;
         };
@@ -178,9 +182,11 @@ export type Database = {
           id?: number;
           max_active_orders?: number;
           max_line_qty?: number;
+          max_order_iqd?: number;
           max_order_lines?: number;
           min_order_iqd?: number;
           new_account_max_active_orders?: number;
+          new_account_max_order_iqd?: number;
           store_open?: boolean;
           updated_at?: string;
         };
@@ -822,6 +828,7 @@ export type Database = {
           is_active: boolean;
           must_change_pin: boolean;
           phone: string | null;
+          pin_reset_at: string | null;
           role: Database['public']['Enums']['user_role'];
           updated_at: string;
         };
@@ -833,6 +840,7 @@ export type Database = {
           is_active?: boolean;
           must_change_pin?: boolean;
           phone?: string | null;
+          pin_reset_at?: string | null;
           role?: Database['public']['Enums']['user_role'];
           updated_at?: string;
         };
@@ -843,6 +851,7 @@ export type Database = {
           is_active?: boolean;
           must_change_pin?: boolean;
           phone?: string | null;
+          pin_reset_at?: string | null;
           role?: Database['public']['Enums']['user_role'];
           updated_at?: string;
         };
@@ -855,6 +864,7 @@ export type Database = {
           last_seen_at: string;
           platform: Database['public']['Enums']['push_platform'];
           provider: Database['public']['Enums']['push_provider'];
+          session_id: string | null;
           token: string;
           user_id: string;
         };
@@ -865,6 +875,7 @@ export type Database = {
           last_seen_at?: string;
           platform: Database['public']['Enums']['push_platform'];
           provider?: Database['public']['Enums']['push_provider'];
+          session_id?: string | null;
           token: string;
           user_id: string;
         };
@@ -874,6 +885,7 @@ export type Database = {
           last_seen_at?: string;
           platform?: Database['public']['Enums']['push_platform'];
           provider?: Database['public']['Enums']['push_provider'];
+          session_id?: string | null;
           token?: string;
           user_id?: string;
         };
@@ -1274,6 +1286,7 @@ export type Database = {
           phone: string;
         }[];
       };
+      panel_session_alive: { Args: Record<PropertyKey, never>; Returns: boolean };
       place_order: {
         Args: { p_address_id: string; p_idempotency_key: string; p_items: Json; p_note?: string };
         Returns: Json;
@@ -1452,9 +1465,11 @@ export type Database = {
           id: number;
           max_active_orders: number;
           max_line_qty: number;
+          max_order_iqd: number;
           max_order_lines: number;
           min_order_iqd: number;
           new_account_max_active_orders: number;
+          new_account_max_order_iqd: number;
           store_open: boolean;
           updated_at: string;
         };

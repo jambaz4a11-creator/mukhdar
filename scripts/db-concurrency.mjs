@@ -8,6 +8,8 @@
 //      الباقي INSUFFICIENT_STOCK، صفر deadlocks.
 //   2) 8 سائقين يقبلون نفس الطلب بنفس اللحظة: واحد ينجح، الباقي ORDER_NOT_AVAILABLE.
 //   2b) سائق يُخفَّض أثناء accept_order: يُرفض بعد القفل (الدور يُفحص تحت القفل).
+//   4) حد قيمة الطلب (T23 F M3): حساب جديد 50,000 وطلب مفتوح واحد، الحد العام 200,000، أول تسليم يتسابق
+//      مع طلبات كبيرة، والأدمن يخفض الحد أثناء الطلبات (مُدقَّق).
 // "نفس اللحظة": كل عامل ينتظر قفلاً استشارياً يمسكه المنسّق، ثم يُطلق الجميع معاً.
 // البيانات تُنشأ فعلاً (commit) ثم تُحذف بالنهاية، لذلك يُرفض أي هدف غير محلي.
 import pg from 'pg';
@@ -38,7 +40,15 @@ const admin = await newClient();
 const q = (sql, params) => admin.query(sql, params);
 console.log(`target: ${describe(target)}`);
 
-const ids = { users: [], product: null, category: null, sector: null, orders: [] };
+const ids = {
+  users: [],
+  product: null,
+  category: null,
+  sector: null,
+  orders: [],
+  capProduct: null,
+  settings: null,
+};
 
 async function createUsers(role, count, offset) {
   const phones = Array.from(
@@ -286,6 +296,142 @@ try {
     allClaimed.length === Math.min(pendingRows[0].n, WORKERS * PER_WORKER),
     'workers together claim every available row (skip locked, no waiting)',
   );
+
+  // 4) حد قيمة الطلب (T23 F M3) تحت التزامن. التوصيل 0 هنا (أرقام دقيقة)، والإعدادات تُعاد بالنهاية.
+  const { rows: savedSettings } = await q(
+    `select delivery_fee_iqd, max_active_orders, new_account_max_active_orders, max_order_iqd,
+            new_account_max_order_iqd, max_line_qty from public.app_settings where id = 1`,
+  );
+  ids.settings = savedSettings[0];
+  await q(
+    `update public.app_settings set delivery_fee_iqd = 0, max_active_orders = 3, new_account_max_active_orders = 1,
+            max_order_iqd = 200000, new_account_max_order_iqd = 50000, max_line_qty = 99 where id = 1`,
+  );
+  ids.capProduct = (
+    await q(
+      `insert into public.products (category_id, name, unit, price_iqd)
+       values ($1, 'concurrency cap', 'نص كيلو', 10000) returning id`,
+      [ids.category],
+    )
+  ).rows[0].id;
+  await q(`update public.stock set qty = 10000 where product_id = $1`, [ids.capProduct]);
+  const capCustomers = await createUsers('customer', 4, 3001);
+  const [freshCust, oldCust, flipCust, lowCust] = capCustomers;
+  const { rows: capAddr } = await q(
+    `insert into public.addresses (customer_id, building_id, apartment)
+     select c, $2::int, '1' from unnest($1::uuid[]) c returning customer_id, id`,
+    [capCustomers, building],
+  );
+  const capAddrOf = new Map(capAddr.map((r) => [r.customer_id, r.id]));
+  const RACERS = 8;
+  const capOrder = (cust, qty) => (c) =>
+    c.query(`select public.place_order($1, $2, gen_random_uuid())`, [
+      capAddrOf.get(cust),
+      JSON.stringify([{ product_id: ids.capProduct, qty }]),
+    ]);
+  const capTotals = async (cust) =>
+    (await q(`select total_iqd::int as total from public.orders where customer_id = $1`, [cust]))
+      .rows;
+  /** اتصال مستقل بهوية مستخدم داخل معاملة (يُثبَّت بـ commit). */
+  const session = async (uid, aal = 'aal2') => {
+    const c = await newClient();
+    await c.query('begin');
+    await c.query(`select set_config('request.jwt.claims', $1, true)`, [
+      JSON.stringify({ sub: uid, role: 'authenticated', aal }),
+    ]);
+    await c.query('set local role authenticated');
+    return c;
+  };
+  /** أول طلب صغير للزبون (10,000). */
+  const smallOrder = async (cust) => {
+    const c = await session(cust, 'aal1');
+    const { rows } = await c.query(
+      `select (public.place_order($1, $2, gen_random_uuid()) ->> 'order_id') as id`,
+      [capAddrOf.get(cust), JSON.stringify([{ product_id: ids.capProduct, qty: 1 }])],
+    );
+    await c.query('commit');
+    await c.end();
+    return rows[0].id;
+  };
+  /** تسليم بالمسار الحقيقي (أدمن: تحضير ← جاهز ← تعيين ← بالطريق ← تسليم)، باتصال مستقل. */
+  const deliver = async (orderId) => {
+    const c = await session(adminId);
+    await c.query(`select public.set_order_status($1, 'preparing')`, [orderId]);
+    await c.query(`select public.set_order_status($1, 'ready')`, [orderId]);
+    await c.query(`select public.assign_driver($1, $2)`, [orderId, drivers[DRIVERS - 1]]);
+    await c.query(`select public.set_order_status($1, 'out_for_delivery')`, [orderId]);
+    await c.query(`select public.set_order_status($1, 'delivered')`, [orderId]);
+    await c.query('commit');
+    await c.end();
+  };
+  const raceSame = (cust, qty, n = RACERS) =>
+    race(
+      Array.from({ length: n }, () => cust),
+      capOrder(cust, qty),
+    );
+
+  // 4a) حساب جديد: 8 طلبات متزامنة بـ 60,000 ← كلها NEW_ACCOUNT_ORDER_LIMIT، ولا طلب يُنشأ
+  const t4a = tally(await raceSame(freshCust, 6));
+  console.log('new account, 60,000 x8:', t4a);
+  check(
+    t4a.NEW_ACCOUNT_ORDER_LIMIT === RACERS,
+    'new account: every concurrent 60,000 order is refused',
+  );
+  check((await capTotals(freshCust)).length === 0, 'new account: no order over 50,000 exists');
+  // 4b) حساب جديد: 8 طلبات بـ 40,000 ← واحد فقط (طلب مفتوح واحد)، والباقي TOO_MANY_ACTIVE_ORDERS
+  const t4b = tally(await raceSame(freshCust, 4));
+  console.log('new account, 40,000 x8:', t4b);
+  check(
+    t4b.OK === 1 && t4b.TOO_MANY_ACTIVE_ORDERS === RACERS - 1,
+    'new account: exactly one concurrent 40,000 order is accepted',
+  );
+  // 4c) حساب له طلب مُسلَّم: 210,000 ← كلها ORDER_TOO_LARGE؛ 190,000 ← 3 تنجح (حد الطلبات المفتوحة)
+  await deliver(await smallOrder(oldCust));
+  const t4c = tally(await raceSame(oldCust, 21));
+  console.log('established, 210,000 x8:', t4c);
+  check(t4c.ORDER_TOO_LARGE === RACERS, 'established account: every 210,000 order is refused');
+  const t4d = tally(await raceSame(oldCust, 19));
+  console.log('established, 190,000 x8:', t4d);
+  check(
+    t4d.OK === 3 && t4d.TOO_MANY_ACTIVE_ORDERS === RACERS - 3,
+    'established account: 190,000 orders accepted up to the open-order limit (3)',
+  );
+  check(
+    (await capTotals(oldCust)).every((o) => o.total <= 200000),
+    'no order above 200,000 exists',
+  );
+  // 4e) أول تسليم يتسابق مع طلبات كبيرة: رفض (ما زال جديداً) أو قبول (بعد التسليم)، بلا خطأ آخر ولا deadlock
+  const flipFirst = await smallOrder(flipCust);
+  await q(`update public.app_settings set new_account_max_active_orders = 3 where id = 1`);
+  const [flipOutcome] = await Promise.all([raceSame(flipCust, 6, 3), deliver(flipFirst)]);
+  console.log('first delivery vs 60,000 orders:', tally(flipOutcome));
+  check(
+    flipOutcome.every((r) => r === 'OK' || r === 'NEW_ACCOUNT_ORDER_LIMIT'),
+    'first delivery racing big orders: only OK or NEW_ACCOUNT_ORDER_LIMIT (no deadlock, no other error)',
+  );
+  // 4f) الأدمن يخفض الحد العام أثناء طلبات بـ 150,000: كل طلب يُقبل أو يُرفض بالرمز
+  await deliver(await smallOrder(lowCust));
+  const lowerCap = async () => {
+    const c = await session(adminId);
+    await c.query(`select public.update_app_settings('{"max_order_iqd": 100000}'::jsonb)`);
+    await c.query('commit');
+    await c.end();
+  };
+  const [lowerOutcome] = await Promise.all([raceSame(lowCust, 15, 3), lowerCap()]);
+  console.log('cap lowered during 150,000 orders:', tally(lowerOutcome));
+  check(
+    lowerOutcome.every((r) => r === 'OK' || r === 'ORDER_TOO_LARGE'),
+    'cap lowered concurrently: each order is accepted or refused with ORDER_TOO_LARGE',
+  );
+  await q(`update public.app_settings set max_active_orders = 10 where id = 1`);
+  const t4g = tally(await raceSame(lowCust, 15, 3));
+  check(t4g.ORDER_TOO_LARGE === 3, 'after the change commits, 150,000 orders are refused');
+  const { rows: auditRows } = await q(
+    `select count(*)::int as n from public.admin_audit
+      where actor = $1 and action = 'settings' and after ? 'max_order_iqd'`,
+    [adminId],
+  );
+  check(auditRows[0].n === 1, 'the cap change is audited');
 } catch (err) {
   console.error(`error: ${err.message}`);
   failures++;
@@ -300,6 +446,35 @@ try {
     await q(`delete from public.orders where id = any ($1)`, [ids.orders]);
   }
   if (ids.product) await q(`delete from public.products where id = $1`, [ids.product]);
+  if (ids.capProduct) {
+    const capIds = (
+      await q(
+        `select distinct order_id::text as id from public.order_items where product_id = $1`,
+        [ids.capProduct],
+      )
+    ).rows.map((r) => r.id);
+    await q(`delete from public.notification_outbox where data ->> 'order_id' = any ($1::text[])`, [
+      capIds,
+    ]);
+    await q(`delete from public.inventory_movements where product_id = $1`, [ids.capProduct]);
+    await q(`delete from public.orders where id = any ($1::uuid[])`, [capIds]);
+    await q(`delete from public.products where id = $1`, [ids.capProduct]);
+  }
+  if (ids.settings) {
+    const s = ids.settings;
+    await q(
+      `update public.app_settings set delivery_fee_iqd = $1, max_active_orders = $2, new_account_max_active_orders = $3,
+              max_order_iqd = $4, new_account_max_order_iqd = $5, max_line_qty = $6 where id = 1`,
+      [
+        s.delivery_fee_iqd,
+        s.max_active_orders,
+        s.new_account_max_active_orders,
+        s.max_order_iqd,
+        s.new_account_max_order_iqd,
+        s.max_line_qty,
+      ],
+    );
+  }
   if (ids.category) await q(`delete from public.categories where id = $1`, [ids.category]);
   if (ids.users.length) await q(`delete from auth.users where id = any ($1)`, [ids.users]);
   if (ids.sector) {

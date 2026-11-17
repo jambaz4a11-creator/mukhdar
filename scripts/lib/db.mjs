@@ -123,6 +123,39 @@ export async function connect(target) {
   return client;
 }
 
+/**
+ * T23 F L3: حارس ثانٍ مستقل عن قوائم المراجع: قاعدة البيانات نفسها لازم تقول إنها تطوير
+ * (`private.deployment.env = 'dev'`). الصف يُضاف محلياً بـ seed.sql ومرة واحدة يدوياً على mukhdar-dev، ولا يُضاف
+ * على الإنتاج أبداً (RUNBOOK §17.2)، فخطأ بـ projects.mjs وحده لا يكفي لتشغيل سكربت بيانات تجريبية على الإنتاج.
+ */
+export async function assertDevDatabase(client) {
+  let env;
+  try {
+    const { rows } = await client.query('select env from private.deployment');
+    env = rows[0]?.env ?? null;
+  } catch {
+    env = null; // الجدول غير موجود (migration 20261202000001 لم تُطبَّق) = غير مُعلَّم
+  }
+  if (env !== 'dev') {
+    throw new Error(
+      `Refusing: this database is not marked as development (private.deployment.env = ${env ?? 'none'}). ` +
+        'Demo/test data scripts run only where the dev marker exists (RUNBOOK §17.2).',
+    );
+  }
+}
+
+/** connect + assertDevDatabase: لكل سكربت يكتب بيانات تجريبية أو اختبارية (seed:*، it:*). */
+export async function connectDev(target) {
+  const client = await connect(target);
+  try {
+    await assertDevDatabase(client);
+  } catch (err) {
+    await client.end().catch(() => {});
+    throw err;
+  }
+  return client;
+}
+
 export function describe(target) {
   return target.kind === 'remote'
     ? `remote project ${target.projectRef}`

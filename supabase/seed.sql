@@ -109,3 +109,7 @@ select private.apply_stock_movement(p.id, sp.qty, 'adjust', 'رصيد افتتا
    and not exists (select 1 from public.inventory_movements m where m.product_id = p.id);
 
 drop table seed_products;
+
+-- T23 F L3: علامة التطوير لقاعدة البيانات المحلية (seed.sql لا يُطبَّق على الإنتاج). سكربتات البيانات التجريبية
+-- (seed:*، it:*) ترفض أي قاعدة بلا هذه العلامة (scripts/lib/db.mjs assertDevDatabase).
+insert into private.deployment (env) values ('dev') on conflict (id) do nothing;

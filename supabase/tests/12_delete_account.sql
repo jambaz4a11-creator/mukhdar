@@ -84,7 +84,9 @@ select tests.as_postgres();
 select is((select is_active from public.profiles where id = tests.id('off')), false,
   'abort keeps a previously-deactivated account inactive');
 select tests.as_service();
-select is(public.begin_account_deletion(tests.id('stf')), true, 'staff account can be deleted');
+-- T23 F L7: حساب الموظف مثل الأدمن: يُعطَّل من اللوحة، لا يُحذف ذاتياً
+select throws_ok(format($$ select public.begin_account_deletion(%L) $$, tests.id('stf')), 'ADMIN_ACCOUNT',
+  'staff account cannot delete itself (T23 F L7)');
 select is(public.begin_account_deletion(tests.id('drv')), true, 'driver whose orders are finished can be deleted');
 
 -- ---------------------------------------------------------------- بعد deleteUser (= حذف auth.users)

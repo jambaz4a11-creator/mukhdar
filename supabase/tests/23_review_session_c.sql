@@ -2,7 +2,7 @@
 --   H1 الإشعارات لا تصل للمعلَّم (must_change_pin) وتُحذف الرموز بالإعادة/التعطيل/التخفيض
 --   M1 accept_order/assign_driver (القفل بالدور والعلامة، DRIVER_PIN_PENDING، list_drivers)
 --   L2 admin_actions_last_hour محذوفة | L3 نفس السائق | L4(b) كلفة الهدر | L5 kind/reset_by
-select plan(53);
+select plan(54);
 
 select tests.remember('admin',  tests.new_user('admin'));
 select tests.remember('staff',  tests.new_user('staff'));
@@ -12,13 +12,14 @@ select tests.remember('d2',     tests.new_user('driver'));
 select tests.remember('d3',     tests.new_user('driver'));
 select tests.remember('cust',   tests.new_user('customer'));
 
-insert into public.push_tokens (user_id, token, platform, provider) values
-  (tests.id('admin'),  'ExponentPushToken[c-admin]',  'ios',     'expo'),
-  (tests.id('staff'),  'ExponentPushToken[c-staff]',  'ios',     'expo'),
-  (tests.id('staff2'), 'ExponentPushToken[c-staff2]', 'ios',     'expo'),
-  (tests.id('d1'),     'ExponentPushToken[c-d1]',     'android', 'expo'),
-  (tests.id('d2'),     'ExponentPushToken[c-d2]',     'android', 'expo'),
-  (tests.id('cust'),   'ExponentPushToken[c-cust]',   'android', 'expo');
+-- T23 F H1: رموز الأدمن/الموظف مربوطة بجلسة aal2
+insert into public.push_tokens (user_id, token, platform, provider, session_id) values
+  (tests.id('admin'),  'ExponentPushToken[c-admin]',  'ios',     'expo', tests.panel_session(tests.id('admin'))),
+  (tests.id('staff'),  'ExponentPushToken[c-staff]',  'ios',     'expo', tests.panel_session(tests.id('staff'))),
+  (tests.id('staff2'), 'ExponentPushToken[c-staff2]', 'ios',     'expo', tests.panel_session(tests.id('staff2'))),
+  (tests.id('d1'),     'ExponentPushToken[c-d1]',     'android', 'expo', null),
+  (tests.id('d2'),     'ExponentPushToken[c-d2]',     'android', 'expo', null),
+  (tests.id('cust'),   'ExponentPushToken[c-cust]',   'android', 'expo', null);
 
 -- ================================================================ 1) H1: المستلمون
 -- staff2 و d2 و cust معلَّمون بالرمز المؤقت: لا يصلهم شيء مهما كان الجمهور
@@ -69,7 +70,7 @@ select throws_ok($$ select public.register_push_token('ExponentPushToken[c-new]'
 select tests.as_user(tests.id('cust'));
 select throws_ok($$ select public.register_push_token('ExponentPushToken[c-new]', 'ios', 'expo') $$,
   '42501', 'PIN_CHANGE_REQUIRED', 'also a flagged customer (registers again after changing the PIN)');
-select tests.as_user(tests.id('staff'));
+select tests.as_panel(tests.id('staff'));
 select lives_ok($$ select public.register_push_token('ExponentPushToken[c-staff-b]', 'ios', 'expo') $$,
   'an unflagged user still registers');
 select tests.as_postgres();
@@ -104,14 +105,19 @@ select tests.as_postgres();
 select is((select count(*)::int from public.push_tokens where user_id = tests.id('d3')), 0,
   'demotion deletes push tokens');
 
--- ترقية: الرموز تبقى
+-- ترقية (T23 F M2): تتطلب رمزاً مؤقتاً أولاً، وتحذف رموز الإشعارات (تُسجَّل من جديد بجلسة اللوحة aal2)
 insert into public.push_tokens (user_id, token, platform, provider)
 values (tests.id('d3'), 'ExponentPushToken[c-d3b]', 'android', 'expo');
 select tests.as_user(tests.id('admin'));
+select throws_ok(format($$ select public.set_user_role(%L, 'staff', true) $$, tests.id('d3')),
+  'P0001', 'PIN_RESET_REQUIRED', 'promoting a customer without a temporary PIN is refused (T23 F M2)');
+select tests.as_postgres();
+update public.profiles set must_change_pin = true where id = tests.id('d3');
+select tests.as_user(tests.id('admin'));
 select lives_ok(format($$ select public.set_user_role(%L, 'staff', true) $$, tests.id('d3')), 'admin promotes customer → staff');
 select tests.as_postgres();
-select is((select count(*)::int from public.push_tokens where user_id = tests.id('d3')), 1,
-  'a promotion keeps the tokens (sessions are not revoked either)');
+select is((select count(*)::int from public.push_tokens where user_id = tests.id('d3')), 0,
+  'a promotion drops the old push tokens (T23 F H1/M2)');
 
 -- ================================================================ 4) L5: kind ↔ reset_by
 select tests.as_service();

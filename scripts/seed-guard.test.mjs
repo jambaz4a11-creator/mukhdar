@@ -77,3 +77,23 @@ for (const script of ['seed-demo.mjs', 'seed-reset.mjs']) {
     assert.match(remoteUrl.out, /Refusing: DB_URL host .* is not local/);
   });
 }
+
+// T23 F L3: الحارس الثاني داخل قاعدة البيانات (private.deployment)
+test('assertDevDatabase: only a database marked dev passes', async () => {
+  const { assertDevDatabase } = await import('./lib/db.mjs');
+  const fake = (result) => ({
+    query: async () => {
+      if (result instanceof Error) throw result;
+      return { rows: result };
+    },
+  });
+  await assertDevDatabase(fake([{ env: 'dev' }]));
+  for (const [label, client] of [
+    ['production', fake([{ env: 'production' }])],
+    ['staging', fake([{ env: 'staging' }])],
+    ['no row (prod is never marked)', fake([])],
+    ['no table (old schema)', fake(new Error('relation "private.deployment" does not exist'))],
+  ]) {
+    await assert.rejects(assertDevDatabase(client), /Refusing: this database is not marked/, label);
+  }
+});
