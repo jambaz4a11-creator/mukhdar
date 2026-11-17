@@ -104,6 +104,8 @@ own session; RLS and the functions enforce what a driver may see and do.
 > **2026-11-17 (security review T23):** admin and staff accounts now need two-factor (TOTP) in the
 > admin panel. **Drivers are not affected:** phone + PIN only, same calls, same RLS, no change in the
 > driver app. Order caps added to `place_order` (customers only) do not touch driver functions.
+>
+> **2026-11-17 (T23 fix session E2):** still no driver-side change. Demo driver accounts `07000000011..13` on mukhdar-dev now have their **own dev-only PIN** (RUNBOOK §6); the shared `DEMO_PIN` stays admin/staff/customer-only and is never given to you. Panel idle timeout (12 h) applies to admin and staff sessions only, not drivers. Deleting a customer account anonymizes their old orders (name, phone, building, apartment removed): you may see `customer_name`/`customer_phone` null on a delivered order of a deleted customer; drivers only ever see those for orders they hold, which are never final.
 
 1. **Phone number + 6-digit PIN** via Supabase Auth, same as the customer app (changed 2026-11-14:
    **no SMS/OTP at all**, nothing is ever sent). The PIN is the account password.
@@ -149,7 +151,7 @@ own session; RLS and the functions enforce what a driver may see and do.
      the database.
    - **Development project:** phone + PIN sign-in is enabled once the project owner applies the Auth
      settings (RUNBOOK §6). Demo driver accounts then sign in with `07000000011`, `07000000012`,
-     `07000000013` and the shared dev-only PIN we send you (also in RUNBOOK §6). Never use it in
+     `07000000013` and the **driver-demo PIN** we send you (separate from the admin demo PIN; RUNBOOK §6). Never use it in
      production.
 2. When `signup` creates the account a trigger creates `profiles` with `role = 'customer'`. **A new
    account is not a driver.** The admin activates it from the admin panel
