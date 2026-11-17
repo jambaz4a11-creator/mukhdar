@@ -133,12 +133,19 @@ test.describe.serial('ratings (admin)', () => {
 });
 
 test.describe.serial('ratings (staff)', () => {
-  test('staff open the page and see the same figures', async ({ browser }) => {
+  test('staff open the page and see their own figures: the last 7 Baghdad days only (T23 F M1)', async ({
+    browser,
+  }) => {
     const page = await pageAs(browser, 'staff');
     const client = await signedInClient(ACCOUNTS.staff);
+    const admin = await signedInClient(ACCOUNTS.admin);
     await page.goto('/ratings');
     await expect(page.getByRole('heading', { level: 1, name: 'التقييمات' })).toBeVisible();
-    await expectHeader(page, await summary(client));
+    await expect(page.getByTestId('staff-window-note')).toContainText('آخر 7 أيام');
+    const staffSummary = await summary(client);
+    await expectHeader(page, staffSummary);
+    // seed:demo يوزّع التقييمات على 30 يوماً: الموظف يرى أقل من الأدمن
+    expect(staffSummary.count).toBeLessThan((await summary(admin)).count);
     await page.context().close();
   });
 
@@ -216,7 +223,8 @@ test.describe.serial('customer rating flow (writes)', () => {
     expect(after.count).toBe(before.count + 1);
     expect(after.distribution['5']).toBe((before.distribution['5'] ?? 0) + 1);
 
-    // الأدمن والموظف يريان التقييم، والتعليق نص صرف (لا عنصر b)
+    // الأدمن والموظف يريان التقييم (تقييم اليوم داخل نافذة الموظف)، والتعليق نص صرف (لا عنصر b)
+    const staffAfter = await summary(await signedInClient(ACCOUNTS.staff));
     for (const role of ['admin', 'staff'] as const) {
       const page = await pageAs(browser, role);
       await page.goto('/ratings');
@@ -227,7 +235,7 @@ test.describe.serial('customer rating flow (writes)', () => {
       await expect(card.locator('p')).toHaveText(comment);
       await expect(card.locator('b')).toHaveCount(0);
       await expect(card).toHaveAttribute('data-stars', '5');
-      await expectHeader(page, after);
+      await expectHeader(page, role === 'admin' ? after : staffAfter);
       await page.context().close();
     }
   });

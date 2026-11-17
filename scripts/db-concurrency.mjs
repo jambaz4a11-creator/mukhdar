@@ -459,6 +459,11 @@ try {
     await q(`delete from public.inventory_movements where product_id = $1`, [ids.capProduct]);
     await q(`delete from public.orders where id = any ($1::uuid[])`, [capIds]);
     await q(`delete from public.products where id = $1`, [ids.capProduct]);
+    // 4e يسلّم طلبات فتُحسب بـ daily_stats؛ حذفها لا يمسح الإحصاء، فيُعاد بناء أيام التشغيل من المصدر
+    // (وإلا يفشل فحص seed:demo بعدها: يوم بإحصاء بلا طلبات).
+    await q(
+      `select private.rebuild_daily_stats(public.baghdad_today() - 1, public.baghdad_today() + 1)`,
+    );
   }
   if (ids.settings) {
     const s = ids.settings;
