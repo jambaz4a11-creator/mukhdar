@@ -190,7 +190,8 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     await page.getByRole('button', { name: 'بحث', exact: true }).click();
     await page.getByTestId('search-result').getByRole('button', { name: 'تصفير الرمز' }).click();
     const dialog = page.getByTestId('reset-pin-dialog');
-    await expect(dialog).toContainText(`نفس الرقم: ${RESET_CUSTOMER}`);
+    await expect(dialog.getByTestId('reset-rules')).toContainText(RESET_CUSTOMER);
+    await expect(dialog.getByTestId('reset-rules')).toContainText('سؤالين عن آخر طلب');
     await dialog.getByLabel('الرمز (6 أرقام)').fill('123456');
     await dialog.getByRole('button', { name: 'ضبط الرمز الجديد' }).click();
     await expect(dialog.getByTestId('error-reset-pin')).toContainText('سهل');
