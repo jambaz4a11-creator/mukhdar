@@ -31,6 +31,7 @@ import {
   fullAddress,
   phoneLinks,
 } from './format';
+import { LockdownDialog } from '@/features/admin/LockdownDialog';
 import { driverOptions } from './drivers';
 import { StatusBadge } from './StatusBadge';
 
@@ -63,6 +64,7 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
   const [reason, setReason] = useState('');
   const [keepStock, setKeepStock] = useState(false);
   const [driverId, setDriverId] = useState('');
+  const [locking, setLocking] = useState(false);
 
   const done = async () => {
     setError(null);
@@ -98,7 +100,14 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
 
   if (detail.isPending) return <Shell onClose={onClose}>جارٍ التحميل…</Shell>;
   if (detail.isError) return <Shell onClose={onClose}>تعذّر تحميل الطلب، حاول مرة ثانية.</Shell>;
-  if (!detail.data) return <Shell onClose={onClose}>ما لقينا هذا الطلب.</Shell>;
+  if (!detail.data) {
+    return (
+      <Shell onClose={onClose}>
+        ما لقينا هذا الطلب.
+        {role === 'staff' && ' الطلبات المنتهية الأقدم من 7 أيام عند المدير فقط.'}
+      </Shell>
+    );
+  }
 
   const { order, costs } = detail.data;
   const address = asAddress(order.address_snapshot);
@@ -132,7 +141,7 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
 
       <div className="flex flex-col gap-1 text-sm">
         <span className="font-semibold">
-          {order.customer_name ?? 'بدون اسم'}
+          {order.customer_name ?? (order.customer_id ? 'بدون اسم' : 'حساب محذوف')}
           {order.customer_phone && (
             <>
               {' · '}
@@ -403,6 +412,29 @@ export function OrderDetailPanel({ orderId, drivers, onClose }: Props) {
           </form>
         )}
       </div>
+
+      {role === 'admin' && order.customer_id && (
+        <div className="flex flex-col gap-1.5 border-t border-divider pt-3">
+          <button
+            type="button"
+            onClick={() => setLocking(true)}
+            data-testid="lockdown-open"
+            className="h-10 rounded-control border border-[#F3CFCA] bg-danger-soft text-sm text-danger"
+          >
+            إلغاء كل طلبات هذا الزبون وتعطيل حسابه
+          </button>
+          <span className="text-xs text-text-muted">
+            للطلبات الوهمية أو المسيئة: يلغي كل طلباته المفتوحة ويعطّل الحساب (أدمن فقط).
+          </span>
+        </div>
+      )}
+      {locking && order.customer_id && (
+        <LockdownDialog
+          userId={order.customer_id}
+          label={`${order.customer_name ?? 'بدون اسم'} · ${displayPhone(order.customer_phone)}`}
+          onClose={() => setLocking(false)}
+        />
+      )}
 
       <section
         aria-label="سجل الحالات"

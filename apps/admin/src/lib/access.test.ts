@@ -109,6 +109,8 @@ describe('navItems (sidebar per role, design order)', () => {
   });
 });
 
+const BACKSLASH = String.fromCharCode(92);
+
 describe('safeNext', () => {
   it.each([
     [undefined, '/'],
@@ -118,7 +120,52 @@ describe('safeNext', () => {
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],
     ['/login?next=/x', '/'],
+    ['/login', '/'],
+    ['/orders/123?order=abc#x', '/orders/123?order=abc'],
+    ['/a/../orders', '/orders'],
+    // مسار بترميز نسبي يبقى بالأصل نفسه (لا يصير رابطاً خارجياً)
+    ['/%09/evil.com', '/%09/evil.com'],
+    ['/%2F/evil.com', '/%2F/evil.com'],
   ])('%s -> %s', (input, out) => {
     expect(safeNext(input)).toBe(out);
+  });
+
+  // M4 (T23): TAB/LF/CR داخل المسار: المتصفح (WHATWG) يحذفها فيصير "/<TAB>/evil.com" هو "//evil.com" = https://evil.com
+  it.each([
+    ['TAB between slashes', '/' + String.fromCharCode(9) + '/evil.com'],
+    ['LF between slashes', '/' + String.fromCharCode(10) + '/evil.com'],
+    ['CR between slashes', '/' + String.fromCharCode(13) + '/evil.com'],
+    ['TAB then backslash', '/' + String.fromCharCode(9) + BACKSLASH + 'evil.com'],
+    ['backslash', '/' + BACKSLASH + '/evil.com'],
+    ['TAB inside the path', '/or' + String.fromCharCode(9) + 'ders'],
+    ['NUL', '/orders' + String.fromCharCode(0)],
+    ['DEL', '/orders' + String.fromCharCode(127)],
+    ['C1 control', '/orders' + String.fromCharCode(0x85)],
+    ['scheme-relative', '//evil.com/x'],
+    ['javascript:', 'javascript:alert(1)'],
+    ['absolute URL', 'https://evil.com'],
+    ['relative without slash', 'evil.com'],
+    ['data:', 'data:text/html,x'],
+  ])('rejects %s', (_label, input) => {
+    expect(safeNext(input)).toBe('/');
+  });
+
+  it('never leaves the origin, whatever the input (resolved by the URL parser)', () => {
+    const evil = [
+      '/',
+      '//',
+      '/.',
+      '/..',
+      '/%00',
+      '/%0a/evil.com',
+      '/@evil.com',
+      '/?next=//evil.com',
+    ];
+    for (const c of ['', String.fromCharCode(9), String.fromCharCode(10), BACKSLASH, '/']) {
+      for (const e of evil) {
+        const out = safeNext('/' + c + e);
+        expect(new URL(out, 'https://panel.test').origin).toBe('https://panel.test');
+      }
+    }
   });
 });

@@ -12,6 +12,7 @@ import {
   PROD_PROJECT_REFS,
   classifyRef,
   isValidRef,
+  refFromPoolerUrl,
 } from './projects.mjs';
 
 // القائمتان وتصنيف المشروع من projects.mjs (T23 H3: مصدر واحد مع db.mjs)
@@ -40,8 +41,16 @@ export function positionals(args) {
   return out;
 }
 
+// أوامر الـ CLI التي تدعم --dry-run فعلاً (T23 L5): `db push` و`migration ...`. لغيرها العلم لا يمنع التنفيذ،
+// فلا نعامله كقراءة فقط (مثلاً `functions deploy x --dry-run` على الإنتاج ينشر فعلاً إن تجاهله الـ CLI).
+const DRY_RUN_COMMANDS = [['db', 'push'], ['migration']];
+
+function supportsDryRun(pos) {
+  return DRY_RUN_COMMANDS.some((c) => c.every((word, i) => pos[i] === word));
+}
+
 export function isReadOnly(args) {
-  if (args.includes('--dry-run')) return true;
+  if (args.includes('--dry-run') && supportsDryRun(positionals(args))) return true;
   if (args.some((a) => a === '--version' || a === '-v' || a === '--help' || a === '-h'))
     return true;
   const pos = positionals(args);
@@ -64,6 +73,19 @@ export function explicitRefs(args) {
     }
   }
   return refs;
+}
+
+/** كل رابط قاعدة بيانات صريح بالوسائط: --db-url X أو --db-url=X (T23 L5). */
+export function dbUrls(args) {
+  const urls = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--') break;
+    const m = a.match(/^--db-url=(.*)$/);
+    if (m) urls.push(m[1]);
+    else if (a === '--db-url') urls.push(args[i + 1] ?? '');
+  }
+  return urls;
 }
 
 export function readLinked(rootDir = root) {
@@ -127,6 +149,22 @@ export function plan(args, { linked, env = process.env } = {}) {
       return {
         action: 'refuse',
         reason: `Explicit project ${r} differs from the target ${ref}. Refusing to mix projects.`,
+      };
+    }
+  }
+
+  // --db-url يتجاوز المشروع المربوط كلياً (يتصل بأي قاعدة): يُقبل فقط إن كان رابطه لنفس المشروع المصنَّف (ref من
+  // مستخدم الـ pooler "postgres.<ref>" أو مضيف db.<ref>.supabase.co)؛ ما لا نستطيع التحقق منه (محلي، مخصص) يُرفض.
+  for (const u of dbUrls(args)) {
+    const r = refFromPoolerUrl(u);
+    if (r !== ref) {
+      return {
+        action: 'refuse',
+        reason:
+          r === null
+            ? `--db-url could not be tied to the target project ${ref} (expected the pooler user postgres.${ref} ` +
+              `or host db.${ref}.supabase.co). Refusing a database URL the guard cannot verify.`
+            : `--db-url points at project ${r}, not the target ${ref}. Refusing to mix projects.`,
       };
     }
   }

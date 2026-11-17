@@ -19,6 +19,7 @@ import { assertSafeTarget, connect, describe, resolveTarget } from './lib/db.mjs
 import {
   DEMO_PHONE_PREFIX,
   DEMO_PIN,
+  DRIVER_DEMO_PIN,
   LOAD_PHONE_PREFIX,
   STATS_MISMATCH_SQL,
   phone,
@@ -262,6 +263,15 @@ async function createUsers(specs) {
        from unnest($1::text[], $2::text[], $3::text[]) as x(phone, role, name) where p.phone = x.phone`,
     [specs.map((s) => s.phone), specs.map((s) => s.role), specs.map((s) => s.name)],
   );
+  // T23 L6: السائقون التجريبيون برمزهم الخاص (لا DEMO_PIN، فلا يدخل مطوّر السائق بحساب أدمن العرض)
+  const driverPhones = specs.filter((s) => s.role === 'driver').map((s) => s.phone);
+  if (driverPhones.length > 0) {
+    await q(
+      `update auth.users set encrypted_password = extensions.crypt($2::text, extensions.gen_salt('bf', 10))
+        where phone = any($1::text[])`,
+      [driverPhones, DRIVER_DEMO_PIN],
+    );
+  }
   const byPhone = new Map(rows.map((r) => [r.phone, r.id]));
   return specs.map((s) => ({ ...s, id: byPhone.get(s.phone) }));
 }
@@ -313,7 +323,7 @@ async function seedDemo() {
   );
   console.log(
     `sign in (dev only): admin 0${people[0].phone.slice(3)}, staff 0${people[1].phone.slice(3)}, ` +
-      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with PIN ${DEMO_PIN}; ` +
+      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with PIN ${DEMO_PIN} (demo drivers 0${drivers[0].phone.slice(3)}.. with ${DRIVER_DEMO_PIN}); ` +
       `admin/staff 2FA: the dev-only TOTP secret (scripts/lib/totp.mjs)`,
   );
 

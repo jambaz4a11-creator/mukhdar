@@ -76,6 +76,8 @@ export interface SettingsValues {
   delivery_fee_iqd: string;
   min_order_iqd: string;
   max_active_orders: string;
+  /** T23 H2: حد الطلبات المفتوحة لحساب بلا طلب مُسلَّم بعد (افتراضي 1) */
+  new_account_max_active_orders: string;
   /** T23 H2: حد الكمية لكل منتج بالطلب (وحدات بيع، 20 = 10 كيلو للنص كيلو) */
   max_line_qty: string;
   /** T23 H2: حد عدد المنتجات بالطلب */
@@ -88,6 +90,7 @@ export interface SettingsPayload {
   delivery_fee_iqd: number;
   min_order_iqd: number;
   max_active_orders: number;
+  new_account_max_active_orders: number;
   max_line_qty: number;
   max_order_lines: number;
   store_open: boolean;
@@ -122,6 +125,8 @@ export function validateSettings(
   const max = /^\d{1,4}$/.test(maxRaw) ? Number(maxRaw) : null;
   if (max === null || max < 1 || max > 1000) errors.max_active_orders = 'عدد من 1 إلى 1000';
   // نفس حدود قاعدة البيانات (update_app_settings والقيود)
+  const newMax = intIn(v.new_account_max_active_orders, 1, 1000);
+  if (newMax === null) errors.new_account_max_active_orders = 'عدد من 1 إلى 1000';
   const lineQty = intIn(v.max_line_qty, 1, 99);
   if (lineQty === null) errors.max_line_qty = 'عدد من 1 إلى 99';
   const lines = intIn(v.max_order_lines, 1, 50);
@@ -134,6 +139,7 @@ export function validateSettings(
       delivery_fee_iqd: fee as number,
       min_order_iqd: min as number,
       max_active_orders: max as number,
+      new_account_max_active_orders: newMax as number,
       max_line_qty: lineQty as number,
       max_order_lines: lines as number,
       store_open: v.store_open,

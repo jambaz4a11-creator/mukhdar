@@ -5,13 +5,18 @@ import { IBMPlexSansArabic_400Regular } from '@expo-google-fonts/ibm-plex-sans-a
 import { IBMPlexSansArabic_500Medium } from '@expo-google-fonts/ibm-plex-sans-arabic/500Medium';
 import { IBMPlexSansArabic_600SemiBold } from '@expo-google-fonts/ibm-plex-sans-arabic/600SemiBold';
 import { IBMPlexSansArabic_700Bold } from '@expo-google-fonts/ibm-plex-sans-arabic/700Bold';
+import { isProductionOnDevBackend } from '@mukhdar/shared';
+import Constants from 'expo-constants';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AppText } from '../components/AppText';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { config } from '../config';
 import { ForcedPinGuard } from '../features/auth/ForcedPinGuard';
 import { initAuth } from '../features/auth/store';
 import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
@@ -97,4 +102,28 @@ function RootLayout() {
   );
 }
 
-export default wrapRoot(RootLayout);
+/**
+ * T23 L8: بناء production يشير لمشروع التطوير = خطأ إعداد (متغيرات بيئة EAS). لا نعرض التطبيق ولا نتصل بشيء.
+ * (app.config.ts يمنع هذا أصلاً وقت البناء؛ هذه الشبكة الثانية لبناء قديم أو متغير بيئة تغيّر لاحقاً.)
+ */
+function Root() {
+  const appEnv = (Constants.expoConfig?.extra as { appEnv?: string } | undefined)?.appEnv;
+  if (isProductionOnDevBackend(appEnv, config.supabaseUrl)) {
+    return (
+      <View
+        testID="build-config-error"
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      >
+        <AppText weight="bold" size="title">
+          خطأ بإعداد التطبيق
+        </AppText>
+        <AppText color={colors.textMuted}>
+          هذه النسخة موجّهة لخادم تجريبي. لا تستعملها، وأبلغ المطوّر.
+        </AppText>
+      </View>
+    );
+  }
+  return <RootLayout />;
+}
+
+export default wrapRoot(Root);

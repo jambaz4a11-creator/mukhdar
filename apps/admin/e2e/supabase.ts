@@ -1,7 +1,7 @@
 // عميل Supabase للاختبارات (Node): إنشاء طلب كزبون العرض. الكتابة فقط حيث E2E_ALLOW_WRITES=1
 // (CI ضد Supabase محلي)، فلا تُعدَّل بيانات mukhdar-dev من الاختبارات المحلية.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { PIN } from './accounts';
+import { pinFor } from './accounts';
 import { DEV_TOTP_SECRET, freshTotp } from './totp';
 
 export const ALLOW_WRITES = process.env.E2E_ALLOW_WRITES === '1';
@@ -21,7 +21,7 @@ export function anonClient(): SupabaseClient {
 
 export async function signedInClient(
   phone: string,
-  pin = PIN,
+  pin = pinFor(phone),
   mfaSecret = DEV_TOTP_SECRET,
 ): Promise<SupabaseClient> {
   const { url, key } = env();

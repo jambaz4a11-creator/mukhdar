@@ -73,6 +73,10 @@ export const ERROR_MESSAGES = {
   TOO_MANY_RESETS: 'وصلت حد إعادة الضبط (20 بالساعة)، انتظر قليلاً',
   // T23 C1: الأدمن والموظف يحتاجان جلسة aal2 (رمز تطبيق المصادقة بعد الـ PIN)
   MFA_REQUIRED: 'أكمل الدخول برمز تطبيق المصادقة أولاً',
+  // T23 جلسة E2: خمول اللوحة 12 ساعة (M7)، إلغاء كل طلبات الزبون (H2)، حد العناوين (L3)
+  SESSION_EXPIRED: 'انتهت جلستك بعد 12 ساعة بلا نشاط، سجّل الدخول من جديد',
+  NOT_A_CUSTOMER: 'هذا الإجراء للزبائن فقط',
+  ADDRESS_LIMIT: 'وصلت الحد الأقصى من العناوين (20)، احذف عنواناً قديماً أولاً',
 } as const satisfies Record<string, string>;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

@@ -9,7 +9,7 @@ export const SHOP = {
 } as const;
 
 /** تاريخ آخر تحديث للمسودة */
-export const LEGAL_UPDATED = '2026-11-15';
+export const LEGAL_UPDATED = '2026-11-17';
 
 /** علامة المسودة تظهر أعلى كل صفحة عامة حتى يعتمدها صاحب المشروع. */
 export const IS_DRAFT = true;

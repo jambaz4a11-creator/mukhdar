@@ -12,3 +12,4 @@ export * from './status';
 export * from './errors';
 export * from './auth-errors';
 export * from './supabase';
+export * from './projects';

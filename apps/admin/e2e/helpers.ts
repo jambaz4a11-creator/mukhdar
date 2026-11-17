@@ -1,5 +1,5 @@
 import { expect, type Browser, type Page } from '@playwright/test';
-import { ACCOUNTS, PIN } from './accounts';
+import { ACCOUNTS, PIN, pinFor } from './accounts';
 import { DEV_TOTP_SECRET, freshTotp } from './totp';
 
 /** حسابا العرض اللذان يحتاجان رمز تطبيق المصادقة (T23 C1). */
@@ -19,7 +19,7 @@ export async function completeMfa(page: Page, secret = DEV_TOTP_SECRET) {
 export async function signIn(
   page: Page,
   phone: string,
-  pin = PIN,
+  pin = pinFor(phone),
   mfaSecret: string | null = MFA_ACCOUNTS.includes(phone) && pin === PIN ? DEV_TOTP_SECRET : null,
 ) {
   await page.goto('/login');

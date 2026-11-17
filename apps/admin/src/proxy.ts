@@ -1,5 +1,6 @@
 // Next 16: proxy.ts (كان middleware.ts). حماية كل المسارات عدا /login والصفحات العامة (SPEC-admin §1، T16).
 // لا جلسة ← /login؛ دور غير admin/staff ← "غير مصرح"؛ موظف على صفحة أدمن ← "غير مصرح" (حتى بالرابط المباشر).
+// T23: CSP بـ nonce لكل طلب (M3)، وتسجيل نشاط الجلسة وإخراج الخاملة > 12 ساعة (M7، يفرضه الخادم بقاعدة البيانات).
 import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@mukhdar/shared';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -15,14 +16,38 @@ import {
 } from './lib/access';
 import { readPublicEnv } from './lib/env';
 import { getPanelUser } from './lib/panelUser';
+import {
+  TOUCH_COOKIE,
+  TOUCH_THROTTLE_S,
+  buildCsp,
+  newNonce,
+  sessionCookieOptions,
+} from './lib/security';
 
 export async function proxy(request: NextRequest) {
+  // CSP بـ nonce جديد لكل طلب: Next يقرؤه من ترويسة الطلب ويضعه على سكربتاته
+  const nonce = newNonce();
+  const csp = buildCsp({
+    nonce,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    dev: process.env.NODE_ENV === 'development',
+  });
+  request.headers.set('x-nonce', nonce);
+  request.headers.set('content-security-policy', csp);
+
+  const response = await handle(request);
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
+}
+
+async function handle(request: NextRequest): Promise<NextResponse> {
   const { pathname, search } = request.nextUrl;
-  if (isPublicPath(pathname)) return NextResponse.next();
+  if (isPublicPath(pathname)) return NextResponse.next({ request });
 
   let response = NextResponse.next({ request });
   const { url, key } = readPublicEnv();
   const supabase = createServerClient<Database>(url, key, {
+    cookieOptions: sessionCookieOptions(),
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
@@ -59,6 +84,30 @@ export async function proxy(request: NextRequest) {
     return withCookies(
       NextResponse.rewrite(new URL(NOT_AUTHORIZED_PATH, request.url), { status: 403 }),
     );
+  }
+  // خمول 12 ساعة (T23 M7): كل تنقّل بالجلسة المكتملة (aal2) يسجّل نشاطها؛ الخادم (touch_panel_session) هو
+  // من يقرر، ويحذف الجلسة الخاملة فلا تُحيا أبداً. الـ cookie القصير لتخفيف النداءات فقط (حذفه لا يفيد أحداً:
+  // الخادم يفرض الحد بنفسه). خطأ شبكة لحظي لا يُخرج أحداً.
+  if (!user.mfaRequired) {
+    const marker = `${user.id}`;
+    if (request.cookies.get(TOUCH_COOKIE)?.value !== marker) {
+      const { data: alive, error } = await supabase.rpc('touch_panel_session');
+      if (!error && alive === false) {
+        await supabase.auth.signOut({ scope: 'local' });
+        const login = new URL(LOGIN_PATH, request.url);
+        login.searchParams.set('reason', 'idle');
+        const res = withCookies(NextResponse.redirect(login));
+        res.cookies.set(TOUCH_COOKIE, '', { path: '/', maxAge: 0 });
+        return res;
+      }
+      if (!error) {
+        response.cookies.set(TOUCH_COOKIE, marker, {
+          ...sessionCookieOptions(),
+          httpOnly: true,
+          maxAge: TOUCH_THROTTLE_S,
+        });
+      }
+    }
   }
   // المصادقة الثنائية أولاً (T23 C1): بالـ PIN وحده (aal1) كل صفحة ← /mfa (الخادم يرفض دوال الدور أصلاً)
   if (user.mfaRequired) {

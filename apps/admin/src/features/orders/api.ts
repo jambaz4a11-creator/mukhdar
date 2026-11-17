@@ -20,7 +20,7 @@ export const LIST_COLUMNS =
   'id, order_number, status, created_at, customer_name, customer_phone, address_snapshot, total_iqd, driver_id';
 
 const DETAIL_COLUMNS =
-  `${LIST_COLUMNS}, subtotal_iqd, delivery_fee_iqd, note, cancel_reason, preparing_at, ready_at, ` +
+  `${LIST_COLUMNS}, customer_id, subtotal_iqd, delivery_fee_iqd, note, cancel_reason, preparing_at, ready_at, ` +
   'out_for_delivery_at, delivered_at, cancelled_at, ' +
   'order_items(id, name_snapshot, unit_snapshot, price_snapshot_iqd, qty, line_total_iqd), ' +
   'order_status_history(id, from_status, to_status, note, created_at), ' +
@@ -48,6 +48,8 @@ export interface OrderItem {
 }
 
 export interface OrderDetail extends OrderRow {
+  /** null = حساب محذوف (T23 M5) */
+  customer_id: string | null;
   subtotal_iqd: number;
   delivery_fee_iqd: number;
   note: string | null;

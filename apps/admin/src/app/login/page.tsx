@@ -7,9 +7,9 @@ export const metadata: Metadata = { title: 'تسجيل الدخول' };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; reason?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, reason } = await searchParams;
   return (
     <main className="flex min-h-dvh items-center justify-center p-5">
       <div className="w-full max-w-sm rounded-card border border-border bg-surface p-6">
@@ -24,6 +24,15 @@ export default async function LoginPage({
         </div>
         <h1 className="mb-1 text-2xl font-bold">تسجيل الدخول</h1>
         <p className="mb-6 text-sm text-text-muted">برقم الهاتف ورمز الدخول (6 أرقام).</p>
+        {reason === 'idle' && (
+          <p
+            role="status"
+            data-testid="idle-notice"
+            className="mb-4 rounded-control bg-warning-soft px-3 py-2 text-sm text-warning-text"
+          >
+            انتهت جلستك لأنك لم تستعمل اللوحة أكثر من 12 ساعة. سجّل الدخول من جديد.
+          </p>
+        )}
         <LoginForm next={safeNext(next)} />
         <p className="mt-6 text-xs leading-6 text-text-muted">
           نسيت الرمز؟ راسل مدير المتجر من نفس الرقم ليعيد ضبطه. لا يوجد إنشاء حساب من اللوحة.

@@ -17,7 +17,7 @@ import { usePanel } from '@/components/PanelProviders';
 import { displayPhone } from '@/features/orders/format';
 import { Field, Modal, inputClass } from '@/features/catalog/ui';
 import { adminKeys, createStaffUser, resetPin, type UserRow } from './api';
-import { pinMessage, resetPinFailure } from './forms';
+import { ROLE_LABELS, pinMessage, resetPinFailure } from './forms';
 
 function PinInput({
   id,
@@ -78,7 +78,8 @@ function PinOnce({
   return (
     <div className="flex flex-col gap-3" data-testid="pin-once">
       <p className="m-0 text-sm text-text-muted">
-        هذا الرمز يظهر <strong>مرة وحدة</strong> وما ينحفظ بأي مكان. انسخه أو ارسله هسه.
+        هذا الرمز يظهر <strong>مرة وحدة</strong> وما ينحفظ بأي مكان. الأفضل «نسخ الرمز» ثم الصقه
+        بنفس المحادثة (رابط الواتساب يترك الرمز بسجل المتصفح).
       </p>
       <output
         data-testid="pin-value"
@@ -176,16 +177,38 @@ export function ResetPinDialog({ user, onClose }: { user: UserRow; onClose: () =
               {displayPhone(user.phone)}
             </span>
           </p>
-          <p
+          <div
             role="note"
-            className="m-0 rounded-control bg-warning-soft px-3 py-2 text-sm text-warning-text"
+            data-testid="reset-rules"
+            className="flex flex-col gap-1.5 rounded-control bg-warning-soft px-3 py-2 text-sm text-warning-text"
           >
-            تأكد أن رسالة الواتساب من نفس الرقم:{' '}
-            <span className="num font-bold" dir="ltr">
-              {displayPhone(user.phone)}
-            </span>
-            . الضبط يطلّعه من كل الأجهزة.
-          </p>
+            <strong>قبل الضبط (دليل التشغيل §16):</strong>
+            <ul className="m-0 flex list-disc flex-col gap-1 ps-5 leading-6">
+              <li>
+                الرسالة لازم تجي من نفس الرقم المسجّل{' '}
+                <span className="num font-bold" dir="ltr">
+                  {displayPhone(user.phone)}
+                </span>{' '}
+                (رقم رأس المحادثة، مو الاسم ولا رسالة محوّلة ولا لقطة شاشة).
+              </li>
+              {user.role === 'customer' ? (
+                <li>
+                  اسأله سؤالين عن آخر طلب له: <strong>المبلغ التقريبي</strong> و
+                  <strong>العنوان</strong>. إن غلط بواحد لا تضبط.
+                </li>
+              ) : (
+                <li>
+                  {ROLE_LABELS[user.role]}: لا تضبط من رسالة وحدها،{' '}
+                  <strong>اتصل بالرقم المسجّل</strong> وتأكد منه بالمكالمة أولاً.
+                </li>
+              )}
+              <li>
+                «رقم جديد» ليس سبباً للضبط: حساب جديد، أو تغيير الرقم بعد تحقق مباشر. وحساب الأدمن
+                لا يُضبط من واتساب أبداً.
+              </li>
+              <li>الضبط يطلّعه من كل الأجهزة؛ أبلغه بذلك، وإن ما طلبه بنفسه عطّل الحساب.</li>
+            </ul>
+          </div>
           <PinInput id="reset-pin" value={pin} onChange={setPin} error={pinError} phone={phone} />
           {reset.error && (
             <p

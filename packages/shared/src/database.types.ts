@@ -155,6 +155,7 @@ export type Database = {
           max_line_qty: number;
           max_order_lines: number;
           min_order_iqd: number;
+          new_account_max_active_orders: number;
           store_open: boolean;
           updated_at: string;
         };
@@ -167,6 +168,7 @@ export type Database = {
           max_line_qty?: number;
           max_order_lines?: number;
           min_order_iqd?: number;
+          new_account_max_active_orders?: number;
           store_open?: boolean;
           updated_at?: string;
         };
@@ -178,6 +180,7 @@ export type Database = {
           max_line_qty?: number;
           max_order_lines?: number;
           min_order_iqd?: number;
+          new_account_max_active_orders?: number;
           store_open?: boolean;
           updated_at?: string;
         };
@@ -1171,6 +1174,7 @@ export type Database = {
         };
         Returns: number;
       };
+      admin_cancel_customer_orders: { Args: { p_user_id: string }; Returns: Json };
       admin_rate_hit: { Args: { p_admin: string; p_kind: string }; Returns: number };
       admin_reset_mfa: { Args: { p_user_id: string }; Returns: number };
       admin_save_product: { Args: { p: Json }; Returns: string };
@@ -1439,6 +1443,7 @@ export type Database = {
       };
       signup_rate_hit: { Args: { p_ip: string; p_phone: string }; Returns: boolean };
       stuck_notifications_count: { Args: Record<PropertyKey, never>; Returns: number };
+      touch_panel_session: { Args: Record<PropertyKey, never>; Returns: boolean };
       update_app_settings: {
         Args: { p: Json };
         Returns: {
@@ -1449,6 +1454,7 @@ export type Database = {
           max_line_qty: number;
           max_order_lines: number;
           min_order_iqd: number;
+          new_account_max_active_orders: number;
           store_open: boolean;
           updated_at: string;
         };

@@ -117,11 +117,24 @@ export function isNavActive(item: NavItem, pathname: string): boolean {
   return item.match.includes(firstSegment(pathname));
 }
 
+const NEXT_BASE = 'https://panel.invalid';
+
 /**
- * وجهة آمنة بعد الدخول: مسار داخلي فقط (لا "//host" ولا رابط خارجي)، وإلا الرئيسية.
+ * وجهة آمنة بعد الدخول: مسار داخلي بنفس الأصل فقط، وإلا الرئيسية (T23 M4).
+ * لا نقارن بادئات نصية (يفلت منها "/\t/evil.com": المتصفح يحذف TAB وLF فيصير "//evil.com")؛ نرفض أي محرف
+ * تحكم أو "\"، ثم نحلّل بـ URL ونتأكد أن الأصل لم يتغير.
  */
 export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
-  if (next.startsWith(LOGIN_PATH)) return '/';
-  return next;
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f-\u009f\\]/.test(next)) return '/';
+  let url: URL;
+  try {
+    url = new URL(next, NEXT_BASE);
+  } catch {
+    return '/';
+  }
+  if (url.origin !== NEXT_BASE || url.pathname.startsWith('//')) return '/';
+  if (url.pathname.startsWith(LOGIN_PATH)) return '/';
+  return url.pathname + url.search;
 }

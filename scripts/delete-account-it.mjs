@@ -146,7 +146,7 @@ try {
   const profile = await db.query(`select 1 from public.profiles where id = $1`, [userId]);
   check(profile.rowCount === 0, 'profile is gone');
   const kept = await db.query(
-    `select id, customer_id, customer_name, status::text from public.orders where id = any ($1) order by status`,
+    `select id, customer_id, customer_name, customer_phone, address_snapshot, total_iqd, status::text from public.orders where id = any ($1) order by status`,
     [orderIds],
   );
   check(kept.rowCount === 2, 'both orders are kept');
@@ -154,9 +154,23 @@ try {
     kept.rows.every((r) => r.customer_id === null),
     'kept orders have customer_id = null',
   );
+  // T23 M5: بيانات الزبون الشخصية تُمحى من الطلبات المحفوظة؛ يبقى القطاع والوحدة والمبالغ للمحاسبة
+  const d = kept.rows.find((r) => r.id === deliveredId);
   check(
-    kept.rows.find((r) => r.id === deliveredId)?.customer_name === 'T08 throwaway',
-    'delivered order keeps its snapshot (still visible to reports)',
+    d?.customer_name === null && d?.customer_phone === null,
+    'delivered order: customer name and phone are removed (M5)',
+  );
+  const snap = d?.address_snapshot ?? {};
+  check(
+    snap.sector === 'IT' &&
+      snap.subsection === 'IT' &&
+      snap.building === undefined &&
+      snap.apartment === undefined,
+    'delivered order: only sector and unit remain in the address (M5)',
+  );
+  check(
+    Number(d?.total_iqd) === 2000,
+    'delivered order keeps its amounts (still counted by reports)',
   );
   const items = await db.query(
     `select count(*)::int n from public.order_items where order_id = $1`,

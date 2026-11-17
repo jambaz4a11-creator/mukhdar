@@ -3,11 +3,13 @@ import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@mukhdar/shared';
 import { cookies } from 'next/headers';
 import { readPublicEnv } from '../env';
+import { sessionCookieOptions } from '../security';
 
 export async function createClient() {
   const { url, key } = readPublicEnv();
   const store = await cookies();
   return createServerClient<Database>(url, key, {
+    cookieOptions: sessionCookieOptions(),
     cookies: {
       getAll: () => store.getAll(),
       setAll: (list) => {

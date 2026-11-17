@@ -19,6 +19,7 @@ import {
   type UserRow,
 } from './api';
 import { ROLE_LABELS, type UserRole } from './forms';
+import { LockdownDialog } from './LockdownDialog';
 import { CreateUserDialog, ResetPinDialog } from './PinDialogs';
 import { RoleBadge } from './RoleBadge';
 
@@ -199,6 +200,7 @@ function UserLine({
   const { supabase } = usePanel();
   const qc = useQueryClient();
   const name = user.full_name ?? 'بلا اسم';
+  const [locking, setLocking] = useState(false);
   const change = useMutation({
     mutationFn: (v: { role: UserRole; active: boolean }) =>
       setUserRole(supabase, user.id, v.role, v.active),
@@ -278,6 +280,23 @@ function UserLine({
         >
           تصفير الرمز
         </button>
+      )}
+      {user.role === 'customer' && (
+        <button
+          type="button"
+          onClick={() => setLocking(true)}
+          className="h-10 rounded-[10px] border border-[#F3CFCA] bg-danger-soft px-2.5 text-[13px] text-danger"
+          data-testid="lockdown-open"
+        >
+          إلغاء كل طلباته وتعطيل
+        </button>
+      )}
+      {locking && (
+        <LockdownDialog
+          userId={user.id}
+          label={`${name} · ${displayPhone(user.phone)}`}
+          onClose={() => setLocking(false)}
+        />
       )}
       {user.role === 'staff' && (
         <button

@@ -29,5 +29,10 @@ export function formatAddress(address: AddressParts): string {
 export function formatAddressShort(
   address: Pick<AddressSnapshot, 'subsection' | 'building'>,
 ): string {
-  return `وحدة ${clean(address.subsection)} - عمارة ${clean(address.building)}`;
+  // طلب زبون محذوف (T23 M5) بلا عمارة: "وحدة A3" فقط
+  const unit = clean(address.subsection);
+  const building = clean(address.building);
+  return [unit && `وحدة ${unit}`, building && `عمارة ${building}`]
+    .filter((p) => p !== '')
+    .join(' - ');
 }

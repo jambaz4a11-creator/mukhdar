@@ -3,6 +3,7 @@
 // والرئيسية لاحقاً). INSERT ← صوت تنبيه وإبطال استعلامات الطلبات؛ UPDATE ← إبطالها (الصفوف المعروضة تتحدث).
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { IdleGuard } from '@/components/IdleGuard';
 import { createClient } from '@/lib/supabase/browser';
 import { ordersKeys } from '@/features/orders/api';
 import { maxWaitDebounce } from '@/lib/maxWaitDebounce';
@@ -95,5 +96,10 @@ function RealtimeBridge({ children, role }: { children: React.ReactNode; role: P
     () => ({ supabase, role, newOrderIds, realtimeStatus }),
     [supabase, role, newOrderIds, realtimeStatus],
   );
-  return <PanelContext.Provider value={value}>{children}</PanelContext.Provider>;
+  return (
+    <PanelContext.Provider value={value}>
+      <IdleGuard supabase={supabase} />
+      {children}
+    </PanelContext.Provider>
+  );
 }

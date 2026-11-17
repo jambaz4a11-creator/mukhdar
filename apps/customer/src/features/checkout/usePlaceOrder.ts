@@ -108,6 +108,8 @@ export function placeOrderMessage(code: ErrorCode | null, detail: string | null)
   const base = ERROR_MESSAGES[code];
   const limit = detail && /^\d+$/.test(detail) ? Number(detail) : null;
   if (limit === null) return base;
+  // T23 H2: الحساب الجديد (بلا طلب مُسلَّم) طلب مفتوح واحد فقط
+  if (code === 'TOO_MANY_ACTIVE_ORDERS' && limit === 1) return ar.checkout.oneActiveOrder;
   if (code === 'BELOW_MIN_ORDER') return `${base} (${formatIQD(limit)})`;
   if (code === 'QTY_LIMIT') return `${base} ${ar.checkout.qtyLimit(limit)}`;
   if (code === 'TOO_MANY_ITEMS') return `${base} ${ar.checkout.linesLimit(limit)}`;

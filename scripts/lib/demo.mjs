@@ -11,6 +11,15 @@ export const DEMO_PHONE_LIKE = [`${DEMO_PHONE_PREFIX}%`, `${LOAD_PHONE_PREFIX}%`
 // لكنه منشور بالـ repo: لا يُستخدم أبداً بمشروع الإنتاج (seed:demo يرفض غير التطوير أصلاً).
 export const DEMO_PIN = '482915';
 
+// رمز حسابات السائقين التجريبية 07000000011..13 فقط (T23 L6). هذا الرمز (لا DEMO_PIN) هو ما يُسلَّم لمطوّر تطبيق
+// السائق الخارجي، فلا يستطيع الدخول بحساب أدمن أو موظف العرض. تطوير فقط مثل DEMO_PIN. يمكن تدويره بلا commit:
+// DRIVER_DEMO_PIN=<6 أرقام> قبل seed:demo (يُعاد تعيينه للسائقين الثلاثة عند كل تشغيل).
+const FROM_ENV = process.env.DRIVER_DEMO_PIN;
+if (FROM_ENV !== undefined && !/^\d{6}$/.test(FROM_ENV)) {
+  throw new Error('DRIVER_DEMO_PIN must be exactly 6 digits');
+}
+export const DRIVER_DEMO_PIN = FROM_ENV ?? '739164';
+
 export const phone = (prefix, n) => `${prefix}${String(n).padStart(6, '0')}`;
 
 // يرجع الأيام التي لا يطابق فيها daily_stats الطلبات الفعلية (المسلّمة والملغاة) بتوقيت بغداد.

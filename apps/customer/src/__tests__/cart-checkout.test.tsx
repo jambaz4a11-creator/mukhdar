@@ -545,6 +545,8 @@ describe('checkout', () => {
 
   it.each<[ErrorCode, string | undefined, string]>([
     ['TOO_MANY_ACTIVE_ORDERS', '3', ERROR_MESSAGES.TOO_MANY_ACTIVE_ORDERS],
+    // T23 H2: حساب جديد بلا طلب مُسلَّم: طلب مفتوح واحد
+    ['TOO_MANY_ACTIVE_ORDERS', '1', ar.checkout.oneActiveOrder],
     ['STORE_CLOSED', undefined, ERROR_MESSAGES.STORE_CLOSED],
     ['BELOW_MIN_ORDER', '5000', `${ERROR_MESSAGES.BELOW_MIN_ORDER} (${formatIQD(5000)})`],
     ['ADDRESS_INACTIVE', undefined, ERROR_MESSAGES.ADDRESS_INACTIVE],

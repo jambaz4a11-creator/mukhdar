@@ -20,7 +20,7 @@ import { OrderDetailPanel } from './OrderDetailPanel';
 import { OrdersTable } from './OrdersTable';
 
 export function OrdersScreen() {
-  const { supabase, newOrderIds, realtimeStatus } = usePanel();
+  const { supabase, role, newOrderIds, realtimeStatus } = usePanel();
   const params = useSearchParams();
   const today = baghdadToday();
 
@@ -157,6 +157,12 @@ export function OrdersScreen() {
           </label>
         </div>
       </header>
+
+      {role === 'staff' && (
+        <p className="m-0 text-xs text-text-muted" data-testid="staff-window-note">
+          تظهر لك الطلبات المفتوحة وطلبات آخر 7 أيام فقط. الأقدم من ذلك عند المدير.
+        </p>
+      )}
 
       <div role="tablist" aria-label="حالة الطلب" className="flex flex-wrap gap-2">
         {TABS.map((tab) => {

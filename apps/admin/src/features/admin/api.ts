@@ -30,7 +30,7 @@ export function fetchSettings(supabase: MukhdarClient): Promise<AppSettings> {
     supabase
       .from('app_settings')
       .select(
-        'delivery_fee_iqd, min_order_iqd, max_active_orders, max_line_qty, max_order_lines, store_open, closed_message, updated_at',
+        'delivery_fee_iqd, min_order_iqd, max_active_orders, new_account_max_active_orders, max_line_qty, max_order_lines, store_open, closed_message, updated_at',
       )
       .eq('id', 1)
       .single(),
@@ -129,6 +129,21 @@ async function invoke<T>(supabase: MukhdarClient, name: string, body: object): P
  * T23 C1: إعادة ضبط المصادقة الثنائية لموظف (فقد هاتفه): تحذف عوامل TOTP، تبطل جلساته، وتُسجَّل بـ
  * admin_audit (mfa_reset). أول دخول بعدها يسجّل التطبيق من جديد. لا لحساب أدمن (ADMIN_ACCOUNT).
  */
+export interface LockdownResult {
+  cancelled: number;
+  out_for_delivery: number;
+}
+
+/** T23 H2: يلغي كل الطلبات المفتوحة لزبون ويعطّل حسابه (أدمن فقط، مُدقَّق). */
+export function cancelCustomerOrders(
+  supabase: MukhdarClient,
+  userId: string,
+): Promise<LockdownResult> {
+  return unwrap<LockdownResult>(
+    supabase.rpc('admin_cancel_customer_orders', { p_user_id: userId }),
+  );
+}
+
 export function resetMfa(supabase: MukhdarClient, userId: string): Promise<number> {
   return unwrap<number>(supabase.rpc('admin_reset_mfa', { p_user_id: userId }));
 }

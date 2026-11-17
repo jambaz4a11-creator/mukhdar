@@ -5,6 +5,22 @@ import { config } from '../config';
 
 let enabled = false;
 
+/**
+ * T23 L8: breadcrumbs الشبكة تحمل رابط الطلب كاملاً، وروابط REST بمعرّفات المستخدم بمرشّحاتها (?customer_id=eq.<uuid>).
+ * نحذف سلسلة الاستعلام (والـ hash) من روابط supabase.co قبل الإرسال؛ بقية الـ breadcrumbs كما هي.
+ */
+export function scrubBreadcrumb<T extends { data?: Record<string, unknown> | undefined }>(b: T): T {
+  const url = b.data?.url;
+  if (
+    typeof url !== 'string' ||
+    !/^https?:\/\/(?:[^/?#@]*\.)?supabase\.(?:co|in)(?::\d+)?(?:[/?#]|$)/i.test(url)
+  ) {
+    return b;
+  }
+  const clean = url.replace(/[?#].*$/s, '');
+  return clean === url ? b : { ...b, data: { ...b.data, url: clean } };
+}
+
 export function initSentry(dsn: string = config.sentryDsn): boolean {
   if (dsn.trim() === '') {
     enabled = false;
@@ -13,6 +29,7 @@ export function initSentry(dsn: string = config.sentryDsn): boolean {
   Sentry.init({
     dsn,
     sendDefaultPii: false,
+    beforeBreadcrumb: scrubBreadcrumb,
     tracesSampleRate: 0.2,
     environment: __DEV__ ? 'development' : 'production',
   });

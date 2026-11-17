@@ -1,7 +1,13 @@
 import * as Sentry from '@sentry/react-native';
 import { isSupabaseConfigured } from '../config';
 import { ensureRTL, RTL_RELOAD_KEY, type RtlDeps } from '../lib/rtl';
-import { captureError, initSentry, isSentryEnabled, wrapRoot } from '../lib/sentry';
+import {
+  captureError,
+  initSentry,
+  isSentryEnabled,
+  scrubBreadcrumb,
+  wrapRoot,
+} from '../lib/sentry';
 
 jest.mock('@sentry/react-native', () => ({
   init: jest.fn(),
@@ -86,5 +92,50 @@ describe('config', () => {
         supabaseKey: 'sb_publishable_x',
       }),
     ).toBe(true);
+  });
+});
+
+describe('scrubBreadcrumb (T23 L8)', () => {
+  const crumb = (url: unknown) => ({
+    category: 'fetch',
+    data: { url, method: 'GET', status_code: 200 },
+  });
+
+  it('drops the query string and hash of Supabase URLs', () => {
+    const out = scrubBreadcrumb(
+      crumb(
+        'https://abcdefghijklmnopqrst.supabase.co/rest/v1/orders?customer_id=eq.123e4567-e89b&select=*#x',
+      ),
+    );
+    expect(out.data.url).toBe('https://abcdefghijklmnopqrst.supabase.co/rest/v1/orders');
+    expect(out.data.method).toBe('GET');
+    expect(out.data.status_code).toBe(200);
+  });
+
+  it('keeps URLs without a query, other hosts, and look-alike hosts untouched', () => {
+    for (const u of [
+      'https://abcdefghijklmnopqrst.supabase.co/rest/v1/orders',
+      'https://example.com/path?x=1',
+      'https://evilsupabase.co/path?x=1',
+      'https://supabase.co.evil.com/path?x=1',
+    ]) {
+      const c = crumb(u);
+      expect(scrubBreadcrumb(c)).toBe(c);
+    }
+  });
+
+  it('ignores breadcrumbs without a URL', () => {
+    const c: { data?: Record<string, unknown> } = {};
+    expect(scrubBreadcrumb(c)).toBe(c);
+    const d = { data: { url: 42 } };
+    expect(scrubBreadcrumb(d)).toBe(d);
+  });
+
+  it('is passed to Sentry.init as beforeBreadcrumb', () => {
+    initSentry('https://key@o1.ingest.sentry.io/1');
+    expect(Sentry.init).toHaveBeenLastCalledWith(
+      expect.objectContaining({ beforeBreadcrumb: scrubBreadcrumb }),
+    );
+    initSentry('');
   });
 });
