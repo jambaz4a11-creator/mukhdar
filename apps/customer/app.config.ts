@@ -51,7 +51,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),
   },
-  web: { favicon: './assets/images/favicon.png' },
+  // PWA (معاينة المالك): SPA واحدة (index.html) تُعدَّل وسومها بـ scripts/postexport-web.mjs، يخدمها Cloudflare Pages. الـ manifest والأيقونات بـ public/.
+  web: { bundler: 'metro', output: 'single', favicon: './public/icons/favicon.png' },
   plugins: [
     'expo-router',
     'expo-font',

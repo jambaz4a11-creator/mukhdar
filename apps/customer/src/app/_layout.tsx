@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import '../lib/webShims';
 import { AppText } from '../components/AppText';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { config } from '../config';
