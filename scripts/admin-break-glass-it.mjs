@@ -92,11 +92,11 @@ async function createUser(phone, pin, role) {
 }
 
 /** يشغّل السكربت بالمدخلات المعطاة؛ يرجع الخرج بلا الرمز + الرمز المستخرج (إن ظهر) + رمز الخروج. */
-function runScript(phoneArg, answers, env) {
+function runScript(phoneArg, answers, env, extra = []) {
   return new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      [path.join(root, 'scripts', 'admin-break-glass.mjs'), phoneArg],
+      [path.join(root, 'scripts', 'admin-break-glass.mjs'), phoneArg, ...extra],
       {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -237,12 +237,40 @@ try {
     adminId,
   ]);
   check(cleared.rows[0]?.must_change_pin === false, 'after the change the flag is cleared');
+
+  // ---------------------------------------------------------------- T23 C1: --mfa-only
+  await db.query(
+    `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
+     values (gen_random_uuid(), $1, 'it break-glass', 'totp', 'verified', now(), now(), 'JBSWY3DPEHPK3PXP')`,
+    [adminId],
+  );
+  const mfa = await runScript(`+${adminPhone}`, 'y\n', baseEnv, ['--mfa-only']);
+  check(
+    mfa.code === 0 && !mfa.pin && /2FA factors removed/.test(mfa.out),
+    '--mfa-only: succeeds without printing a PIN',
+  );
+  const factors = await db.query(
+    `select count(*)::int n from auth.mfa_factors where user_id = $1`,
+    [adminId],
+  );
+  check(factors.rows[0].n === 0, '--mfa-only: the TOTP factor is removed');
+  const mfaAudit = await db.query(
+    `select actor, after ->> 'via' via from public.admin_audit where target_id = $1 and action = 'mfa_reset'`,
+    [adminId],
+  );
+  check(
+    mfaAudit.rows.length === 1 &&
+      mfaAudit.rows[0].actor === null &&
+      mfaAudit.rows[0].via === 'break_glass',
+    '--mfa-only: one admin_audit row (mfa_reset, via break_glass, no actor)',
+  );
 } catch (err) {
   console.error(`error: ${err.message}`);
   failures++;
 } finally {
   for (const id of created) {
     await db.query(`delete from public.pin_resets where user_id = $1`, [id]);
+    await db.query(`delete from public.admin_audit where target_id = $1`, [id]);
     const del = await request(`${url}/auth/v1/admin/users/${id}`, {
       method: 'DELETE',
       key: serviceKey,

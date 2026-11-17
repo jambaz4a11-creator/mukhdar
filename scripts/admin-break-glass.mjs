@@ -1,7 +1,12 @@
 #!/usr/bin/env node
-// طوارئ: إعادة ضبط رمز أدمن نسيه (مراجعة T16-T19 M4، RUNBOOK §7).
+// طوارئ: إعادة ضبط رمز أدمن نسيه، و/أو مصادقته الثنائية (مراجعة T16-T19 M4، T23 C1، RUNBOOK §7).
 //
-//   pnpm admin:break-glass-reset 07XXXXXXXXX
+//   pnpm admin:break-glass-reset 07XXXXXXXXX              # الرمز (PIN) فقط
+//   pnpm admin:break-glass-reset 07XXXXXXXXX --mfa-only   # المصادقة الثنائية فقط (فقد هاتف التطبيق)
+//   pnpm admin:break-glass-reset 07XXXXXXXXX --with-mfa   # الاثنان (فقد الهاتف ونسي الرمز)
+//
+// المصادقة الثنائية (T23 C1): break_glass_reset_mfa تحذف عوامل TOTP للأدمن، تبطل جلساته، وتكتب admin_audit
+// (mfa_reset، via = break_glass). أول دخول بعدها يسجّل تطبيق مصادقة جديداً. لوحة الأدمن لا تعيد مصادقة أدمن.
 //
 // يعمل على جهاز صاحب المشروع فقط (مفتاح service_role من .env.local، لا يُنسخ لمكان آخر ولا يُرفع):
 //   1) يرفض العمل إن غاب SUPABASE_URL أو SUPABASE_SERVICE_ROLE_KEY (بيئة العملية أو .env.local).
@@ -21,6 +26,7 @@ import readline from 'node:readline';
 import {
   DEV_PROJECT_REF,
   interactiveGuard,
+  parseArgs,
   projectRef,
   randomPin,
   storedPhone,
@@ -44,10 +50,15 @@ function fail(message) {
 }
 
 async function main() {
-  const phone = storedPhone(process.argv[2]);
-  if (!phone) {
-    fail('usage: pnpm admin:break-glass-reset 07XXXXXXXXX   (the admin phone number)');
-  }
+  const usage =
+    'usage: pnpm admin:break-glass-reset 07XXXXXXXXX [--mfa-only | --with-mfa]   (the admin phone number)';
+  const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.error) fail(`${parsed.error}\n${usage}`);
+  const { mode } = parsed;
+  const phone = storedPhone(parsed.phone);
+  if (!phone) fail(usage);
+  const doPin = mode === 'pin' || mode === 'both';
+  const doMfa = mode === 'mfa' || mode === 'both';
   const url = readEnv('SUPABASE_URL')?.replace(/\/+$/, '');
   const serviceKey = readEnv('SUPABASE_SERVICE_ROLE_KEY');
   if (!url) fail('SUPABASE_URL is missing (env or .env.local). Refusing to guess the project.');
@@ -82,7 +93,13 @@ async function main() {
     const typed = await ask(`Type the project ref (${ref}) to continue: `);
     if (typed !== ref) fail('project ref not confirmed. Nothing changed.');
   }
-  const yes = (await ask('Reset the PIN of this ADMIN account? [y/N] ')).toLowerCase();
+  const what =
+    mode === 'pin'
+      ? 'the PIN'
+      : mode === 'mfa'
+        ? 'the 2FA (authenticator app)'
+        : 'the PIN AND the 2FA';
+  const yes = (await ask(`Reset ${what} of this ADMIN account? [y/N] `)).toLowerCase();
   if (yes !== 'y' && yes !== 'yes') fail('cancelled. Nothing changed.');
 
   const headers = {
@@ -131,10 +148,10 @@ async function main() {
     );
   }
 
-  const pin = randomPin(phone);
+  const pin = doPin ? randomPin(phone) : null;
 
   // الرمز ← الجلسات ← التدقيق (record_pin_reset يضبط must_change_pin بعد أن يمسحه تغيير كلمة السر)
-  const steps = [
+  const pinSteps = [
     ['set the PIN', () => call('PUT', `/auth/v1/admin/users/${profile.id}`, { password: pin })],
     [
       'revoke all sessions',
@@ -150,6 +167,14 @@ async function main() {
         }),
     ],
   ];
+  // T23 C1: حذف عوامل TOTP + إبطال الجلسات + admin_audit (mfa_reset) بدالة واحدة (service_role، أدمن فقط)
+  const mfaSteps = [
+    [
+      'remove the 2FA factors + revoke sessions + audit',
+      () => call('POST', '/rest/v1/rpc/break_glass_reset_mfa', { p_user_id: profile.id }),
+    ],
+  ];
+  const steps = [...(doMfa ? mfaSteps : []), ...(doPin ? pinSteps : [])];
   for (const [label, run] of steps) {
     const res = await run();
     if (res.status === 0 || res.status >= 300) {
@@ -160,8 +185,18 @@ async function main() {
     }
   }
 
+  if (!doPin) {
+    console.log(
+      '\nDone: 2FA factors removed, sessions revoked, audit row written (mfa_reset, break_glass). ' +
+        'At the next sign-in the admin enrolls a new authenticator app (QR) on /mfa.',
+    );
+    rl.close();
+    return;
+  }
   console.log(
-    '\nDone: sessions revoked, audit row written, the admin must change the PIN at first sign-in.',
+    `\nDone: sessions revoked, audit row written, the admin must change the PIN at first sign-in.${
+      doMfa ? ' 2FA removed: the admin enrolls a new authenticator app first.' : ''
+    }`,
   );
   console.log('Tell the admin by PHONE CALL (not WhatsApp, not a message). Shown once:\n');
   console.log(`    PIN: ${pin}\n`);

@@ -26,6 +26,8 @@ function toValues(s: AppSettings): SettingsValues {
     delivery_fee_iqd: String(s.delivery_fee_iqd),
     min_order_iqd: String(s.min_order_iqd),
     max_active_orders: String(s.max_active_orders),
+    max_line_qty: String(s.max_line_qty),
+    max_order_lines: String(s.max_order_lines),
     store_open: s.store_open,
     closed_message: s.closed_message ?? '',
   };
@@ -89,7 +91,12 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
   });
 
   const numberField = (
-    key: 'delivery_fee_iqd' | 'min_order_iqd' | 'max_active_orders',
+    key:
+      | 'delivery_fee_iqd'
+      | 'min_order_iqd'
+      | 'max_active_orders'
+      | 'max_line_qty'
+      | 'max_order_lines',
     label: string,
   ) => (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -170,8 +177,13 @@ function SettingsForm({ initial }: { initial: AppSettings }) {
           {numberField('delivery_fee_iqd', 'أجرة التوصيل (د.ع)')}
           {numberField('min_order_iqd', 'الحد الأدنى للطلب')}
           {numberField('max_active_orders', 'حد الطلبات المفتوحة للزبون')}
+          {numberField('max_line_qty', 'أقصى كمية لكل منتج بالطلب')}
+          {numberField('max_order_lines', 'أقصى عدد منتجات بالطلب')}
         </div>
-        <span className="text-xs text-text-muted">المبالغ لازم تكون من مضاعفات 250.</span>
+        <span className="text-xs text-text-muted">
+          المبالغ لازم تكون من مضاعفات 250. الكمية بوحدة البيع: 20 = 10 كيلو للخضار والفواكه (نص
+          كيلو).
+        </span>
         {save.error && (
           <p
             role="alert"

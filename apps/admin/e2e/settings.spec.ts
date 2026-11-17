@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { ACCOUNTS, PIN } from './accounts';
 import { pageAs, signIn } from './helpers';
 import { ALLOW_WRITES, signedInClient } from './supabase';
+import { freshTotp } from './totp';
 
 // T19: الإعدادات والموظفون والعناوين. القراءة (ومحاولات تُرفض بلا كتابة) تعمل على أي بيانات seed؛
 // الكتابة (حفظ الإعدادات، ترقية، تصفير رمز، إنشاء سائق، عمارات) فقط مع E2E_ALLOW_WRITES=1
@@ -243,7 +244,22 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
 
     const context = await browser.newContext();
     const staff = await context.newPage();
-    await signIn(staff, phone, temp);
+    await signIn(staff, phone, temp, null);
+    // T23 C1: أول دخول ← تسجيل تطبيق المصادقة (QR + المفتاح اليدوي) قبل أي شيء، حتى تغيير الرمز
+    await staff.waitForURL((u) => u.pathname === '/mfa');
+    await expect(staff.getByTestId('mfa-enroll-intro')).toBeVisible();
+    await expect(staff.getByTestId('mfa-qr')).toBeVisible();
+    const secret = (await staff.getByTestId('mfa-secret').innerText()).trim();
+    expect(secret).toMatch(/^[A-Z2-7]{16,}$/);
+    await staff.goto('/orders'); // أي صفحة ← /mfa
+    await staff.waitForURL((u) => u.pathname === '/mfa');
+    await staff.getByLabel('رمز تطبيق المصادقة').fill('000000');
+    await staff.getByRole('button', { name: 'تفعيل ودخول' }).click();
+    await expect(staff.getByTestId('mfa-error')).toBeVisible();
+    // نفس التسجيل ما زال معروضاً (نفس السر) بعد الرمز الخاطئ
+    const current = (await staff.getByTestId('mfa-secret').innerText()).trim();
+    await staff.getByLabel('رمز تطبيق المصادقة').fill(await freshTotp(current));
+    await staff.getByRole('button', { name: 'تفعيل ودخول' }).click();
     await staff.waitForURL((u) => u.pathname === '/change-pin');
     await expect(staff.getByTestId('pin-forced')).toBeVisible();
     await staff.goto('/orders'); // أي صفحة ← تغيير الرمز
@@ -251,6 +267,7 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
 
     const fresh = temp === '583926' ? '692817' : '583926';
     await staff.getByLabel('الرمز المؤقت').fill(temp);
+    await staff.getByLabel('رمز تطبيق المصادقة').fill(await freshTotp(current));
     await staff.getByLabel('الرمز الجديد', { exact: true }).fill(fresh);
     await staff.getByLabel('أعد كتابة الرمز الجديد').fill(fresh);
     await staff.getByRole('button', { name: 'تغيير الرمز' }).click();
@@ -261,6 +278,55 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
 
     await page.reload();
     await expect(userLine(page, phone).first().getByTestId('temp-pin')).toHaveCount(0);
+
+    // كل دخول بعدها: الـ PIN ثم رمز التطبيق
+    const again = await browser.newContext();
+    const staff2 = await again.newPage();
+    await signIn(staff2, phone, fresh, current);
+    await staff2.waitForURL((u) => u.pathname === '/');
+    // رمز خاطئ يبقى على /mfa
+    const third = await browser.newContext();
+    const staff3 = await third.newPage();
+    await signIn(staff3, phone, fresh, null);
+    await staff3.waitForURL((u) => u.pathname === '/mfa');
+    await expect(staff3.getByTestId('mfa-enroll-intro')).toHaveCount(0);
+    await staff3.getByLabel('رمز تطبيق المصادقة').fill('000000');
+    await staff3.getByRole('button', { name: 'دخول' }).click();
+    await expect(staff3.getByTestId('mfa-error')).toBeVisible();
+    await expect(staff3).toHaveURL(/\/mfa/);
+    await third.close();
+
+    // الأدمن يعيد ضبط مصادقة الموظف (فقد هاتفه): مُدقَّق، ويخرج من كل الأجهزة، وأول دخول يسجّل من جديد
+    page.once('dialog', (d) => void d.accept());
+    await userLine(page, phone).first().getByTestId('mfa-reset').click();
+    await expect(userLine(page, phone).first().getByTestId('mfa-reset-done')).toBeVisible();
+    const admin = await signedInClient(ACCOUNTS.admin);
+    const { data: audit } = await admin
+      .from('admin_audit')
+      .select('action, after')
+      .eq('action', 'mfa_reset')
+      .order('id', { ascending: false })
+      .limit(1);
+    expect(audit?.[0]?.after).toMatchObject({ factors: 0, via: 'panel' });
+    await staff2.goto('/orders');
+    await staff2.waitForURL((u) => u.pathname === '/login'); // الجلسة أُبطلت
+    await again.close();
+    const fourth = await browser.newContext();
+    const staff4 = await fourth.newPage();
+    await signIn(staff4, phone, fresh, null);
+    await staff4.waitForURL((u) => u.pathname === '/mfa');
+    await expect(staff4.getByTestId('mfa-enroll-intro')).toBeVisible();
+    await expect(staff4.getByTestId('mfa-qr')).toBeVisible();
+    await fourth.close();
+  });
+
+  test('2FA of an admin cannot be reset from the panel (break-glass only)', async () => {
+    const admin = await signedInClient(ACCOUNTS.admin);
+    const { data: me } = await admin.auth.getUser();
+    const { error } = await admin.rpc('admin_reset_mfa', { p_user_id: me.user?.id ?? '' });
+    expect(error?.message).toBe('ADMIN_ACCOUNT');
+    await page.goto('/staff');
+    await expect(userLine(page, ACCOUNTS.admin).first().getByTestId('mfa-reset')).toHaveCount(0);
   });
 
   test('create a driver: PIN shown once, signs in, listed; the same phone → "registered"', async () => {

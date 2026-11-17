@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/browser';
 export function ChangePinForm({ phone, forced }: { phone: string | null; forced: boolean }) {
   const router = useRouter();
   const [current, setCurrent] = useState('');
+  const [totp, setTotp] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,14 +20,16 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await changePanelPin(createClient(), phone, current, next, confirm);
+    const result = await changePanelPin(createClient(), phone, current, totp, next, confirm);
     setBusy(false);
     if (!result.ok) {
       if (result.field === 'current') setCurrent('');
+      if (result.field === 'totp' || result.field === 'current') setTotp('');
       setError(result.message);
       return;
     }
     setCurrent('');
+    setTotp('');
     setNext('');
     setConfirm('');
     setDone(true);
@@ -42,12 +45,13 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
     value: string,
     set: (v: string) => void,
     auto: string,
+    type: 'password' | 'text' = 'password',
   ) => (
     <label htmlFor={id} className="flex flex-col gap-1.5 text-sm font-medium">
       {label}
       <input
         id={id}
-        type="password"
+        type={type}
         inputMode="numeric"
         autoComplete={auto}
         dir="ltr"
@@ -72,6 +76,7 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
           setCurrent,
           'current-password',
         )}
+        {field('pin-totp', 'رمز تطبيق المصادقة', totp, setTotp, 'one-time-code', 'text')}
         {field('pin-new', 'الرمز الجديد', next, setNext, 'new-password')}
         {field('pin-confirm', 'أعد كتابة الرمز الجديد', confirm, setConfirm, 'new-password')}
         {error && (
@@ -90,7 +95,9 @@ export function ChangePinForm({ phone, forced }: { phone: string | null; forced:
         )}
         <button
           type="submit"
-          disabled={busy || current.length < 6 || next.length < 6 || confirm.length < 6}
+          disabled={
+            busy || current.length < 6 || totp.length < 6 || next.length < 6 || confirm.length < 6
+          }
           className="h-14 rounded-card bg-primary text-base font-bold text-white hover:bg-primary-pressed disabled:opacity-60"
         >
           {busy ? 'جارٍ التغيير…' : 'تغيير الرمز'}

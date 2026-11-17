@@ -152,6 +152,8 @@ export type Database = {
           delivery_fee_iqd: number;
           id: number;
           max_active_orders: number;
+          max_line_qty: number;
+          max_order_lines: number;
           min_order_iqd: number;
           store_open: boolean;
           updated_at: string;
@@ -162,6 +164,8 @@ export type Database = {
           delivery_fee_iqd?: number;
           id?: number;
           max_active_orders?: number;
+          max_line_qty?: number;
+          max_order_lines?: number;
           min_order_iqd?: number;
           store_open?: boolean;
           updated_at?: string;
@@ -171,6 +175,8 @@ export type Database = {
           delivery_fee_iqd?: number;
           id?: number;
           max_active_orders?: number;
+          max_line_qty?: number;
+          max_order_lines?: number;
           min_order_iqd?: number;
           store_open?: boolean;
           updated_at?: string;
@@ -1166,6 +1172,7 @@ export type Database = {
         Returns: number;
       };
       admin_rate_hit: { Args: { p_admin: string; p_kind: string }; Returns: number };
+      admin_reset_mfa: { Args: { p_user_id: string }; Returns: number };
       admin_save_product: { Args: { p: Json }; Returns: string };
       assign_driver: {
         Args: { p_driver_id: string; p_order_id: string };
@@ -1219,6 +1226,7 @@ export type Database = {
       };
       baghdad_today: { Args: Record<PropertyKey, never>; Returns: string };
       begin_account_deletion: { Args: { p_user_id: string }; Returns: boolean };
+      break_glass_reset_mfa: { Args: { p_user_id: string }; Returns: number };
       claim_push_notifications: {
         Args: { p_limit?: number };
         Returns: {
@@ -1438,6 +1446,8 @@ export type Database = {
           delivery_fee_iqd: number;
           id: number;
           max_active_orders: number;
+          max_line_qty: number;
+          max_order_lines: number;
           min_order_iqd: number;
           store_open: boolean;
           updated_at: string;

@@ -1,6 +1,8 @@
 // تغيير رمز الدخول باللوحة (SPEC-admin §2.6، ADR 0001): نفس مسار تطبيق الزبون.
 // 1) الجديد (مرتين) ← validatePin برقم الشخص، ولا يساوي الحالي (الرمز المؤقت لا يُعاد).
 // 2) signInWithPassword بالرقم والرمز الحالي: تحقق + جلسة جديدة (فلا يُطلب reauthenticate عبر SMS المرفوض).
+// 2ب) T23 C1: الدخول من جديد يرجع الجلسة لـ aal1، وAuth يرفض تغيير كلمة السر لحساب له عامل TOTP
+//     بلا aal2، فرمز تطبيق المصادقة مطلوب قبل التحديث (verifyTotp).
 // 3) updateUser ← قاعدة البيانات تمسح must_change_pin بنفسها (trigger على كلمة السر).
 // 4) signOut({ scope: 'others' }): بقية الأجهزة تخرج. فشله لا يلغي التغيير.
 import {
@@ -11,10 +13,11 @@ import {
   validatePin,
   type MukhdarClient,
 } from '@mukhdar/shared';
+import { MFA_TEXT, normalizeTotpCode, verifyTotp } from './mfa';
 
 export type ChangePinResult =
   | { ok: true; othersSignedOut: boolean }
-  | { ok: false; field: 'current' | 'next'; message: string };
+  | { ok: false; field: 'current' | 'totp' | 'next'; message: string };
 
 export const CHANGE_PIN_TEXT = {
   mismatch: 'الرمزان الجديدان غير متطابقين',
@@ -29,6 +32,7 @@ export async function changePanelPin(
   client: AuthClient,
   phone: string | null,
   current: string,
+  totp: string,
   next: string,
   confirm: string,
 ): Promise<ChangePinResult> {
@@ -42,6 +46,7 @@ export async function changePanelPin(
   }
   const currentPin = normalizePin(current);
   if (nextPin === currentPin) return { ok: false, field: 'next', message: CHANGE_PIN_TEXT.same };
+  if (!normalizeTotpCode(totp)) return { ok: false, field: 'totp', message: MFA_TEXT.invalidCode };
 
   try {
     const signIn = await client.auth.signInWithPassword({ phone: e164, password: currentPin });
@@ -53,6 +58,8 @@ export async function changePanelPin(
         message: e.kind === 'invalid_credentials' ? CHANGE_PIN_TEXT.wrongCurrent : e.message,
       };
     }
+    const mfa = await verifyTotp(client, null, totp);
+    if (!mfa.ok) return { ok: false, field: 'totp', message: mfa.message };
     const { error } = await client.auth.updateUser({ password: nextPin });
     if (error) {
       const code = (error as { code?: string }).code;

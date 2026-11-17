@@ -20,20 +20,26 @@ begin
 end $$;
 
 -- حد الطلبات غير المنتهية للزبون (افتراضي 3) يُرفع للتجهيز؛ 03_place_order يختبره بقيمته الحقيقية.
-update public.app_settings set max_active_orders = 1000;
+-- حدا الطلب (T23 H2: 20 وحدة لكل منتج، 30 منتجاً) يُرفعان لأقصاهما للتجهيز؛ 28_order_caps يختبرهما.
+update public.app_settings set max_active_orders = 1000, max_line_qty = 99, max_order_lines = 50;
 
 create sequence tests.phone_seq start 9647900000000;
 
 -- ---------------------------------------------------------------------
 -- التبديل بين المستخدمين
 -- ---------------------------------------------------------------------
--- مستخدم مسجل حقيقي: role authenticated + JWT sub (مثل طلب من التطبيق)
-create function tests.as_user(p_uid uuid) returns void language plpgsql as $$
+-- مستخدم مسجل حقيقي: role authenticated + JWT sub (مثل طلب من التطبيق). الجلسة aal2 (دخل بالـ PIN ورمز
+-- تطبيق المصادقة؛ T23 C1: الأدمن والموظف يحتاجانها، الزبون والسائق لا يتأثران). as_user_aal1 = الـ PIN وحده.
+create function tests.as_user(p_uid uuid, p_aal text default 'aal2') returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims',
-                     json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+                     json_build_object('sub', p_uid, 'role', 'authenticated', 'aal', p_aal)::text, true);
   perform set_config('role', 'authenticated', true);
 end $$;
+
+create function tests.as_user_aal1(p_uid uuid) returns void language sql as $$
+  select tests.as_user(p_uid, 'aal1')
+$$;
 
 -- زائر غير مسجل
 create function tests.as_anon() returns void language plpgsql as $$
@@ -60,7 +66,7 @@ end $$;
 create function tests.set_uid(p_uid uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims',
-                     json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+                     json_build_object('sub', p_uid, 'role', 'authenticated', 'aal', 'aal2')::text, true);
 end $$;
 
 -- حفظ معرّفات التجهيز بإعداد جلسة محلي (يُقرأ من أي دور، ويُلغى مع المعاملة)

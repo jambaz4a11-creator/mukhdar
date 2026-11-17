@@ -11,7 +11,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertSafeTarget, connect, resolveTarget } from '../lib/db.mjs';
+import { connect, resolveTarget } from '../lib/db.mjs';
 import { STATS_MISMATCH_SQL } from '../lib/demo.mjs';
 import { checkOversell, expectedRaceOutcome, verifyDatabase, verifyReports } from './checks.mjs';
 import {
@@ -23,9 +23,13 @@ import {
   THRESHOLDS,
   classify,
   evaluate,
+  assertLoadDbTarget,
+  confirmProdTarget,
   expDelay,
   http,
   loadEnv,
+  loadTargetMode,
+  upgradeToAal2,
   percentile,
   pick,
   rnd,
@@ -80,9 +84,12 @@ const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`,
 // ---------------------------------------------------------------------
 // الحالة العامة
 // ---------------------------------------------------------------------
-const env = loadEnv();
+// T23 H3: dev افتراضياً؛ الإنتاج فقط بـ --target=prod + تأكيد مكتوب (لا ref إنتاج بقائمة التطوير أبداً)
+const MODE = loadTargetMode(argv);
+const env = loadEnv({ mode: MODE });
+if (MODE === 'prod') await confirmProdTarget(env.ref);
 const target = resolveTarget(['--remote']);
-assertSafeTarget(target);
+assertLoadDbTarget(target, MODE, env.ref);
 const metrics = new Metrics();
 let phase = 'setup';
 let quiesced = false; // بعد انتهاء الفحوص: لا طلبات جديدة (قبل التنظيف الذي يحذف المستخدمين)
@@ -147,6 +154,9 @@ async function signIn(u) {
       u.access = r.json.access_token;
       u.refresh = r.json.refresh_token;
       u.expiresAt = Date.now() + (r.json.expires_in ?? 3600) * 1000;
+      // T23 C1: لوحتا الأدمن والموظف بـ aal2 (تطبيق مصادقة)، كما باللوحة الحقيقية
+      if (u.role === 'admin' || u.role === 'staff')
+        await upgradeToAal2(http, env.base, env.anonKey, u);
       return;
     }
     if (r.status === 429) {

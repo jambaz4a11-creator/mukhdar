@@ -9,6 +9,8 @@ export const LOGIN_PATH = '/login';
 export const NOT_AUTHORIZED_PATH = '/not-authorized';
 /** تغيير رمز الدخول (SPEC-admin §2.6): إجباري برمز مؤقت، ومتاح دائماً من القائمة. */
 export const CHANGE_PIN_PATH = '/change-pin';
+/** المصادقة الثنائية (T23 C1): تسجيل تطبيق المصادقة أول مرة، ثم رمزه بكل دخول. إجبارية قبل أي صفحة. */
+export const MFA_PATH = '/mfa';
 
 /** كل صفحات اللوحة ومن يدخلها. أول جزء من المسار يحدد الصفحة. */
 export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
@@ -24,6 +26,7 @@ export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
   '/settings': ['admin'],
   '/print': ['admin', 'staff'], // إيصال 80mm للطلب (T17)، بلا قائمة
   '/change-pin': ['admin', 'staff'], // تغيير الرمز (مراجعة T16-T19)، بلا قائمة
+  '/mfa': ['admin', 'staff'], // المصادقة الثنائية (T23 C1)، بلا قائمة
 };
 
 export function isPanelRole(role: unknown): role is PanelRole {

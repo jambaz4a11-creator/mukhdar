@@ -86,6 +86,8 @@ describe('validateSettings', () => {
     delivery_fee_iqd: '1000',
     min_order_iqd: '0',
     max_active_orders: '3',
+    max_line_qty: '20',
+    max_order_lines: '30',
     store_open: true,
     closed_message: '',
   };
@@ -96,6 +98,8 @@ describe('validateSettings', () => {
         delivery_fee_iqd: 1000,
         min_order_iqd: 0,
         max_active_orders: 3,
+        max_line_qty: 20,
+        max_order_lines: 30,
         store_open: true,
         closed_message: 'نرجع 8 الصبح',
       },
@@ -125,6 +129,12 @@ describe('validateSettings', () => {
     [{ max_active_orders: '0' }, 'max_active_orders'],
     [{ max_active_orders: '1001' }, 'max_active_orders'],
     [{ max_active_orders: '2.5' }, 'max_active_orders'],
+    // T23 H2: نفس حدود قاعدة البيانات
+    [{ max_line_qty: '0' }, 'max_line_qty'],
+    [{ max_line_qty: '100' }, 'max_line_qty'],
+    [{ max_line_qty: '' }, 'max_line_qty'],
+    [{ max_order_lines: '51' }, 'max_order_lines'],
+    [{ max_order_lines: '0' }, 'max_order_lines'],
     [{ closed_message: 'x'.repeat(201) }, 'closed_message'],
   ] as const)('rejects %p', (patch, field) => {
     const r = validateSettings({ ...base, ...patch });

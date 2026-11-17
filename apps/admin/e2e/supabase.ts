@@ -2,6 +2,7 @@
 // (CI ضد Supabase محلي)، فلا تُعدَّل بيانات mukhdar-dev من الاختبارات المحلية.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PIN } from './accounts';
+import { DEV_TOTP_SECRET, freshTotp } from './totp';
 
 export const ALLOW_WRITES = process.env.E2E_ALLOW_WRITES === '1';
 
@@ -18,7 +19,11 @@ export function anonClient(): SupabaseClient {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-export async function signedInClient(phone: string, pin = PIN): Promise<SupabaseClient> {
+export async function signedInClient(
+  phone: string,
+  pin = PIN,
+  mfaSecret = DEV_TOTP_SECRET,
+): Promise<SupabaseClient> {
   const { url, key } = env();
   const client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -29,6 +34,18 @@ export async function signedInClient(phone: string, pin = PIN): Promise<Supabase
     password: pin,
   });
   if (error) throw error;
+  // T23 C1: حساب له عامل TOTP (الأدمن والموظف) ← aal2 برمز التطبيق، وإلا دوال الدور ترفض
+  const { data: aal } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    const { data: factors, error: fe } = await client.auth.mfa.listFactors();
+    const factorId = factors?.totp[0]?.id;
+    if (fe || !factorId) throw fe ?? new Error(`no verified TOTP factor for ${phone}`);
+    const { error: ve } = await client.auth.mfa.challengeAndVerify({
+      factorId,
+      code: await freshTotp(mfaSecret),
+    });
+    if (ve) throw ve;
+  }
   return client;
 }
 
@@ -58,8 +75,12 @@ export async function placeOrder(note = 'طلب اختبار Playwright'): Promi
       .limit(1);
     const addressId = addr?.[0]?.id as string | undefined;
     if (!addressId) continue;
-    const { data: settings } = await client.from('app_settings').select('min_order_iqd').limit(1);
+    const { data: settings } = await client
+      .from('app_settings')
+      .select('min_order_iqd, max_line_qty')
+      .limit(1);
     const minOrder = Number(settings?.[0]?.min_order_iqd ?? 0);
+    const maxLine = Number(settings?.[0]?.max_line_qty ?? 20); // T23 H2
     const { data: products } = await client
       .from('products')
       .select('id, price_iqd')
@@ -68,7 +89,7 @@ export async function placeOrder(note = 'طلب اختبار Playwright'): Promi
       .limit(1);
     const product = products?.[0] as { id: string; price_iqd: number } | undefined;
     if (!product) throw new Error('no product in stock for e2e');
-    const qty = Math.min(99, Math.max(1, Math.ceil(minOrder / product.price_iqd)));
+    const qty = Math.min(maxLine, Math.max(1, Math.ceil(minOrder / product.price_iqd)));
     const { data, error } = await client.rpc('place_order', {
       p_address_id: addressId,
       p_items: [{ product_id: product.id, qty }],

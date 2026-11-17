@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { NOT_AUTHORIZED_PATH } from '@/lib/access';
+import { MFA_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
 import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 
@@ -7,5 +7,6 @@ import { createClient } from '@/lib/supabase/server';
 export default async function AdminOnlyLayout({ children }: { children: React.ReactNode }) {
   const user = await getPanelUser(await createClient());
   if (user.state !== 'ok' || user.role !== 'admin') redirect(NOT_AUTHORIZED_PATH);
+  if (user.mfaRequired) redirect(MFA_PATH);
   return children;
 }

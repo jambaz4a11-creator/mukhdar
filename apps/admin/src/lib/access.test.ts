@@ -25,6 +25,7 @@ const TABLE: [string, string, boolean, boolean][] = [
   // ليست صفحة بجدول §1: إيصال طباعة الطلب (T17) لمن يرى الطلبات
   ['طباعة الطلب', '/print', true, true],
   ['تغيير الرمز', '/change-pin', true, true],
+  ['المصادقة الثنائية (T23)', '/mfa', true, true],
 ];
 
 describe('canAccess (SPEC-admin §1)', () => {

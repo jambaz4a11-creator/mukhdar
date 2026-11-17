@@ -68,7 +68,7 @@ async function race(actors, fn, role = 'authenticated') {
     try {
       await c.query('begin');
       await c.query(`select set_config('request.jwt.claims', $1, true)`, [
-        JSON.stringify({ sub: actors[i], role }),
+        JSON.stringify({ sub: actors[i], role, aal: 'aal2' }), // T23: الأدمن/الموظف بـ aal2
       ]);
       await c.query(`set local role ${role}`);
       await c.query('select pg_advisory_xact_lock_shared($1)', [BARRIER]);
@@ -183,7 +183,7 @@ try {
   const contested = ids.orders[0];
   await q('begin');
   await q(`select set_config('request.jwt.claims', $1, true)`, [
-    JSON.stringify({ sub: adminId, role: 'authenticated' }),
+    JSON.stringify({ sub: adminId, role: 'authenticated', aal: 'aal2' }),
   ]);
   await q(`select public.set_order_status($1, 'preparing')`, [contested]);
   await q(`select public.set_order_status($1, 'ready')`, [contested]);
@@ -209,7 +209,7 @@ try {
   const raceOrder = ids.orders[1];
   await q('begin');
   await q(`select set_config('request.jwt.claims', $1, true)`, [
-    JSON.stringify({ sub: adminId, role: 'authenticated' }),
+    JSON.stringify({ sub: adminId, role: 'authenticated', aal: 'aal2' }),
   ]);
   await q(`select public.set_order_status($1, 'preparing')`, [raceOrder]);
   await q(`select public.set_order_status($1, 'ready')`, [raceOrder]);
@@ -221,7 +221,7 @@ try {
   const as = async (c, uid) => {
     await c.query('begin');
     await c.query(`select set_config('request.jwt.claims', $1, true)`, [
-      JSON.stringify({ sub: uid, role: 'authenticated' }),
+      JSON.stringify({ sub: uid, role: 'authenticated', aal: 'aal2' }),
     ]);
     await c.query('set local role authenticated');
   };

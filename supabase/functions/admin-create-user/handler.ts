@@ -18,6 +18,7 @@ import {
   readJsonObject,
   requireAdmin,
 } from '../_shared/admin.ts';
+import { withCors } from '../_shared/cors.ts';
 
 export const CREATIONS_PER_HOUR = 20;
 export type CreatableRole = 'staff' | 'driver';
@@ -98,4 +99,12 @@ export function createAdminCreateUserHandler(
     deps.log?.('admin-create-user done', { user_id: created.id, role, by: admin });
     return json(201, { user_id: created.id });
   };
+}
+
+/** ما تخدمه index.ts: المعالج + CORS (OPTIONS والترويسات) بأصول ALLOWED_ORIGINS فقط (T23 H1). */
+export function createAdminCreateUserServer(
+  deps: CreateUserDeps,
+  allowedOrigins: ReadonlySet<string>,
+): (req: Request) => Promise<Response> {
+  return withCors(createAdminCreateUserHandler(deps), allowedOrigins);
 }

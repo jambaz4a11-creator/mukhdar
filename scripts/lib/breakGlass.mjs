@@ -1,7 +1,26 @@
 // مساعدات سكربت الطوارئ scripts/admin-break-glass.mjs (قابلة للاختبار بلا شبكة: breakGlass.test.mjs).
 import crypto from 'node:crypto';
+import { DEV_PROJECT_REFS } from './projects.mjs';
 
-export const DEV_PROJECT_REF = 'ghcohlrzvehtcettaaiu'; // mukhdar-dev
+export const DEV_PROJECT_REF = DEV_PROJECT_REFS[0]; // mukhdar-dev (T23 H3: من projects.mjs)
+
+/**
+ * الوضع من الوسائط (T23 C1): pin (افتراضي، كما كان) | mfa (المصادقة الثنائية فقط، بلا رمز جديد) | both.
+ * يرجع { phone, mode } أو { error }.
+ */
+export function parseArgs(argv) {
+  const flags = argv.filter((a) => a.startsWith('--'));
+  const rest = argv.filter((a) => !a.startsWith('--'));
+  const known = new Set(['--mfa-only', '--with-mfa']);
+  const bad = flags.find((f) => !known.has(f));
+  if (bad) return { error: `unknown option ${bad}` };
+  if (flags.includes('--mfa-only') && flags.includes('--with-mfa')) {
+    return { error: 'use --mfa-only OR --with-mfa, not both' };
+  }
+  if (rest.length !== 1) return { error: 'exactly one admin phone number is required' };
+  const mode = flags.includes('--mfa-only') ? 'mfa' : flags.includes('--with-mfa') ? 'both' : 'pin';
+  return { phone: rest[0], mode };
+}
 
 /** 07XXXXXXXXX | +9647XXXXXXXXX | 9647XXXXXXXXX (أرقام عربية-هندية مقبولة) ← 9647XXXXXXXXX (كما بـ profiles). */
 export function storedPhone(input) {

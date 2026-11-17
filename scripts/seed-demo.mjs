@@ -9,6 +9,8 @@
 //
 // ينشئ: أدمن، موظف، 3 سائقين، 20 زبوناً بعناوين، و500 طلب موزعة على 30 يوماً.
 // الدخول: رقم المستخدم + DEMO_PIN (scripts/lib/demo.mjs، للتطوير فقط؛ RUNBOOK §6).
+// T23 C1: الأدمن والموظف يحتاجان رمز TOTP؛ لهما عامل مُفعَّل بالسر التجريبي DEV_TOTP_SECRET
+// (scripts/lib/totp.mjs، أو E2E_TOTP_SECRET) حتى تدخل e2e بـ aal2. للتطوير فقط: هذا السكربت يرفض الإنتاج.
 // الطلبات وتحويلاتها تمر حصراً عبر place_order / set_order_status / accept_order /
 // assign_driver / rate_order (لا إدخال مباشر)، لذلك daily_stats محسوبة بنفس منطق الإنتاج.
 // بعدها تُرجَع الطوابع الزمنية لليوم المقصود، وتُنقل مساهمة اليوم من daily_stats لذلك اليوم.
@@ -21,6 +23,7 @@ import {
   STATS_MISMATCH_SQL,
   phone,
 } from './lib/demo.mjs';
+import { DEV_TOTP_SECRET } from './lib/totp.mjs';
 import { uploadProductImages } from './lib/images.mjs';
 
 const args = process.argv.slice(2);
@@ -106,6 +109,12 @@ with pw as (
 )
 select id, phone from u`;
 
+// T23 C1: عامل TOTP مُفعَّل لحسابي الأدمن والموظف (السر التجريبي؛ GoTrue يقبل السر غير المشفّر).
+const DEMO_MFA_SQL = `
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
+select gen_random_uuid(), u, 'لوحة المخضر (dev)', 'totp', 'verified', now(), now(), $2::text
+  from unnest($1::uuid[]) as u`;
+
 // يُنشأ لهذه الجلسة فقط (pg_temp)، ولا يبقى بقاعدة البيانات.
 // ينفّذ مواصفات طلبات يوم كامل عبر دوال RPC، كل طلب بمعاملة فرعية مستقلة.
 const RUNNER_SQL = `
@@ -115,11 +124,11 @@ declare
 begin
   for s in select * from jsonb_array_elements(p_specs) loop
     begin
-      perform set_config('request.jwt.claims', json_build_object('sub', s ->> 'customer', 'role', 'authenticated')::text, true);
+      perform set_config('request.jwt.claims', json_build_object('sub', s ->> 'customer', 'role', 'authenticated', 'aal', 'aal2')::text, true);
       r := public.place_order((s ->> 'address')::uuid, s -> 'items', gen_random_uuid(), s ->> 'note');
       v_id := (r ->> 'order_id')::uuid;
       for st in select * from jsonb_array_elements(s -> 'steps') loop
-        perform set_config('request.jwt.claims', json_build_object('sub', st ->> 'actor', 'role', 'authenticated')::text, true);
+        perform set_config('request.jwt.claims', json_build_object('sub', st ->> 'actor', 'role', 'authenticated', 'aal', 'aal2')::text, true);
         case st ->> 'action'
           when 'status' then perform public.set_order_status(v_id, (st ->> 'arg')::public.order_status, st ->> 'reason');
           when 'accept' then perform public.accept_order(v_id);
@@ -273,6 +282,8 @@ async function seedDemo() {
   ]);
   const admin = people.find((p) => p.role === 'admin');
   const staff = people.find((p) => p.role === 'staff');
+  // عامل TOTP مُفعَّل (كما يكتبه GoTrue بعد التحقق) بالسر التجريبي: dev والمحلي فقط
+  await q(DEMO_MFA_SQL, [[admin.id, staff.id], process.env.E2E_TOTP_SECRET || DEV_TOTP_SECRET]);
   const drivers = people.filter((p) => p.role === 'driver');
   const customers = people.filter((p) => p.role === 'customer');
 
@@ -302,7 +313,8 @@ async function seedDemo() {
   );
   console.log(
     `sign in (dev only): admin 0${people[0].phone.slice(3)}, staff 0${people[1].phone.slice(3)}, ` +
-      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with PIN ${DEMO_PIN}`,
+      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with PIN ${DEMO_PIN}; ` +
+      `admin/staff 2FA: the dev-only TOTP secret (scripts/lib/totp.mjs)`,
   );
 
   const { rows: products } = await q('select id from public.products where is_active');
@@ -440,7 +452,7 @@ async function seedDemo() {
     // تعبئة صباحية: كل منتج رصيده أقل من 60 يُكمَّل لـ 150 (عبر adjust_stock، تسوية موجبة بملاحظة:
     // لا تغيّر سعر الشراء، بخلاف 'purchase' التي تتطلب سعراً منذ T18)
     await q(`select set_config('request.jwt.claims', $1, true)`, [
-      JSON.stringify({ sub: admin.id, role: 'authenticated' }),
+      JSON.stringify({ sub: admin.id, role: 'authenticated', aal: 'aal2' }),
     ]);
     await q(
       `select public.adjust_stock(product_id, 150 - qty, 'adjust', 'تعبئة صباحية (عرض)') from public.stock where qty < 60`,

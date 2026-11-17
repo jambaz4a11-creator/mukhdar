@@ -6,10 +6,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
   CHANGE_PIN_PATH,
   LOGIN_PATH,
+  MFA_PATH,
   NOT_AUTHORIZED_PATH,
   canAccess,
   isKnownPanelPath,
   isPublicPath,
+  safeNext,
 } from './lib/access';
 import { readPublicEnv } from './lib/env';
 import { getPanelUser } from './lib/panelUser';
@@ -39,9 +41,10 @@ export async function proxy(request: NextRequest) {
   };
 
   if (pathname === LOGIN_PATH) {
-    return user.state === 'ok'
-      ? withCookies(NextResponse.redirect(new URL('/', request.url)))
-      : response;
+    if (user.state !== 'ok') return response;
+    return withCookies(
+      NextResponse.redirect(new URL(user.mfaRequired ? MFA_PATH : '/', request.url)),
+    );
   }
   if (user.state === 'anonymous') {
     if (pathname === NOT_AUTHORIZED_PATH) {
@@ -56,6 +59,18 @@ export async function proxy(request: NextRequest) {
     return withCookies(
       NextResponse.rewrite(new URL(NOT_AUTHORIZED_PATH, request.url), { status: 403 }),
     );
+  }
+  // المصادقة الثنائية أولاً (T23 C1): بالـ PIN وحده (aal1) كل صفحة ← /mfa (الخادم يرفض دوال الدور أصلاً)
+  if (user.mfaRequired) {
+    if (pathname === MFA_PATH) return response;
+    const mfa = new URL(MFA_PATH, request.url);
+    if (pathname !== '/') mfa.searchParams.set('next', pathname + search);
+    return withCookies(NextResponse.redirect(mfa));
+  }
+  if (pathname === MFA_PATH) {
+    // اكتملت: لا داعي للصفحة
+    const next = safeNext(request.nextUrl.searchParams.get('next'));
+    return withCookies(NextResponse.redirect(new URL(next === MFA_PATH ? '/' : next, request.url)));
   }
   // رمز مؤقت: كل صفحة ← تغيير الرمز (الخادم يرفض دوال الدور أصلاً حتى يُغيَّر)
   if (user.mustChangePin && pathname !== CHANGE_PIN_PATH) {

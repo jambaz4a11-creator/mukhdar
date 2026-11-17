@@ -102,13 +102,15 @@ export interface PlaceOrderFailure {
   retryable: boolean;
 }
 
-/** رسالة عربية لكل رمز من place_order (من errors.ts)، مع تفاصيل الحد الأدنى إن وُجدت. */
+/** رسالة عربية لكل رمز من place_order (من errors.ts)، مع تفاصيل الحد (الأدنى، أو حدّا الطلب T23 H2) إن وُجدت. */
 export function placeOrderMessage(code: ErrorCode | null, detail: string | null): string {
   if (code === null) return ar.checkout.sendFailed;
   const base = ERROR_MESSAGES[code];
-  if (code === 'BELOW_MIN_ORDER' && detail && /^\d+$/.test(detail)) {
-    return `${base} (${formatIQD(Number(detail))})`;
-  }
+  const limit = detail && /^\d+$/.test(detail) ? Number(detail) : null;
+  if (limit === null) return base;
+  if (code === 'BELOW_MIN_ORDER') return `${base} (${formatIQD(limit)})`;
+  if (code === 'QTY_LIMIT') return `${base} ${ar.checkout.qtyLimit(limit)}`;
+  if (code === 'TOO_MANY_ITEMS') return `${base} ${ar.checkout.linesLimit(limit)}`;
   return base;
 }
 

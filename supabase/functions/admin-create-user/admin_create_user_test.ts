@@ -12,10 +12,12 @@ const STAFF = '00000000-0000-4000-8000-000000000003';
 const FLAGGED = '00000000-0000-4000-8000-000000000007';
 const NEW_ID = '00000000-0000-4000-8000-0000000000aa';
 
-const JWTS: Record<string, string> = {
-  'jwt-admin': ADMIN,
-  'jwt-staff': STAFF,
-  'jwt-flagged': FLAGGED,
+// الرمز ← المستخدم ومستوى الجلسة (aal2 = PIN + تطبيق المصادقة، T23 C1)
+const JWTS: Record<string, { id: string; aal: string | null }> = {
+  'jwt-admin': { id: ADMIN, aal: 'aal2' },
+  'jwt-admin-aal1': { id: ADMIN, aal: 'aal1' },
+  'jwt-staff': { id: STAFF, aal: 'aal2' },
+  'jwt-flagged': { id: FLAGGED, aal: 'aal2' },
 };
 const PROFILES: Record<string, ProfileRow> = {
   [ADMIN]: { role: 'admin', is_active: true, phone: '9647000000001' },
@@ -30,7 +32,7 @@ function setup(overrides: Partial<CreateUserDeps> = {}, count = 1) {
   const calls: string[] = [];
   const logs: string[] = [];
   const deps: CreateUserDeps = {
-    getUserId: (jwt) => Promise.resolve(JWTS[jwt] ?? null),
+    getUser: (jwt) => Promise.resolve(JWTS[jwt] ?? null),
     getProfile: (id) => Promise.resolve(PROFILES[id] ?? null),
     rateHit() {
       calls.push('rate');
@@ -129,6 +131,17 @@ Deno.test(
     assert.deepEqual(over.calls, ['rate']); // سُجّلت المحاولة، ولا حساب أُنشئ
     const limit = setup({}, CREATIONS_PER_HOUR);
     await expectResponse(await limit.handler(post(VALID)), 201, { user_id: NEW_ID });
+  },
+);
+
+Deno.test(
+  'admin-create-user: an admin without a 2FA (aal2) session → 403 MFA_REQUIRED, nothing changes (T23 C1)',
+  async () => {
+    const { handler, calls } = setup();
+    await expectResponse(await handler(post(VALID, 'Bearer jwt-admin-aal1')), 403, {
+      error: 'MFA_REQUIRED',
+    });
+    assert.deepEqual(calls, []);
   },
 );
 

@@ -180,6 +180,9 @@ export const ar = {
     retry: glossary.retry,
     sendFailed: `تعذّر الإرسال، ${glossary.tryAgain}`,
     emptyCart: 'السلة فارغة',
+    // T23 H2: تفصيل حدّي الطلب (الحد من app_settings). 20 وحدة = 10 كيلو للخضار والفواكه (نص كيلو).
+    qtyLimit: (n: number) => `(الحد ${n} لكل منتج، يعني ${n / 2} كيلو للخضار والفواكه)`,
+    linesLimit: (n: number) => `(الحد ${n} منتجاً بالطلب)`,
   },
   order: {
     title: (n: number | string) => `الطلب #${n}`,

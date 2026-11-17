@@ -553,6 +553,14 @@ describe('checkout', () => {
     ['NOT_CUSTOMER', undefined, ERROR_MESSAGES.NOT_CUSTOMER],
     ['EMPTY_CART', undefined, ERROR_MESSAGES.EMPTY_CART],
     ['INVALID_QTY', undefined, ERROR_MESSAGES.INVALID_QTY],
+    // T23 H2: حدّا الطلب برسالة عربية واضحة فيها الحد
+    [
+      'QTY_LIMIT',
+      '20',
+      `${ERROR_MESSAGES.QTY_LIMIT} (الحد 20 لكل منتج، يعني 10 كيلو للخضار والفواكه)`,
+    ],
+    ['TOO_MANY_ITEMS', '30', `${ERROR_MESSAGES.TOO_MANY_ITEMS} (الحد 30 منتجاً بالطلب)`],
+    ['TOO_MANY_ITEMS', undefined, ERROR_MESSAGES.TOO_MANY_ITEMS],
   ])(
     '%s shows its Arabic message and is not offered as a retry',
     async (code, details, message) => {

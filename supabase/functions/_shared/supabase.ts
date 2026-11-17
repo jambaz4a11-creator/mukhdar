@@ -1,7 +1,11 @@
 // عميل الخدمة وتنفيذ AdminAuthDeps للدوال الإدارية (T19). SUPABASE_URL وSUPABASE_SERVICE_ROLE_KEY
 // تحقنهما Supabase تلقائياً ولا يغادران الخادم.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
-import type { AdminAuthDeps, ProfileRow } from './admin.ts';
+import { type AdminAuthDeps, jwtAal, type ProfileRow } from './admin.ts';
+import { parseAllowedOrigins } from './cors.ts';
+
+/** سر الدالة ALLOWED_ORIGINS (T23 H1): أصول لوحة الأدمن المسموحة، مفصولة بفواصل. */
+export const allowedOrigins = () => parseAllowedOrigins(Deno.env.get('ALLOWED_ORIGINS'));
 
 export function serviceClient(): SupabaseClient {
   const url = Deno.env.get('SUPABASE_URL');
@@ -12,10 +16,11 @@ export function serviceClient(): SupabaseClient {
 
 export function adminAuthDeps(admin: SupabaseClient): AdminAuthDeps {
   return {
-    async getUserId(jwt) {
+    async getUser(jwt) {
+      // getUser يتحقق من الرمز (التوقيع والجلسة) عند Auth؛ بعدها فقط نقرأ aal من نفس الرمز
       const { data, error } = await admin.auth.getUser(jwt);
       if (error || !data.user) return null;
-      return data.user.id;
+      return { id: data.user.id, aal: jwtAal(jwt) };
     },
     async getProfile(userId) {
       const { data, error } = await admin

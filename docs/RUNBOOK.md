@@ -7,7 +7,7 @@
 | البيئة | اسم المشروع | ref | المنطقة | الخطة |
 |---|---|---|---|---|
 | تطوير | `mukhdar-dev` | `ghcohlrzvehtcettaaiu` | `ap-southeast-1` (سنغافورة) | مجانية |
-| إنتاج | `mukhdar-prod` (الاسم الإلزامي عند الإنشاء؛ لم يُنشأ بعد) | - (مكانه المحجوز `PROD_PROJECT_REFS` بـ `scripts/lib/sb.mjs`) | **يجب** `eu-central-1` (فرانكفورت) | Pro |
+| إنتاج | `mukhdar-prod` (الاسم الإلزامي عند الإنشاء؛ لم يُنشأ بعد) | - (مكانه المحجوز `PROD_PROJECT_REFS` بـ `scripts/lib/projects.mjs`) | **يجب** `eu-central-1` (فرانكفورت) | Pro |
 
 - **مشروع التطوير بسنغافورة** لأنه أُنشئ هناك مسبقاً. هذا مقبول للتطوير فقط.
 - **مشروع الإنتاج يجب أن يُنشأ بمنطقة أوروبية: فرانكفورت (`eu-central-1`)**، لأنها أقرب للعراق وزمن الاستجابة منها أقل بكثير من سنغافورة. المنطقة لا تتغير بعد إنشاء المشروع، فانتبه لها وقت الإنشاء.
@@ -18,7 +18,7 @@
 نعمل على المشروع السحابي مباشرة، ولا نشغّل Supabase محلياً (توفيراً للموارد على ويندوز).
 الـ CLI مثبت كـ devDependency، ونستدعيه **فقط** عبر الحارس: `pnpm sb <أمر supabase>` (مثلاً `pnpm sb db push --remote --dry-run`). لا تستعمل `pnpm exec supabase` ولا `npx supabase` للعمل السحابي.
 
-> **حارس `pnpm sb` (مراجعة C، H1):** يقرأ المشروع المربوط (`supabase/.temp/linked-project.json`) ويصنّفه بقائمتين صريحتين (`DEV_PROJECT_REFS` بـ `scripts/lib/db.mjs`، `PROD_PROJECT_REFS` بـ `scripts/lib/sb.mjs`)، ويطبع أولاً لافتة ملونة: `TARGET: DEV mukhdar-dev (…)` أو `TARGET: *** PRODUCTION *** mukhdar-prod (…)`. أي ref خارج القائمتين **مرفوض دائماً**؛ وref الإنتاج الحالي **placeholder** فيُرفض كل شيء عليه إلى أن يُسجَّل الـ ref الحقيقي. على الإنتاج: الأوامر القارئة فقط (`--dry-run`، `migration list`، `functions list`، `db advisors`، `gen types`…) تعمل مباشرة؛ أي أمر يغيّر شيئاً يحتاج `MUKHDAR_TARGET=prod` **وكتابة الـ ref يدوياً** بطرفية حقيقية، ويُحذف `--yes` فيبقى سؤال الـ CLI نفسه. وأي `--project-ref`/`--remote=<ref>` يخالف المشروع المربوط يُرفض.
+> **حارس `pnpm sb` (مراجعة C، H1):** يقرأ المشروع المربوط (`supabase/.temp/linked-project.json`) ويصنّفه بقائمتين صريحتين (`DEV_PROJECT_REFS` و`PROD_PROJECT_REFS`، كلتاهما بـ `scripts/lib/projects.mjs` منذ T23 H3؛ أي ref بالقائمتين يوقف كل السكربتات)، ويطبع أولاً لافتة ملونة: `TARGET: DEV mukhdar-dev (…)` أو `TARGET: *** PRODUCTION *** mukhdar-prod (…)`. أي ref خارج القائمتين **مرفوض دائماً**؛ وref الإنتاج الحالي **placeholder** فيُرفض كل شيء عليه إلى أن يُسجَّل الـ ref الحقيقي. على الإنتاج: الأوامر القارئة فقط (`--dry-run`، `migration list`، `functions list`، `db advisors`، `gen types`…) تعمل مباشرة؛ أي أمر يغيّر شيئاً يحتاج `MUKHDAR_TARGET=prod` **وكتابة الـ ref يدوياً** بطرفية حقيقية، ويُحذف `--yes` فيبقى سؤال الـ CLI نفسه. وأي `--project-ref`/`--remote=<ref>` يخالف المشروع المربوط يُرفض.
 >
 > **تنبيه:** كلمة `· production` التي يطبعها الـ CLI (مثلاً `Target: project mukhdar-dev (…) · production`) تعني "الفرع الافتراضي" لأي مشروع، **وليست البيئة**. لا تعتمد عليها؛ اعتمد على لافتة `pnpm sb`.
 
@@ -107,6 +107,9 @@ pnpm sb db advisors --remote
 5. Authentication ← **Rate Limits** ← "sign-ups and sign-ins": **30 كل 5 دقائق لكل IP** (الافتراضي). **لا تخفّضه**: شبكات العراق تشارك IP واحداً بين زبائن كثيرين (CGNAT).
 6. **الإنتاج فقط:** Sign In / Providers ← **Email: Disabled** (لا حسابات بالبريد ولا رسائل). بالتطوير يبقى مفعّلاً لاختبار `it:delete-account`.
 7. لا Test OTPs بأي مشروع (احذفها إن وُجدت): كانت رموزاً ثابتة يدخل بها أي أحد.
+8. **المصادقة الثنائية (T23 C1، قرار المالك 2026-11-17):** Authentication ← **Multi-Factor** ← **TOTP (App Authenticator): Enabled** (التسجيل والتحقق). مجاني، بلا SMS. **إلزامي للأدمن والموظف** بقاعدة البيانات (`current_user_role()` يطلب `aal2`، migration `20261130000001`)؛ السائق والزبون بلا تغيير. **الترتيب:** فعّل TOTP **قبل** تطبيق `20261130000001` (وإلا لا يستطيع أي أدمن التسجيل ويُقفل عن اللوحة حتى تفعيله). Phone MFA وWebAuthn: **OFF**.
+
+**المصادقة الثنائية باللوحة (T23 C1):** أول دخول للأدمن أو الموظف بعد التفعيل ← صفحة `/mfa`: يمسح رمز QR بتطبيق مصادقة (Google Authenticator، Microsoft Authenticator، …) أو يكتب المفتاح اليدوي، ثم يكتب الرمز من 6 أرقام. كل دخول بعدها: الهاتف + PIN ثم رمز التطبيق. تغيير الـ PIN يطلب رمز التطبيق أيضاً. **حسابا العرض على التطوير والمكدس المحلي:** `seed:demo` يسجّل للأدمن `07000000001` والموظف `07000000002` عاملاً بسر **تجريبي ثابت** `MUKHDARDEVONLYTOTPSECRETNOTPROD2` (`scripts/lib/totp.mjs`، أو `E2E_TOTP_SECRET`) لتدخل اختبارات e2e بـ aal2؛ أضفه بتطبيق المصادقة يدوياً للدخول بهما من المتصفح. **منشور بالـ repo: تطوير والمكدس المحلي فقط، أبداً الإنتاج** (`seed:demo` يرفض غير التطوير). حسابا العرض الحاليان على mukhdar-dev أُنشئا قبل T23 بلا عامل: يسجّلان من `/mfa` بأول دخول (أو `seed:reset` ثم `seed:demo` بموافقة، فيأخذان السر التجريبي).
 
 **التحقق بعد الضبط (التطوير):** `pnpm seed:reset -- --remote && pnpm seed:demo -- --remote` (بموافقة)، ثم الدخول من التطبيق بأدمن العرض `07000000001` والرمز `DEMO_PIN` (أدناه)؛ ومحاولة `signInWithOtp` يجب أن تفشل.
 
@@ -129,10 +132,13 @@ pnpm sb db advisors --remote
    ```sql
    select id, phone, role from public.profiles;
    ```
-3. **أدمن نسي رمزه** (إعادة الضبط من اللوحة لا تشمل حسابات الأدمن، SPEC-admin §2.6): صاحب المشروع من **جهازه** بالسكربت المحلي، لا من SQL Editor ولا بأي رسالة:
+3. **أدمن نسي رمزه، أو فقد تطبيق المصادقة** (إعادة الضبط من اللوحة لا تشمل حسابات الأدمن، SPEC-admin §2.6): صاحب المشروع من **جهازه** بالسكربت المحلي، لا من SQL Editor ولا بأي رسالة:
    ```bash
-   pnpm admin:break-glass-reset 07XXXXXXXXX
+   pnpm admin:break-glass-reset 07XXXXXXXXX              # نسي الـ PIN (التطبيق معه)
+   pnpm admin:break-glass-reset 07XXXXXXXXX --mfa-only   # فقد هاتف/تطبيق المصادقة (يعرف الـ PIN)
+   pnpm admin:break-glass-reset 07XXXXXXXXX --with-mfa   # الاثنان
    ```
+   - **المصادقة الثنائية (T23 C1):** `--mfa-only` و`--with-mfa` يستدعيان `break_glass_reset_mfa` (service_role، أدمن فقط): تحذف عوامل TOTP للأدمن، تبطل كل جلساته، وتكتب `admin_audit` (`action = 'mfa_reset'`، `actor` فارغ، `after.via = 'break_glass'`). `--mfa-only` لا يغيّر الـ PIN ولا يطبع شيئاً سرياً. أول دخول بعدها ← `/mfa` يسجّل تطبيقاً جديداً. **لا يمكن** إعادة مصادقة أدمن من اللوحة (`ADMIN_ACCOUNT`). تحقق قبل التشغيل أن الطلب من صاحب الحساب نفسه بمكالمة (لا رسالة).
    - **الإعداد مرة واحدة:** بـ `.env.local` بجذر المشروع (مُتجاهل بـ git، لا يُنسخ لمكان آخر؛ القالب `.env.example`) سطران: `SUPABASE_SERVICE_ROLE_KEY=<مفتاح service_role>` و`SUPABASE_URL=https://<ref>.supabase.co` (أو مرّر `SUPABASE_URL` بالبيئة). السكربت **يرفض العمل** إن غاب أحدهما. المفتاح لا يُستعمل بأي مكان آخر (ولا بالمتصفح ولا بالتطبيقات).
    - يطبع المشروع المستهدف والرقم ويسأل `[y/N]`؛ مشروع غير mukhdar-dev يتطلب كتابة معرّفه كاملاً أولاً. **يقبل حساب أدمن فقط** (غيره: "إعادة ضبط رمز الدخول" من اللوحة).
    - يولّد رمزاً عشوائياً من 6 أرقام، يضبطه، **يبطل كل جلسات الحساب**، يضبط `must_change_pin` (يُجبر على تغييره أول دخول)، ويكتب سطر تدقيق `pin_resets` بـ `kind = 'break_glass'` (بلا `reset_by`). الرمز يظهر **مرة واحدة على الشاشة فقط** ويُمسح بـ Enter؛ لا يُكتب بأي ملف ولا سجل ولا بسطر الأوامر.
@@ -141,13 +147,14 @@ pnpm sb db advisors --remote
    - **التحقق (التطوير):** `pnpm it:break-glass` ينشئ أدمناً مؤقتاً (بادئة 9647007) ويشغّل السكربت عملياً ثم يحذف كل شيء.
    - **آخر ملاذ بلا جهاز المالك:** لا SQL بنص الرمز. من جهاز المالك فقط، بنفس السكربت. (قديماً: `update auth.users set encrypted_password = crypt(...)` بـ SQL Editor؛ أُلغي لأنه يترك الرمز بسجل الاستعلامات ولا يدقّق ولا يبطل الجلسات إلا بسطر ثانٍ.)
 4. نسيان رمز زبون أو موظف أو سائق: من لوحة الأدمن، "إعادة ضبط رمز الدخول" (`admin-reset-pin`، T19).
+5. **موظف فقد هاتف تطبيق المصادقة (T23 C1):** بعد التحقق منه بمكالمة، الأدمن: الموظفون والسائقون ← سطر الموظف ← **"إعادة ضبط المصادقة الثنائية"** ← تأكيد. يحذف عوامله (`admin_reset_mfa`)، يخرجه من كل الأجهزة، ويُسجَّل بـ `admin_audit` (`mfa_reset`، `after.via = 'panel'`). أول دخول بعدها يسجّل تطبيقاً جديداً. إن نسي الـ PIN أيضاً: "تصفير الرمز" كذلك (مستقلان). السائق والزبون بلا مصادقة ثنائية.
 
 ## 7b) اختبار الحمل (T22)
 `pnpm load:run` (كامل ~55 دقيقة؛ `-- --smoke` للفحص السريع) و`pnpm load:cleanup` عند انقطاعه. على mukhdar-dev فقط، ببيانات مؤقتة تُحذف وتُثبت بلقطة قبل/بعد. التفاصيل: `scripts/load/README.md`، النتائج: `docs/reviews/load-test-T22.md`.
 
 ## 8) اختبارات قاعدة البيانات (pgTAP، T03)
 
-الملفات: `supabase/tests/NN_*.sql` (27 ملفاً، 1036 فحصاً بعد جلسة D؛ `27_access_matrix.sql` مصفوفة الأدوار × دوال T20/T25/T26)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
+الملفات: `supabase/tests/NN_*.sql` (29 ملفاً، 1097 فحصاً بعد T23؛ `27_access_matrix.sql` مصفوفة الأدوار × دوال T20/T25/T26، `28_mfa_aal.sql` كل دالة أدمن/موظف بـ aal1 مقابل aal2، `29_order_caps.sql` حدّا الطلب)، والدوال المساعدة `supabase/tests/_helpers.sql`، والمشغّل `scripts/db-test.mjs`.
 
 - كل ملف يعمل داخل `BEGIN ... ROLLBACK`: امتداد `pgtap` ومخطط `tests` وبيانات الاختبار كلها تُنشأ داخل المعاملة وتُلغى. **لا يبقى شيء بقاعدة البيانات**، ولا حاجة لتفعيل pgtap بشكل دائم.
 - لا نستخدم `supabase test db` محلياً لأنه يحتاج Docker.
@@ -179,6 +186,7 @@ pnpm db:test:remote --prelude=supabase/migrations/<new>.sql   # migration غير
 مثل الإنتاج المقصود: الدخول **بالهاتف + PIN فقط** (email معطّل، تأكيد الهاتف معطّل، `[auth.hook.send_sms]` يرفض كل رسالة، بلا Test OTPs). هذا للمكدس المحلي فقط؛ إعدادات Auth السحابية تُدار من اللوحة (§6).
 
 ### كتابة اختبار جديد
+- `tests.as_user(uid)` تحاكي جلسة **aal2** (افتراضياً، T23)، و`tests.as_user_aal1(uid)` جلسة الـ PIN وحده.
 - `tests.new_user(role)`، `tests.new_product(price, stock, active, cost)`، `tests.new_address(customer)`، `tests.place(customer, items)`، `tests.order_in(status, customer, driver)` للتجهيز (بدور postgres).
 - `tests.as_user(uid)` / `tests.as_anon()` / `tests.as_postgres()` للتبديل. `tests.remember(name, id)` و `tests.id(name)` لحفظ المعرّفات بين الأدوار.
 - `tests.try(sql)` يرجع `OK` أو رمز الخطأ، و`tests.affected(sql)` يرجع عدد الصفوف المتأثرة (لاختبار RLS على update/delete).
@@ -378,7 +386,7 @@ select bucket, hits, window_start from private.signup_rate_limits
 **التشغيل محلياً (ضد mukhdar-dev):**
 1. انسخ `apps/admin/.env.example` إلى `apps/admin/.env.local` وضع `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (نفس قيم `EXPO_PUBLIC_*` بتطبيق الزبون). مفتاح خادم (`service_role` / `sb_secret_`) يوقف اللوحة.
 2. `pnpm install` ثم `pnpm --filter @mukhdar/admin dev` ← http://localhost:3000.
-3. الدخول بحسابات العرض (تطوير فقط) والرمز `DEMO_PIN` = `482915` (§6): أدمن `07000000001`، موظف `07000000002`. (سائق `07000000011` وزبون `07000000101` يرون "غير مصرح".)
+3. الدخول بحسابات العرض (تطوير فقط) والرمز `DEMO_PIN` = `482915` (§6): أدمن `07000000001`، موظف `07000000002`، ثم رمز تطبيق المصادقة (§6، T23). (سائق `07000000011` وزبون `07000000101` يرون "غير مصرح".)
 
 **الاختبارات:** `pnpm --filter @mukhdar/admin test` (وحدة)، و`pnpm --filter @mukhdar/admin exec playwright install chromium` مرة واحدة ثم `pnpm --filter @mukhdar/admin test:e2e` (يبني اللوحة ويشغّلها على المنفذ 3100، يدخل بحسابات العرض؛ محلياً ضد المشروع بـ `.env.local`). بـ CI: job `admin-e2e` ضد Supabase محلي + `seed:demo`. حد Auth لكل IP (30/5 دقائق): التشغيل الكامل يدخل ~8 مرات.
 
@@ -404,10 +412,15 @@ pnpm sb db push --remote --yes          # migration 20261122000001 (update_app_s
 pnpm sb functions deploy admin-reset-pin --remote=<ref> --use-api --yes     # verify_jwt = true
 pnpm sb functions deploy admin-create-user --remote=<ref> --use-api --yes   # verify_jwt = true
 ```
-لا أسرار جديدة: `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase. اللوحة تستدعي الدالتين بجلسة الأدمن (`functions.invoke`).
+`SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase. **سر واحد (T23 H1):** `ALLOWED_ORIGINS` = أصول اللوحة المسموحة لـ CORS، مفصولة بفواصل، **بلا `*`** وبلا `/` أخيرة. Supabase المستضاف لا يضيف CORS للدوال، فالدالة ترد على الـ preflight بنفسها (`_shared/cors.ts`)؛ بدون السر لا يستطيع أي متصفح استدعاءها (الـ preflight ← 403):
+```sh
+pnpm sb secrets set ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 --project-ref <ref>   # التطوير
+pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain> --project-ref <prod-ref>                    # الإنتاج (§17)
+```
+اللوحة تستدعي الدالتين بجلسة الأدمن (`functions.invoke`)، **بجلسة aal2** (T23 C1؛ وإلا `MFA_REQUIRED` 403). فحص سريع بعد النشر: `curl -i -X OPTIONS -H "Origin: <أصل اللوحة>" -H "Access-Control-Request-Method: POST" https://<ref>.supabase.co/functions/v1/admin-reset-pin` ← 204 و`access-control-allow-origin: <أصل اللوحة>`؛ وبأصل آخر ← 403 بلا الترويسة.
 
 ### اختبار التكامل (`pnpm it:admin-users`، مشروع التطوير فقط)
-ينشئ أدمن وزبوناً مؤقتين (البادئة `9647007`) ويختبر الدالتين المنشورتين: الرفض (401/403/`ADMIN_ACCOUNT`/`PIN_INVALID`)، بعد التصفير يفشل الرمز القديم وينجح الجديد ويسقط رمز التحديث القديم، وسائق جديد يدخل برمزه المؤقت ويظهر بـ `list_drivers`، والرقم المكرر ← `PHONE_TAKEN`. يحذف كل الحسابات وسطور `pin_resets`/`user_creations` التي أنشأها حتى عند الفشل.
+ينشئ أدمن وزبوناً مؤقتين (البادئة `9647007`) ويختبر الدالتين المنشورتين: (T23) الـ preflight من `http://localhost:3000` (أو `IT_PANEL_ORIGIN`) ← 2xx بالأصل نفسه، وأصل غريب ← بلا ترويسة؛ الأدمن بالـ PIN وحده ← `MFA_REQUIRED`، ثم يسجّل TOTP ويرتفع لـ aal2؛ الرفض (401/403/`ADMIN_ACCOUNT`/`PIN_INVALID`)، بعد التصفير يفشل الرمز القديم وينجح الجديد ويسقط رمز التحديث القديم، وسائق جديد يدخل برمزه المؤقت ويظهر بـ `list_drivers`، والرقم المكرر ← `PHONE_TAKEN`. يحذف كل الحسابات وسطور `pin_resets`/`user_creations` التي أنشأها حتى عند الفشل.
 
 ### التشغيل
 - **نسيان الرمز:** الشخص يراسل واتساب المتجر **من نفس الرقم المسجّل** ← الأدمن: الموظفون والسواق ← بحث بالرقم ← "تصفير الرمز" ← رمز عشوائي ← يظهر مرة واحدة ← "إرسال بالواتساب". التصفير يطلّعه من كل الأجهزة (رمز الوصول الحالي يبقى ≤ ساعة).
@@ -434,12 +447,12 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 - **طلب بالطريق والبضاعة ضاعت/تلفت:** إلغاء (أدمن) مع خانة "البضاعة طلعت مع السائق" ← تُسجَّل هدراً بكلفة الطلب.
 - **سجل التدقيق:** (يشمل منذ جلسة C تغيير اسم/رقم/تفعيل القطاع والوحدة والعمارة: `action = 'address'`، الجدول والمعرّف داخل before/after) `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
 
-## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، 2026-11-17)
+## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسة E1، 2026-11-17)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
 > إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (جلسة C: migration `20261125000001` لـ H1/M1 والبنود Low، وإعادة نشر `admin-reset-pin`) مدرجة أدناه (الصفان 24 و25).
 
-### 1. الـ migrations بالترتيب (29 ملفاً)
+### 1. الـ migrations بالترتيب (30 ملفاً)
 | # | الملف |
 |---|---|
 | 1 | `20261110000001_init.sql` |
@@ -471,6 +484,9 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 | 27 | `20261127000001_dashboard.sql` (T25: `dashboard_today()` للأدمن والموظف، المال null للموظف من الدالة نفسها، وفهرس `orders(cancelled_at)` الجزئي. لا Edge Function تعتمد عليها؛ اللوحة تحتاجها للرئيسية، فطبّقها قبل نشر اللوحة) |
 | 28 | `20261128000001_ratings.sql` (T26: `rate_order` مشدَّد، `ratings_summary` و`ratings_list`، `report_summary` يستعمل نفس حساب التقييمات، و`dashboard_today` يرجع `stuck_notifications` للأدمن. لا Edge Function تعتمد عليها؛ اللوحة تحتاجها لشاشة التقييمات، فطبّقها قبل نشر اللوحة. توقيع `rate_order` **لم يتغير** (`p_order_id, p_stars, p_comment` ← `void`)، لكن **سلوكه** تغيّر (أخطاء جديدة `COMMENT_TOO_LONG` و`PIN_CHANGE_REQUIRED` و`NOT_ALLOWED` للحساب المعطّل، وتعليق مقصوص) ولا يمس تطبيق الزبون) |
 | 29 | `20261129000001_ratings_privacy.sql` (مراجعة C جلسة D، L2–L4: `rate_order` يزيل محارف bidi والعرض الصفري وC1 ويحوّل CR إلى LF؛ `ratings_list` يُرجع `customer_name = null` لزبون محذوف؛ حذف `ratings_created_idx`. لا Edge Function تعتمد عليها؛ توقيعات الدوال لم تتغير) |
+| 30 | `20261130000001_security_t23.sql` (T23 جلسة E1: **C1** `current_user_role()` يطلب `aal2` للأدمن والموظف، `admin_reset_mfa` و`break_glass_reset_mfa`، `admin_audit.action` يقبل `mfa_reset`؛ **H2** `app_settings.max_line_qty` (20) و`max_order_lines` (30)، `place_order` يفرضهما (`QTY_LIMIT`، `TOO_MANY_ITEMS`)، `update_app_settings` يعدّلهما. **قبلها:** TOTP مفعّل بـ Auth (§6 الخطوة 8)، وإلا يُقفل الأدمن عن اللوحة. لوحة الأدمن الحالية (صفحة `/mfa`) والدالتان الإداريتان تحتاجانها) |
+
+**قاعدة إلزامية (3، T23):** فعّل **TOTP** بـ Auth (§6 الخطوة 8) **قبل** `20261130000001`، واضبط سر **`ALLOWED_ORIGINS`** (§16) **قبل** نشر `admin-reset-pin` و`admin-create-user` بنسختهما الحالية (بلا السر يرفض الـ preflight كل متصفح). الدالتان تطلبان aal2 بنفسهما، فلا تعتمدان على الـ migration، لكن اللوحة الحالية تفترضها.
 
 **قاعدة إلزامية (2):** طبّق migration **`20261125000001`** قبل نشر **`admin-reset-pin`** بنسخته الحالية (الجلسة C)؛ الدالة نفسها تعمل بدونها، لكن `record_pin_reset` الجديدة هي التي تحذف رموز الإشعارات (H1)، فلا يكتمل قطع الجهاز الضائع بغيرها. وهي تحذف `admin_actions_last_hour` (غير مستعملة).
 
@@ -482,27 +498,28 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
 ```
 
 ### 2. الترتيب الكامل
-1. أنشئ المشروع بمنطقة **`eu-central-1`** (§1) **باسم `mukhdar-prod`**. ثم، بنفس الـ commit، ضع الـ ref الحقيقي مكان الـ placeholder في `PROD_PROJECT_REFS` (`scripts/lib/sb.mjs`) (إلى ذلك الحين يرفض `pnpm sb` كل شيء على الإنتاج). **لا تربط الإنتاج بنسخة العمل اليومية** (المربوطة بـ mukhdar-dev): أنشئ نسخة منفصلة للإنتاج، واربطها هناك فقط:
+1. أنشئ المشروع بمنطقة **`eu-central-1`** (§1) **باسم `mukhdar-prod`**. ثم، بنفس الـ commit، ضع الـ ref الحقيقي مكان الـ placeholder في `PROD_PROJECT_REFS` (`scripts/lib/projects.mjs`؛ **ولا تضفه أبداً لـ `DEV_PROJECT_REFS`**: أي ref بالقائمتين يوقف كل السكربتات) (إلى ذلك الحين يرفض `pnpm sb` كل شيء على الإنتاج). **لا تربط الإنتاج بنسخة العمل اليومية** (المربوطة بـ mukhdar-dev): أنشئ نسخة منفصلة للإنتاج، واربطها هناك فقط:
    ```bash
    git worktree add ../mukhdar-prod main      # أو clone منفصل
    cd ../mukhdar-prod && pnpm install
    pnpm sb link --project-ref <prod-ref>      # يعرض لافتة PRODUCTION
    ```
-   كل أوامر الإنتاج بالخطوات التالية تُشغَّل من `../mukhdar-prod` فقط، بـ `MUKHDAR_TARGET=prod pnpm sb …`، وتكتب الـ ref عند السؤال. لا حاجة لـ "إعادة ربط التطوير": نسخة التطوير لم تُمس. (سكربتات `db:test:remote` و`seed:*` و`db:concurrency` ترفض أي مشروع غير mukhdar-dev، وهذا مقصود.)
-2. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 29 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد).
-3. إعدادات Auth من اللوحة: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7. **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
+   كل أوامر الإنتاج بالخطوات التالية تُشغَّل من `../mukhdar-prod` فقط، بـ `MUKHDAR_TARGET=prod pnpm sb …`، وتكتب الـ ref عند السؤال. لا حاجة لـ "إعادة ربط التطوير": نسخة التطوير لم تُمس. (سكربتات `seed:*` و`db:concurrency` و`it:*` ترفض أي مشروع غير mukhdar-dev، **وترفض ref الإنتاج دائماً حتى لو أُضيف خطأً لقائمة التطوير** (T23 H3، `scripts/seed-guard.test.mjs`)، وهذا مقصود. اختبار الحمل على الإنتاج له مسار صريح منفصل: §17.4.)
+2. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 30 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد).
+3. إعدادات Auth من اللوحة: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7، **8 (TOTP: Enabled)**. **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`. (الخطوة 8 قبل `db push` بالخطوة 2 أفضل؛ وإن طُبّقت الـ migrations أولاً ففعّلها فوراً بعدها، قبل أي دخول للوحة.)
 4. الدوال، بالترتيب (كلها بعد الخطوة 2، فالقاعدة أعلاه محققة تلقائياً):
    ```bash
    pnpm sb functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt
    pnpm sb functions deploy delete-account    --remote=<prod-ref> --use-api   # verify_jwt = true
    pnpm sb functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt
+   MUKHDAR_TARGET=prod pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain> --project-ref <prod-ref>   # T23 H1: نطاق لوحة الإنتاج فقط، قبل الدالتين
    pnpm sb functions deploy admin-reset-pin   --remote=<prod-ref> --use-api   # verify_jwt = true، بعد 20261125000001 (يحتوي إعادة المحاولة وRESET_INCOMPLETE، جلسة C)
    pnpm sb functions deploy admin-create-user --remote=<prod-ref> --use-api   # verify_jwt = true، بعد 20261124000001
    ```
    ثم `push_dispatch_url` بـ Vault (§11).
 5. §6 الخطوة 3: **Allow new users to sign up: OFF**، وفحص يدوي: حساب تجريبي من التطبيق ثم احذفه (§14).
 6. البيانات الأساسية (المدينة، القطاعات، الوحدات، العمارات 1..100): من `supabase/seed.sql` بقرار المالك (§10؛ الملف يضيف أيضاً كتالوجاً تجريبياً بأسعار، فيُراجع قبل تشغيله على الإنتاج). **لا** `seed:demo` ولا `DEMO_PIN` على الإنتاج.
-7. أول أدمن (§7 الخطوتان 1 و2) برقم صاحب المشروع ورمز لا يعرفه غيره.
+7. أول أدمن (§7 الخطوتان 1 و2) برقم صاحب المشروع ورمز لا يعرفه غيره، ثم أول دخول للوحة يسجّل تطبيق المصادقة (`/mfa`). **لا** السر التجريبي على الإنتاج أبداً.
 8. اللوحة على Vercel (Production ← مشروع الإنتاج): `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` فقط (§15).
 
 ### 3. `.env.local` بجذر المشروع (جهاز صاحب المشروع فقط، مُتجاهل بـ git)
@@ -515,7 +532,9 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 ### 4. قائمة فحص قبل الإطلاق (go-live) — T22 وزمن الاستجابة
 لازمة **قبل فتح التطبيق للزبائن** (T22 اعتُبرت ✅ بالصحة فقط؛ الزمن لم يُقَس على بيئة حقيقية):
 - [ ] **اختيار منطقة الإنتاج الأقرب للعراق:** قِس زمن الذهاب والإياب (RTT) من بغداد إلى المناطق المرشحة لـ Supabase (مثلاً Frankfurt مقابل Singapore وأي منطقة أقرب متاحة) واختر الأقل. إن اختلف الناتج عن `eu-central-1` المذكورة بالخطوة 2.1 فحدّث RUNBOOK §1 وهذه الوثيقة بنفس الـ commit، **قبل** إنشاء المشروع (المنطقة لا تتغير بعدها).
-- [ ] **إعادة `pnpm load:run` على الإنتاج** قبل فتحه للزبائن، بنفس العتبات (بعد إضافة ref الإنتاج لقائمة السماح بغلاف `pnpm sb` وسكربتات `scripts/load`)، ثم `pnpm load:cleanup` والتحقق من **صفر بقايا** (حسابات وطلبات وحركات مخزون الحمل).
+- [ ] **اختبار الحمل قبل فتح الإنتاج للزبائن** بنفس العتبات. **الأفضل** على مشروع staging بنفس خطة الإنتاج ومنطقته (يُضاف ref الـ staging لـ `DEV_PROJECT_REFS` كأي مشروع تطوير). على الإنتاج نفسه فقط إن لم يوجد staging، **وبالمسار الصريح فقط** (T23 H3): من نسخة الإنتاج المنفصلة (§17.2 الخطوة 1)، `pnpm load:run -- --target=prod` (يرفض إن لم يكن المشروع المربوط هو ref الإنتاج المسجّل بـ `PROD_PROJECT_REFS`، ويطلب طرفية حقيقية **وكتابة الـ ref حرفياً**)، ثم `pnpm load:cleanup -- --target=prod` والتحقق من **صفر بقايا** (حسابات وطلبات وحركات مخزون الحمل). **لا تضف ref الإنتاج أبداً لـ `DEV_PROJECT_REFS`** (ولا لأي قائمة سماح للتطوير): `seed:demo`/`seed:reset` و`it:*` ترفضه دائماً، وأي ref بالقائمتين يوقف كل السكربتات. الحمل يسجّل TOTP لأدمن/موظف الحمل المؤقتين بنفسه (Auth API) ويحذفهما بالتنظيف.
+- [ ] **`ALLOWED_ORIGINS` على الإنتاج = نطاق لوحة الإنتاج فقط** (مثلاً `https://admin.<domain>`، بلا `localhost` ولا `*`)، قبل نشر `admin-reset-pin` و`admin-create-user` (§16). تحقق: `curl -i -X OPTIONS -H "Origin: https://admin.<domain>" -H "Access-Control-Request-Method: POST" https://<prod-ref>.supabase.co/functions/v1/admin-reset-pin` ← 204 بالأصل نفسه، و`Origin: http://localhost:3000` ← 403 بلا ترويسة.
+- [ ] **TOTP مفعّل بـ Auth** (§6 الخطوة 8) وأول أدمن سجّل تطبيق المصادقة؛ واختبار سريع: دخول بالـ PIN وحده ← `/mfa`، ولا بيانات قبل الرمز.
 - [ ] **مراقبة كلفة استعلام Realtime الدوري على قاعدة الإنتاج:** كان أكبر مستهلك لقاعدة البيانات في T22 ([load-test-T22.md](reviews/load-test-T22.md)).
 - [ ] **اختبار `BELOW_MIN_ORDER` تحت الحمل على الإنتاج** إن كان للطلب حد أدنى مضبوطاً.
 

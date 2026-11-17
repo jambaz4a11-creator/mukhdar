@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { LOGIN_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
+import { LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
 import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 import { ChangePinForm } from './ChangePinForm';
@@ -12,6 +12,7 @@ export default async function ChangePinPage() {
   const user = await getPanelUser(await createClient());
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
+  if (user.mfaRequired) redirect(MFA_PATH);
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-5">

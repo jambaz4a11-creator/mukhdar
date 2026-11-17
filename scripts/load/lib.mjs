@@ -2,7 +2,10 @@
 // الأجزاء النقية (percentile/summarize/classify/evaluate/RateLimiter) مختبَرة بـ lib.test.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEV_PROJECT_REFS, readEnvLocal, root } from '../lib/db.mjs';
+import readline from 'node:readline';
+import { assertSafeTarget, readEnvLocal, root, tempDir } from '../lib/db.mjs';
+import { PROD_NAME, classifyRef, refFromPoolerUrl } from '../lib/projects.mjs';
+import { freshTotp } from '../lib/totp.mjs';
 
 // ---------------------------------------------------------------------
 // الإحصاءات
@@ -190,12 +193,83 @@ export class RateLimiter {
 export const LOAD_PHONE_PREFIX = '9647006'; // بادئة مستخدمي T22 فقط (ليست 9647000/1/2/7)
 export const RUN_DIR = path.join(root, 'scripts', 'load', '.run');
 
-export function loadEnv() {
-  const linkedPath = path.join(root, 'supabase', '.temp', 'linked-project.json');
-  const ref = JSON.parse(fs.readFileSync(linkedPath, 'utf8')).ref;
-  if (!DEV_PROJECT_REFS.includes(ref)) {
-    throw new Error(`Refusing: linked project ${ref} is not mukhdar-dev. T22 runs on dev only.`);
+/**
+ * T23 H3: الهدف صريح. بلا وسيط = mukhdar-dev فقط. الإنتاج **فقط** بـ --target=prod (ثم ref مصنَّف إنتاجاً
+ * بـ projects.mjs + تأكيد مكتوب بطرفية حقيقية، confirmProdTarget). لا يُضاف ref الإنتاج لقائمة التطوير أبداً.
+ */
+export function loadTargetMode(argv) {
+  const t = argv.filter((a) => a.startsWith('--target='));
+  if (t.length === 0) return 'dev';
+  if (t.length === 1 && (t[0] === '--target=prod' || t[0] === '--target=dev')) return t[0].slice(9);
+  throw new Error(
+    `Refusing: unknown ${t.join(' ')} (use --target=prod for production, nothing for dev).`,
+  );
+}
+
+/** يتحقق من المشروع المربوط مقابل الوضع: dev ← مشروع تطوير؛ prod ← مشروع إنتاج مسجّل (لا placeholder). */
+export function assertLoadRef(ref, mode, lists) {
+  const kind = lists ? classifyRef(ref, lists.dev, lists.prod) : classifyRef(ref);
+  if (mode === 'prod') {
+    if (kind !== 'prod') {
+      throw new Error(
+        `Refusing: --target=prod but the linked project ${ref ?? '(none)'} is not the registered ` +
+          `production project (${kind}). Register it in scripts/lib/projects.mjs and link the prod checkout.`,
+      );
+    }
+    return;
   }
+  if (kind === 'prod' || kind === 'placeholder') {
+    throw new Error(
+      `Refusing: the linked project ${ref} is PRODUCTION. The load test on production needs ` +
+        'the explicit path: pnpm load:run -- --target=prod (typed confirmation).',
+    );
+  }
+  if (kind !== 'dev') {
+    throw new Error(
+      `Refusing: linked project ${ref} is not mukhdar-dev. Without --target=prod T22 runs on dev only.`,
+    );
+  }
+}
+
+/** هدف قاعدة البيانات (resolveTarget --remote) لنفس المشروع وبنفس الوضع. */
+export function assertLoadDbTarget(target, mode, ref) {
+  if (mode !== 'prod') return assertSafeTarget(target);
+  assertLoadRef(target.projectRef, 'prod');
+  if (target.projectRef !== ref || refFromPoolerUrl(target.poolerUrl) !== ref) {
+    throw new Error(
+      `Refusing: the database link (${target.projectRef}, pooler ${refFromPoolerUrl(target.poolerUrl)}) ` +
+        `does not match the linked production project ${ref}.`,
+    );
+  }
+}
+
+/** تأكيد مكتوب للإنتاج: طرفية حقيقية فقط، ويكتب المستخدم الـ ref حرفياً. */
+export async function confirmProdTarget(
+  ref,
+  { input = process.stdin, output = process.stderr } = {},
+) {
+  if (!input.isTTY || !output.isTTY) {
+    throw new Error(
+      'Refusing: the production load test needs an interactive terminal (typed confirmation).',
+    );
+  }
+  output.write(
+    `\n*** PRODUCTION *** ${PROD_NAME} (${ref}): this creates throwaway users/products/orders on production ` +
+      'and deletes them at the end.\n',
+  );
+  const rl = readline.createInterface({ input, output });
+  const answer = await new Promise((r) =>
+    rl.question(`Type the production ref (${ref}) to continue: `, r),
+  );
+  rl.close();
+  if (answer.trim() !== ref)
+    throw new Error('Refusing: confirmation did not match the production ref.');
+}
+
+export function loadEnv({ mode = 'dev' } = {}) {
+  const linkedPath = path.join(tempDir(), 'linked-project.json');
+  const ref = JSON.parse(fs.readFileSync(linkedPath, 'utf8')).ref;
+  assertLoadRef(ref, mode);
   const serviceKey = readEnvLocal('SUPABASE_SERVICE_ROLE_KEY');
   if (!serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY missing (.env.local)');
   const appEnv = fs.readFileSync(path.join(root, 'apps', 'customer', '.env'), 'utf8');
@@ -203,6 +277,43 @@ export function loadEnv() {
   if (!anonKey)
     throw new Error('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY missing (apps/customer/.env)');
   return { ref, serviceKey, anonKey, base: `https://${ref}.supabase.co` };
+}
+
+/**
+ * T23 C1: الأدمن والموظف يحتاجان جلسة aal2. يسجّل عامل TOTP بسر عشوائي (أول مرة) ثم challenge + verify عبر
+ * Auth API، ويستبدل رموز الجلسة برموز aal2 (التحديث بعدها يبقى aal2). u.totpSecret يُحفظ لإعادة الدخول.
+ */
+export async function upgradeToAal2(httpFn, base, anonKey, u) {
+  const auth = { key: anonKey, token: u.access };
+  if (!u.factorId) {
+    const e = await httpFn('POST', `${base}/auth/v1/factors`, {
+      ...auth,
+      body: { factor_type: 'totp', friendly_name: `load ${u.key}`, issuer: 'Mukhdar load' },
+    });
+    if (e.status !== 200 || !e.json?.id) {
+      throw new Error(`MFA enroll failed for ${u.key}: ${e.status} ${JSON.stringify(e.json)}`);
+    }
+    u.factorId = e.json.id;
+    u.totpSecret = e.json.totp?.secret;
+  }
+  if (!u.totpSecret) throw new Error(`MFA enroll for ${u.key} returned no TOTP secret`);
+  const c = await httpFn('POST', `${base}/auth/v1/factors/${u.factorId}/challenge`, {
+    ...auth,
+    body: {},
+  });
+  if (c.status !== 200 || !c.json?.id) {
+    throw new Error(`MFA challenge failed for ${u.key}: ${c.status} ${JSON.stringify(c.json)}`);
+  }
+  const v = await httpFn('POST', `${base}/auth/v1/factors/${u.factorId}/verify`, {
+    ...auth,
+    body: { challenge_id: c.json.id, code: await freshTotp(u.totpSecret) },
+  });
+  if (v.status !== 200 || !v.json?.access_token) {
+    throw new Error(`MFA verify failed for ${u.key}: ${v.status} ${JSON.stringify(v.json)}`);
+  }
+  u.access = v.json.access_token;
+  u.refresh = v.json.refresh_token;
+  u.expiresAt = Date.now() + (v.json.expires_in ?? 3600) * 1000;
 }
 
 /** طلب HTTP مع قياس الزمن. لا يرمي أبداً: الأخطاء بـ networkError. */

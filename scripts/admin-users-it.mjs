@@ -6,6 +6,8 @@
 //     الرمز القديم يفشل والجديد ينجح، ورمز التحديث القديم لا يتجدد، وسطر pin_resets بلا الرمز.
 //   admin-create-user: سائق برقم جديد ← 201، يدخل بالرمز المؤقت ودوره driver ويظهر بـ list_drivers،
 //     سطر user_creations؛ نفس الرقم ← 409 PHONE_TAKEN بلا حساب ثانٍ؛ دور admin ← 400.
+// T23: الأدمن بجلسة aal1 (الـ PIN وحده) ← 403 MFA_REQUIRED، ثم يسجّل TOTP (Auth API) ويرتفع لـ aal2؛
+//   CORS: preflight من أصل لوحة التطوير (ALLOWED_ORIGINS) ← 204 بالأصل نفسه، ومن أصل غريب ← بلا ترويسة.
 // يحذف كل الحسابات وسطور التدقيق التي أنشأها حتى عند الفشل. لا يطبع الرموز ولا المفاتيح.
 // يحتاج: .env.local (SUPABASE_DB_PASSWORD، SUPABASE_SERVICE_ROLE_KEY)، apps/customer/.env (المفتاح المنشور).
 import crypto from 'node:crypto';
@@ -19,6 +21,7 @@ import {
   resolveTarget,
   root,
 } from './lib/db.mjs';
+import { http, upgradeToAal2 } from './load/lib.mjs';
 
 const target = resolveTarget(['--remote']);
 assertSafeTarget(target);
@@ -104,7 +107,43 @@ try {
   adminId = await createAuthUser(adminPhone, adminPin, 'admin');
   const adminSession = await signIn(adminPhone, adminPin);
   if (adminSession.status !== 200) throw new Error(`admin sign-in: ${brief(adminSession)}`);
-  const adminJwt = adminSession.json.access_token;
+  const adminAal1 = adminSession.json.access_token;
+
+  // ---------------------------------------------------------------- T23: CORS + aal2
+  const DEV_ORIGIN = process.env.IT_PANEL_ORIGIN ?? 'http://localhost:3000';
+  for (const name of ['admin-reset-pin', 'admin-create-user']) {
+    const pre = await fetch(`${base}/functions/v1/${name}`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: DEV_ORIGIN,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization, apikey, content-type, x-client-info',
+      },
+    });
+    check(
+      pre.status >= 200 &&
+        pre.status < 300 &&
+        pre.headers.get('access-control-allow-origin') === DEV_ORIGIN,
+      `${name}: preflight from ${DEV_ORIGIN} → ${pre.status} with Allow-Origin (H1)`,
+    );
+    const evil = await fetch(`${base}/functions/v1/${name}`, {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'POST' },
+    });
+    check(
+      evil.headers.get('access-control-allow-origin') === null,
+      `${name}: foreign origin gets no Allow-Origin (${evil.status})`,
+    );
+  }
+  const aal1 = await fn('admin-reset-pin', adminAal1, { user_id: adminId, new_pin: newPin() });
+  check(
+    aal1.status === 403 && aal1.json?.error === 'MFA_REQUIRED',
+    `admin with PIN only (aal1) → 403 MFA_REQUIRED (${brief(aal1)})`,
+  );
+  const adminUser = { key: 'it-admin', access: adminAal1 };
+  await upgradeToAal2(http, base, publishableKey, adminUser);
+  const adminJwt = adminUser.access;
+  console.log('throwaway admin enrolled TOTP and reached aal2');
 
   const custPhone = newPhone();
   const oldPin = newPin();

@@ -161,3 +161,78 @@ test('expectedRaceOutcome: one winner per order', () => {
   assert.ok(expectedRaceOutcome(['ORDER_NOT_AVAILABLE', 'ORDER_NOT_AVAILABLE']).length > 0);
   assert.ok(expectedRaceOutcome(['OK', 'HTTP_500']).length > 0);
 });
+
+// ---------------------------------------------------------------- T23 H3 / C1
+import { assertLoadRef, confirmProdTarget, loadTargetMode, upgradeToAal2 } from './lib.mjs';
+import { DEV_PROJECT_REFS } from '../lib/projects.mjs';
+import { totp } from '../lib/totp.mjs';
+
+const DEVREF = DEV_PROJECT_REFS[0];
+const PRODREF = 'prodprojectrefabcdef';
+const LISTS = { dev: [DEVREF], prod: [PRODREF] };
+
+test('H3 load: dev by default, production only with --target=prod', () => {
+  assert.equal(loadTargetMode([]), 'dev');
+  assert.equal(loadTargetMode(['--smoke', '--target=prod']), 'prod');
+  assert.throws(() => loadTargetMode(['--target=production']), /unknown/);
+  assert.throws(() => loadTargetMode(['--target=prod', '--target=dev']), /unknown/);
+
+  assert.doesNotThrow(() => assertLoadRef(DEVREF, 'dev', LISTS));
+  // الإنتاج بلا --target=prod: مرفوض حتى لو أُضيف لقائمة التطوير
+  assert.throws(() => assertLoadRef(PRODREF, 'dev', LISTS), /PRODUCTION.*--target=prod/);
+  assert.throws(
+    () => assertLoadRef(PRODREF, 'dev', { dev: [DEVREF, PRODREF], prod: [PRODREF] }),
+    /PRODUCTION/,
+  );
+  assert.doesNotThrow(() => assertLoadRef(PRODREF, 'prod', LISTS));
+  // --target=prod على مشروع التطوير أو غير معروف أو placeholder: مرفوض
+  assert.throws(() => assertLoadRef(DEVREF, 'prod', LISTS), /not the registered production/);
+  assert.throws(() => assertLoadRef('REPLACE_WITH_MUKHDAR_PROD_REF', 'prod'), /placeholder/);
+  assert.throws(() => assertLoadRef('unknownprojectrefabc', 'dev', LISTS), /not mukhdar-dev/);
+});
+
+test('H3 load: production needs a real terminal and the typed ref', async () => {
+  const notTty = { isTTY: false };
+  await assert.rejects(
+    confirmProdTarget(PRODREF, { input: notTty, output: notTty }),
+    /interactive terminal/,
+  );
+});
+
+test('C1 load: admin/staff sessions are upgraded to aal2 (enroll, challenge, verify)', async () => {
+  const calls = [];
+  const SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+  const fake = async (method, url, opts) => {
+    calls.push([url.replace('https://x', ''), opts.token, opts.body]);
+    if (url.endsWith('/factors'))
+      return { status: 200, json: { id: 'f1', totp: { secret: SECRET } } };
+    if (url.endsWith('/challenge')) return { status: 200, json: { id: 'c1' } };
+    return {
+      status: 200,
+      json: { access_token: 'aal2-token', refresh_token: 'r2', expires_in: 3600 },
+    };
+  };
+  const u = { key: 'admin', access: 'aal1-token' };
+  await upgradeToAal2(fake, 'https://x', 'anon', u);
+  assert.deepEqual(
+    calls.map((c) => c[0]),
+    ['/auth/v1/factors', '/auth/v1/factors/f1/challenge', '/auth/v1/factors/f1/verify'],
+  );
+  assert.equal(calls[0][1], 'aal1-token');
+  assert.equal(calls[2][2].challenge_id, 'c1');
+  assert.match(calls[2][2].code, /^\d{6}$/);
+  assert.ok([totp(SECRET), totp(SECRET, Date.now() + 30_000)].includes(calls[2][2].code));
+  assert.equal(u.access, 'aal2-token');
+  assert.equal(u.factorId, 'f1');
+
+  // إعادة الدخول: لا تسجيل جديد
+  calls.length = 0;
+  await upgradeToAal2(fake, 'https://x', 'anon', u);
+  assert.equal(calls.length, 2);
+
+  const failing = async () => ({ status: 422, json: { code: 'mfa_totp_enroll_not_enabled' } });
+  await assert.rejects(
+    upgradeToAal2(failing, 'https://x', 'anon', { key: 'staff' }),
+    /MFA enroll failed/,
+  );
+});

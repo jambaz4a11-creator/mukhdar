@@ -161,7 +161,7 @@ try {
   ).rows[0].id;
   await q(`update public.profiles set role = 'admin' where id = $1`, [admin]);
   await q(`select set_config('request.jwt.claims', $1, true)`, [
-    JSON.stringify({ sub: admin, role: 'authenticated' }),
+    JSON.stringify({ sub: admin, role: 'authenticated', aal: 'aal2' }), // T23 C1
   ]);
   await q(`set local role authenticated`);
 

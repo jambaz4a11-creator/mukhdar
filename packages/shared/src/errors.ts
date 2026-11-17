@@ -19,7 +19,9 @@ export const ERROR_MESSAGES = {
   ADDRESS_NOT_FOUND: 'العنوان غير موجود، اختر عنواناً آخر',
   ADDRESS_INACTIVE: 'لا نوصّل إلى هذا العنوان حالياً، اختر عنواناً آخر',
   EMPTY_CART: 'السلة فارغة',
-  TOO_MANY_ITEMS: 'السلة فيها منتجات كثيرة (الحد 50 منتجاً)',
+  // T23 H2: الحدان من app_settings، والتفصيل (detail) = الحد؛ التطبيق يضيفه للرسالة
+  TOO_MANY_ITEMS: 'السلة فيها منتجات كثيرة بالطلب الواحد، احذف بعضها ثم أرسل الطلب',
+  QTY_LIMIT: 'كمية أحد المنتجات أكثر من المسموح بالطلب الواحد، قلّلها ثم أرسل الطلب',
   INVALID_QTY: 'الكمية غير صحيحة (من 1 إلى 99)',
   PRODUCT_UNAVAILABLE: 'أحد المنتجات لم يعد متوفراً',
   INSUFFICIENT_STOCK: 'الكمية المطلوبة من أحد المنتجات غير متوفرة',
@@ -69,6 +71,8 @@ export const ERROR_MESSAGES = {
   RESET_INCOMPLETE: 'لم تكتمل إعادة الضبط: أعد المحاولة ولا ترسل الرمز',
   // Edge Functions admin-reset-pin وadmin-create-user (T19)
   TOO_MANY_RESETS: 'وصلت حد إعادة الضبط (20 بالساعة)، انتظر قليلاً',
+  // T23 C1: الأدمن والموظف يحتاجان جلسة aal2 (رمز تطبيق المصادقة بعد الـ PIN)
+  MFA_REQUIRED: 'أكمل الدخول برمز تطبيق المصادقة أولاً',
 } as const satisfies Record<string, string>;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

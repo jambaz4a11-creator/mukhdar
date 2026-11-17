@@ -415,23 +415,24 @@ blockers in the rollout itself:
 
 ## Ordered fix list
 
-| # | Item | Severity | Where | Migration | Edge Function redeploy | App rebuild / panel | Prod dashboard |
-|---|---|---|---|---|---|---|---|
-| 1 | **C1** TOTP MFA for admin/staff, enforced in `current_user_role()` and `requireAdmin`; break-glass unenrols factors | Critical | `private.current_user_role`, `_shared/admin.ts`, panel login/proxy, `admin-break-glass.mjs` | Yes | Yes (`admin-reset-pin`, `admin-create-user`) | Panel | Auth → MFA TOTP on |
-| 2 | **H1** CORS allow-list + `OPTIONS` in the two admin functions | High | `_shared/admin.ts`, both `index.ts` | No | Yes | No | Function secret `ADMIN_ORIGINS` |
-| 3 | **H3** rewrite RUNBOOK §17.4 (staging load test or separate `LOAD_TARGET_REFS`); test that dev/prod lists are disjoint | High | RUNBOOK, `scripts/load/lib.mjs`, `scripts/lib/*.test.mjs` | No | No | No | No |
-| 4 | **H2** per-product and per-order caps, 1 open order for new accounts, panel "cancel all + deactivate" | High | `place_order`, `app_settings`/`products`, panel, `errors.ts` | Yes | No | Customer app (error texts) + panel | No |
-| 5 | **M5** anonymize deleted customers' final orders (or change the pages + purge job) | Medium | trigger/function, `/privacy`, `/delete-account` | Yes (option a) | No | Panel text | No |
-| 6 | **M3 + M4 + M7** security headers/CSP, `safeNext` by origin, cookie `secure`, idle sign-out | Medium | `next.config.ts`, `access.ts`, Supabase clients | No | No | Panel | Vercel HSTS/domain |
-| 7 | **M6** staff order window (open or ≤ 7 days); drivers only with the developer's agreement | Medium | `orders_read` policy, panel staff screens | Yes | No | Panel check | No |
-| 8 | **M2** forgot-PIN verification rules (RUNBOOK §16 + reset dialog text) | Medium | RUNBOOK, `PinDialogs.tsx` | No | No | Panel text | No |
-| 9 | **M1** Auth log query + alert now; Turnstile plan written in ADR 0003 | Medium | RUNBOOK §6, ADR 0003 | No | Only if triggered | Only if triggered | Logs/alert |
-| 10 | **L2 + L3** token cap, text cleaning, address cap (one migration with 4/5/7 if possible) | Low | `register_push_token`, `place_order`, triggers | Yes | No | No | No |
-| 11 | **L5** `pnpm sb` `--db-url` / `--dry-run` | Low | `scripts/lib/sb.mjs` + tests | No | No | No | No |
-| 12 | **L6** separate dev PIN for the driver developer | Low | `seed:demo` / dev accounts, DRIVER-API §2 | No | No | No | No |
-| 13 | **L7** prod secret key handling (no `.env.local`, named `sb_secret`, rotate) | Low | RUNBOOK §7/§17.3 | No | No | No | API keys |
-| 14 | **L8** production build guard, `allowBackup: false`, Sentry breadcrumb scrubbing | Low | customer app | No | No | Customer app | No |
-| 15 | **L4, L9, L10, L11** Realtime public channels, require-current-password check, Dependabot, docs drift + ADR 0003 | Low | dashboard, GitHub, RUNBOOK §5 | No | No | No | Realtime / Auth |
+| # | Item | Severity | Where | Migration | Edge Function redeploy | App rebuild / panel | Prod dashboard | Status (2026-11-17) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **C1** TOTP MFA for admin/staff, enforced in `current_user_role()` and `requireAdmin`; break-glass unenrols factors | Critical | `private.current_user_role`, `_shared/admin.ts`, panel login/proxy, `admin-break-glass.mjs` | Yes | Yes (`admin-reset-pin`, `admin-create-user`) | Panel | Auth → MFA TOTP on | ✅ **Fixed, fix session E1.** Migration `20261130000001` (aal2 gate in `current_user_role()`, `admin_reset_mfa`, `break_glass_reset_mfa`, `mfa_reset` audit, unconfirmed `<phone>@phone.mukhdar.invalid` label because GoTrue cannot enrol TOTP for an account without an email). `requireAdmin` → `MFA_REQUIRED`. Panel `/mfa` (enrol with QR + manual key, then code on every login), TOTP step in change-PIN, staff 2FA reset on `/staff`. Break-glass `--mfa-only` / `--with-mfa`. Applied + both functions redeployed on mukhdar-dev; TOTP was already on there (Supabase default). Prod: RUNBOOK §6 step 8, §17. |
+| 2 | **H1** CORS allow-list + `OPTIONS` in the two admin functions | High | `_shared/admin.ts`, both `index.ts` | No | Yes | No | Function secret `ADMIN_ORIGINS` | ✅ **Fixed, fix session E1.** `_shared/cors.ts`: origins from secret `ALLOWED_ORIGINS` (not `ADMIN_ORIGINS`), `OPTIONS` → 204 / 403, never `*`. `cors_test.ts` calls what `index.ts` serves (no Kong), so the hosted 405 cannot hide again. Dev secret set and verified by probe. Prod: RUNBOOK §17.4. |
+| 3 | **H3** rewrite RUNBOOK §17.4 (staging load test or separate `LOAD_TARGET_REFS`); test that dev/prod lists are disjoint | High | RUNBOOK, `scripts/load/lib.mjs`, `scripts/lib/*.test.mjs` | No | No | No | No | ✅ **Fixed, fix session E1.** One list file `scripts/lib/projects.mjs` (overlap = refuse everything); `assertSafeTarget` refuses a prod ref even if listed as dev, and a pooler URL of another project; `seed-guard.test.mjs` runs `seed:demo` / `seed:reset` as processes against a faked prod link. Load test: explicit `--target=prod` + TTY + typed ref. RUNBOOK §17.4 rewritten (staging preferred, never add prod to the dev list). |
+| 4 | **H2** per-product and per-order caps, 1 open order for new accounts, panel "cancel all + deactivate" | High | `place_order`, `app_settings`/`products`, panel, `errors.ts` | Yes | No | Customer app (error texts) + panel | No | 🟡 **Caps fixed, fix session E1** (owner decision): `app_settings.max_line_qty` = 20 units (10 kg of half-kilos) and `max_order_lines` = 30, enforced in `place_order` (`QTY_LIMIT`, `TOO_MANY_ITEMS`, detail = limit), admin-editable + audited, Arabic message in the customer app. **Not done (not in the owner's E1 decision):** 1 open order for new accounts, panel "cancel all + deactivate". |
+| 5 | **M5** anonymize deleted customers' final orders (or change the pages + purge job) | Medium | trigger/function, `/privacy`, `/delete-account` | Yes (option a) | No | Panel text | No | ⬜ Open (not in fix session E1). |
+| 6 | **M3 + M4 + M7** security headers/CSP, `safeNext` by origin, cookie `secure`, idle sign-out | Medium | `next.config.ts`, `access.ts`, Supabase clients | No | No | Panel | Vercel HSTS/domain | ⬜ Open (not in fix session E1). |
+| 7 | **M6** staff order window (open or ≤ 7 days); drivers only with the developer's agreement | Medium | `orders_read` policy, panel staff screens | Yes | No | Panel check | No | ⬜ Open (not in fix session E1). |
+| 8 | **M2** forgot-PIN verification rules (RUNBOOK §16 + reset dialog text) | Medium | RUNBOOK, `PinDialogs.tsx` | No | No | Panel text | No | ⬜ Open (not in fix session E1). |
+| 9 | **M1** Auth log query + alert now; Turnstile plan written in ADR 0003 | Medium | RUNBOOK §6, ADR 0003 | No | Only if triggered | Only if triggered | Logs/alert | ⬜ Open (not in fix session E1). |
+| 10 | **L2 + L3** token cap, text cleaning, address cap (one migration with 4/5/7 if possible) | Low | `register_push_token`, `place_order`, triggers | Yes | No | No | No | ⬜ Open (not in fix session E1). |
+| 11 | **L5** `pnpm sb` `--db-url` / `--dry-run` | Low | `scripts/lib/sb.mjs` + tests | No | No | No | No | ⬜ Open (not in fix session E1). |
+| 12 | **L6** separate dev PIN for the driver developer | Low | `seed:demo` / dev accounts, DRIVER-API §2 | No | No | No | No | ⬜ Open (not in fix session E1). |
+| 13 | **L7** prod secret key handling (no `.env.local`, named `sb_secret`, rotate) | Low | RUNBOOK §7/§17.3 | No | No | No | API keys | ⬜ Open (not in fix session E1). |
+| 14 | **L8** production build guard, `allowBackup: false`, Sentry breadcrumb scrubbing | Low | customer app | No | No | Customer app | No | ⬜ Open (not in fix session E1). |
+| 15 | **L4, L9, L10, L11** Realtime public channels, require-current-password check, Dependabot, docs drift + ADR 0003 | Low | dashboard, GitHub, RUNBOOK §5 | No | No | No | Realtime / Auth | ⬜ Open (not in fix session E1). |
 
-Items 1–4 must be done before T24 (release). Items 1, 4, 5, 7 and 10 can share one migration window. Following the
+Items 1–4 must be done before T24 (release). **Fix session E1 (2026-11-17):** 1–3 done, 4 done for the caps the owner
+decided (the two other H2 ideas stay open); 5–15 open. Items 1, 4, 5, 7 and 10 can share one migration window. Following the
 earlier pattern, apply to mukhdar-dev with owner approval, then add the rows to RUNBOOK §17.

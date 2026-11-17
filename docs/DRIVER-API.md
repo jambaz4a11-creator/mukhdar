@@ -101,6 +101,10 @@ own session; RLS and the functions enforce what a driver may see and do.
 
 ## 2) Authentication and role
 
+> **2026-11-17 (security review T23):** admin and staff accounts now need two-factor (TOTP) in the
+> admin panel. **Drivers are not affected:** phone + PIN only, same calls, same RLS, no change in the
+> driver app. Order caps added to `place_order` (customers only) do not touch driver functions.
+
 1. **Phone number + 6-digit PIN** via Supabase Auth, same as the customer app (changed 2026-11-14:
    **no SMS/OTP at all**, nothing is ever sent). The PIN is the account password.
    **How a driver (or staff member) gets an account (changed 2026-11-15):** public sign-up in

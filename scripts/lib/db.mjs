@@ -7,12 +7,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
+import { DEV_PROJECT_REFS, PROD_PROJECT_REFS, classifyRef, refFromPoolerUrl } from './projects.mjs';
 
 export const root = path.resolve(import.meta.dirname, '..', '..');
 export const LOCAL_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
-// المشاريع التي يُسمح لسكربتات البيانات التجريبية بالكتابة عليها. لا تضف مشروع الإنتاج أبداً.
-export const DEV_PROJECT_REFS = ['ghcohlrzvehtcettaaiu']; // mukhdar-dev
+// المشاريع المعروفة بـ projects.mjs (T23 H3: مصدر واحد). لا تضف مشروع الإنتاج لقائمة التطوير أبداً.
+export { DEV_PROJECT_REFS, PROD_PROJECT_REFS };
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', 'host.docker.internal']);
 
@@ -24,8 +25,14 @@ function readEnvLocal(name) {
   return m ? m[1].trim() : undefined;
 }
 
-function readTemp(file) {
-  const p = path.join(root, 'supabase', '.temp', file);
+// مجلد ربط Supabase CLI. MUKHDAR_SUPABASE_TEMP لاختبارات السكربتات فقط (مشروع مربوط مزيف)؛ الحارس يصنّف
+// ما يُقرأ منه بنفس القواعد، فلا يفتح شيئاً.
+export function tempDir(env = process.env) {
+  return env.MUKHDAR_SUPABASE_TEMP || path.join(root, 'supabase', '.temp');
+}
+
+function readTemp(file, env = process.env) {
+  const p = path.join(tempDir(env), file);
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf8').trim() : undefined;
 }
 
@@ -34,28 +41,49 @@ export function resolveTarget(args = process.argv.slice(2), env = process.env) {
   if (args.includes('--remote')) {
     return {
       kind: 'remote',
-      projectRef: readTemp('project-ref'),
-      poolerUrl: readTemp('pooler-url'),
+      projectRef: readTemp('project-ref', env),
+      poolerUrl: readTemp('pooler-url', env),
     };
   }
   return { kind: 'local', url: env.DB_URL ?? LOCAL_URL };
 }
 
 /**
- * يرفض الكتابة على أي شيء غير التطوير. يُستدعى قبل أي سكربت يغيّر البيانات.
+ * يرفض الكتابة على أي شيء غير التطوير. يُستدعى قبل أي سكربت يغيّر البيانات (seed:demo، seed:reset، it:*...).
  * يرمي خطأ بالسبب؛ لا يرجع شيئاً عند السماح.
+ * T23 H3: مشروع بقائمة الإنتاج يُرفض **دائماً** حتى لو أُضيف خطأً لقائمة التطوير، ورابط الـ pooler لازم
+ * يشير لنفس المشروع المربوط (لا ref تطوير مع اتصال فعلي بالإنتاج).
  */
-export function assertSafeTarget(target, env = process.env) {
+export function assertSafeTarget(
+  target,
+  env = process.env,
+  lists = { dev: DEV_PROJECT_REFS, prod: PROD_PROJECT_REFS },
+) {
   const envName = (env.MUKHDAR_ENV ?? '').toLowerCase();
   if (envName === 'production' || envName === 'prod') {
     throw new Error('Refusing: MUKHDAR_ENV is production. Demo data is for development only.');
   }
   if (target.kind === 'remote') {
     if (!target.projectRef) throw new Error('Refusing: no linked project (run `supabase link`).');
-    if (!DEV_PROJECT_REFS.includes(target.projectRef)) {
+    const poolerRef = refFromPoolerUrl(target.poolerUrl);
+    for (const ref of [target.projectRef, poolerRef]) {
+      if (ref && lists.prod.includes(ref)) {
+        throw new Error(
+          `Refusing: ${ref} is the PRODUCTION project. Demo/test data scripts never run on production, ` +
+            'whatever the allowlists say.',
+        );
+      }
+    }
+    if (classifyRef(target.projectRef, lists.dev, lists.prod) !== 'dev') {
       throw new Error(
         `Refusing: linked project ${target.projectRef} is not a known development project ` +
-          `(allowed: ${DEV_PROJECT_REFS.join(', ')}).`,
+          `(allowed: ${lists.dev.join(', ')}).`,
+      );
+    }
+    if (target.poolerUrl && poolerRef !== target.projectRef) {
+      throw new Error(
+        `Refusing: the pooler URL points to ${poolerRef ?? 'an unknown project'}, not the linked ` +
+          `project ${target.projectRef}. Re-run \`supabase link\`.`,
       );
     }
     return;

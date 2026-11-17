@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ACCOUNTS } from './accounts';
-import { expectNotAuthorized, pageAs, sidebarLinks, signIn } from './helpers';
+import { ACCOUNTS, PIN } from './accounts';
+import { completeMfa, expectNotAuthorized, pageAs, sidebarLinks, signIn } from './helpers';
 
 // قبول T16: أدمن وموظف يصلان لـ /، الزبون والسائق "غير مصرح"، الموظف لا يصل لصفحات الأدمن حتى بالرابط،
 // والصفحات العامة بلا دخول.
@@ -174,6 +174,27 @@ for (const role of ['customer', 'driver'] as const) {
     await context.close();
   });
 }
+
+test('T23 C1: admin with PIN only is held on /mfa (every page, deep link kept), then reaches it', async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signIn(page, ACCOUNTS.admin, PIN, null);
+  await page.waitForURL((u) => u.pathname === '/mfa');
+  await expect(page.getByTestId('mfa-enroll-intro')).toHaveCount(0); // عنده تطبيق مسجّل: الرمز فقط
+  for (const path of ['/', '/settings', '/change-pin', '/print/orders/x']) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/mfa/);
+  }
+  await page.goto('/reports');
+  await expect(page).toHaveURL(/\/mfa\?next=%2Freports$/);
+  await completeMfa(page);
+  await page.waitForURL((u) => u.pathname === '/reports');
+  await page.goto('/mfa'); // اكتملت: الصفحة تحوّل
+  await page.waitForURL((u) => u.pathname === '/');
+  await context.close();
+});
 
 test('phone layout: the menu button opens the sidebar', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });

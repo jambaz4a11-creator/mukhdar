@@ -3,13 +3,16 @@
 //   pnpm load:cleanup
 // يعيد إعدادات المتجر من scripts/load/.run/before.json إن وُجد، ويحذف كل ما بادئته 9647006 / LOADTEST،
 // ثم يتحقق من صفر مخلّفات.
-import { assertSafeTarget, connect, resolveTarget } from '../lib/db.mjs';
-import { loadEnv } from './lib.mjs';
+import { connect, resolveTarget } from '../lib/db.mjs';
+import { assertLoadDbTarget, confirmProdTarget, loadEnv, loadTargetMode } from './lib.mjs';
 import { cleanup, loadBefore, verifyClean } from './state.mjs';
 
-const env = loadEnv();
+// T23 H3: نفس قاعدة run.mjs: الإنتاج فقط بـ --target=prod + تأكيد مكتوب
+const MODE = loadTargetMode(process.argv.slice(2));
+const env = loadEnv({ mode: MODE });
+if (MODE === 'prod') await confirmProdTarget(env.ref);
 const target = resolveTarget(['--remote']);
-assertSafeTarget(target);
+assertLoadDbTarget(target, MODE, env.ref);
 const db = await connect(target);
 const before = loadBefore();
 if (!before)

@@ -4,25 +4,18 @@
 // لذلك لا نعتمد عليها: نصنّف المشروع المربوط (supabase/.temp/linked-project.json) بقائمتين صريحتين.
 import fs from 'node:fs';
 import path from 'node:path';
-import { root, DEV_PROJECT_REFS } from './db.mjs';
+import { root } from './db.mjs';
+import {
+  DEV_NAME,
+  DEV_PROJECT_REFS,
+  PROD_NAME,
+  PROD_PROJECT_REFS,
+  classifyRef,
+  isValidRef,
+} from './projects.mjs';
 
-export const DEV_NAME = 'mukhdar-dev';
-export const PROD_NAME = 'mukhdar-prod';
-
-// ref مشروع الإنتاج (mukhdar-prod). مكانه محجوز: القيمة الحالية ليست ref صالحاً، فالحارس يرفض كل شيء
-// على الإنتاج إلى أن تُستبدل بالـ ref الحقيقي (20 حرفاً صغيراً) بنفس الـ commit الذي يُنشئ المشروع.
-export const PROD_PROJECT_REFS = ['REPLACE_WITH_MUKHDAR_PROD_REF'];
-
-const REF_RE = /^[a-z]{20}$/;
-export const isValidRef = (ref) => typeof ref === 'string' && REF_RE.test(ref);
-
-/** 'dev' | 'prod' | 'placeholder' | 'unknown' */
-export function classifyRef(ref) {
-  if (!ref) return 'unknown';
-  if (DEV_PROJECT_REFS.includes(ref)) return 'dev';
-  if (PROD_PROJECT_REFS.includes(ref)) return isValidRef(ref) ? 'prod' : 'placeholder';
-  return 'unknown';
-}
+// القائمتان وتصنيف المشروع من projects.mjs (T23 H3: مصدر واحد مع db.mjs)
+export { DEV_NAME, DEV_PROJECT_REFS, PROD_NAME, PROD_PROJECT_REFS, classifyRef, isValidRef };
 
 // أوامر لا تحتاج مشروعاً مربوطاً ولا تغيّر شيئاً بالسحابة.
 const NO_PROJECT = new Set(['login', 'logout', 'help', 'completion', 'init']);
@@ -116,7 +109,7 @@ export function plan(args, { linked, env = process.env } = {}) {
   if (kind === 'unknown') {
     return {
       action: 'refuse',
-      reason: `Project ${ref} is not in DEV_PROJECT_REFS or PROD_PROJECT_REFS (scripts/lib/db.mjs, scripts/lib/sb.mjs).`,
+      reason: `Project ${ref} is not in DEV_PROJECT_REFS or PROD_PROJECT_REFS (scripts/lib/projects.mjs).`,
     };
   }
   if (kind === 'placeholder') {
@@ -124,7 +117,7 @@ export function plan(args, { linked, env = process.env } = {}) {
       action: 'refuse',
       reason:
         `PROD_PROJECT_REFS still holds a placeholder (${ref}). The production project (${PROD_NAME}) ` +
-        'is not registered: put its real ref in scripts/lib/sb.mjs first.',
+        'is not registered: put its real ref in scripts/lib/projects.mjs first.',
     };
   }
 

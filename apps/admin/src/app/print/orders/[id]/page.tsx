@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { fetchOrderDetail } from '@/features/orders/api';
 import { asAddress, displayPhone, formatDateTime, fullAddress } from '@/features/orders/format';
-import { LOGIN_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
+import { LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
 import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 import { AutoPrint } from './AutoPrint';
@@ -18,6 +18,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
   const user = await getPanelUser(supabase);
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
+  if (user.mfaRequired) redirect(MFA_PATH);
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const order = await fetchOrderDetail(supabase, id);
   if (!order) notFound();

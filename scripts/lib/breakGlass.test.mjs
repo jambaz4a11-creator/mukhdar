@@ -7,6 +7,7 @@ import {
   projectRef,
   randomPin,
   storedPhone,
+  parseArgs,
 } from './breakGlass.mjs';
 
 test('storedPhone: accepts the usual spellings, rejects the rest', () => {
@@ -74,4 +75,17 @@ test('interactiveGuard: the test escape needs the flag AND the dev project', () 
     interactiveGuard({ ...piped, env: { MUKHDAR_BREAK_GLASS_TEST: 'true' }, ref: DEV_PROJECT_REF }),
     null,
   );
+});
+
+test('parseArgs (T23 C1): PIN by default, --mfa-only, --with-mfa; anything else refused', () => {
+  assert.deepEqual(parseArgs(['07701234567']), { phone: '07701234567', mode: 'pin' });
+  assert.deepEqual(parseArgs(['07701234567', '--mfa-only']), { phone: '07701234567', mode: 'mfa' });
+  assert.deepEqual(parseArgs(['--with-mfa', '07701234567']), {
+    phone: '07701234567',
+    mode: 'both',
+  });
+  assert.match(parseArgs(['07701234567', '--mfa-only', '--with-mfa']).error, /not both/);
+  assert.match(parseArgs(['07701234567', '--force']).error, /unknown option --force/);
+  assert.match(parseArgs([]).error, /phone number is required/);
+  assert.match(parseArgs(['0770', '0771']).error, /phone number is required/);
 });

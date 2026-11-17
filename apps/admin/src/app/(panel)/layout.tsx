@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { CHANGE_PIN_PATH, LOGIN_PATH, NOT_AUTHORIZED_PATH, navItems } from '@/lib/access';
+import { CHANGE_PIN_PATH, LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH, navItems } from '@/lib/access';
 import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/Sidebar';
@@ -11,6 +11,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   const user = await getPanelUser(supabase);
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
+  if (user.mfaRequired) redirect(MFA_PATH);
   if (user.mustChangePin) redirect(CHANGE_PIN_PATH);
 
   // شارة الطلبات: العدد الأولي من الخادم، ثم حي عبر Realtime (PanelProviders).

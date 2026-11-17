@@ -76,6 +76,10 @@ export interface SettingsValues {
   delivery_fee_iqd: string;
   min_order_iqd: string;
   max_active_orders: string;
+  /** T23 H2: حد الكمية لكل منتج بالطلب (وحدات بيع، 20 = 10 كيلو للنص كيلو) */
+  max_line_qty: string;
+  /** T23 H2: حد عدد المنتجات بالطلب */
+  max_order_lines: string;
   store_open: boolean;
   closed_message: string;
 }
@@ -84,6 +88,8 @@ export interface SettingsPayload {
   delivery_fee_iqd: number;
   min_order_iqd: number;
   max_active_orders: number;
+  max_line_qty: number;
+  max_order_lines: number;
   store_open: boolean;
   closed_message: string | null;
 }
@@ -93,6 +99,13 @@ export type SettingsErrors = Partial<Record<keyof SettingsValues, string>>;
 function amount(raw: string): number | null {
   const s = normalizePin(raw).replace(/,/g, '');
   return /^\d{1,8}$/.test(s) ? Number(s) : null;
+}
+
+function intIn(raw: string, min: number, max: number): number | null {
+  const s = normalizePin(raw);
+  if (!/^\d{1,4}$/.test(s)) return null;
+  const n = Number(s);
+  return n >= min && n <= max ? n : null;
 }
 
 export function validateSettings(
@@ -108,6 +121,11 @@ export function validateSettings(
   const maxRaw = normalizePin(v.max_active_orders);
   const max = /^\d{1,4}$/.test(maxRaw) ? Number(maxRaw) : null;
   if (max === null || max < 1 || max > 1000) errors.max_active_orders = 'عدد من 1 إلى 1000';
+  // نفس حدود قاعدة البيانات (update_app_settings والقيود)
+  const lineQty = intIn(v.max_line_qty, 1, 99);
+  if (lineQty === null) errors.max_line_qty = 'عدد من 1 إلى 99';
+  const lines = intIn(v.max_order_lines, 1, 50);
+  if (lines === null) errors.max_order_lines = 'عدد من 1 إلى 50';
   const message = v.closed_message.trim();
   if (message.length > 200) errors.closed_message = 'الرسالة أطول من 200 حرف';
   if (Object.keys(errors).length > 0) return { payload: null, errors };
@@ -116,6 +134,8 @@ export function validateSettings(
       delivery_fee_iqd: fee as number,
       min_order_iqd: min as number,
       max_active_orders: max as number,
+      max_line_qty: lineQty as number,
+      max_order_lines: lines as number,
       store_open: v.store_open,
       closed_message: message || null,
     },
@@ -147,6 +167,7 @@ export function pinMessage(kind: 'reset' | 'create', pin: string): string {
  */
 const RESET_REJECTED_BEFORE_CHANGE = new Set([
   'PIN_INVALID',
+  'MFA_REQUIRED',
   'TOO_MANY_RESETS',
   'NOT_ALLOWED',
   'NOT_AUTHENTICATED',

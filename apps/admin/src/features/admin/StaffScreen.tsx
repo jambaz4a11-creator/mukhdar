@@ -2,7 +2,7 @@
 // الموظفون والسائقون (أدمن، SPEC-admin §2.6): قائمة غير الزبائن، بحث بالهاتف لأي حساب (للترقية أو
 // تصفير الرمز)، تغيير الدور والتفعيل (set_user_role؛ الأدمن لا يخفّض نفسه ولا يعطّلها: رفض
 // CANNOT_DEMOTE_SELF من قاعدة البيانات يظهر كرسالة)، إضافة موظف أو سائق (admin-create-user)،
-// وتصفير الرمز (admin-reset-pin؛ لا لحساب أدمن).
+// وتصفير الرمز (admin-reset-pin؛ لا لحساب أدمن)، وإعادة ضبط المصادقة الثنائية للموظف (T23 C1، admin_reset_mfa).
 import { errorMessage, parseBackendError } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
@@ -14,6 +14,7 @@ import {
   currentUserId,
   fetchStaff,
   findByPhone,
+  resetMfa,
   setUserRole,
   type UserRow,
 } from './api';
@@ -206,6 +207,12 @@ function UserLine({
     },
   });
   // أثناء الحفظ: القيمة المطلوبة؛ بعد الرفض: قيمة الخادم (بلا تغيير)
+  const mfa = useMutation({
+    mutationFn: () => resetMfa(supabase, user.id),
+    onSettled: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
+  });
   const shown = change.isPending && change.variables ? change.variables : null;
   const role = shown?.role ?? user.role;
   const active = shown?.active ?? user.is_active;
@@ -272,6 +279,39 @@ function UserLine({
           تصفير الرمز
         </button>
       )}
+      {user.role === 'staff' && (
+        <button
+          type="button"
+          disabled={mfa.isPending}
+          onClick={() => {
+            if (
+              window.confirm(
+                `إعادة ضبط المصادقة الثنائية لـ${name}؟ يخرج من كل الأجهزة ويسجّل تطبيق المصادقة من جديد بأول دخول.`,
+              )
+            ) {
+              mfa.mutate();
+            }
+          }}
+          className="h-10 rounded-[10px] border border-border bg-surface px-2.5 text-[13px] disabled:opacity-60"
+          data-testid="mfa-reset"
+        >
+          إعادة ضبط المصادقة الثنائية
+        </button>
+      )}
+      {mfa.isSuccess && (
+        <span
+          role="status"
+          className="basis-full text-[13px] text-primary"
+          data-testid="mfa-reset-done"
+        >
+          تمت إعادة ضبط المصادقة الثنائية. يسجّل التطبيق من جديد بأول دخول.
+        </span>
+      )}
+      {mfa.error && (
+        <span role="alert" className="basis-full text-[13px] text-danger">
+          {mfaResetErrorText(mfa.error)}
+        </span>
+      )}
       {change.error && (
         <span role="alert" className="basis-full text-[13px] text-danger" data-testid="role-error">
           {roleErrorText(change.error)}
@@ -279,6 +319,14 @@ function UserLine({
       )}
     </div>
   );
+}
+
+/** رفض إعادة ضبط المصادقة الثنائية: حساب أدمن له إجراء الطوارئ فقط (RUNBOOK §7). */
+export function mfaResetErrorText(error: unknown): string {
+  const e = parseBackendError(error);
+  return e.code === 'ADMIN_ACCOUNT'
+    ? 'مصادقة حساب المدير لا تُعاد من اللوحة، فقط بإجراء الطوارئ (دليل التشغيل)'
+    : e.message;
 }
 
 /** رسالة رفض تغيير الدور؛ سائق عنده طلبات ← مع أرقامها ("#12، #15") من detail. */

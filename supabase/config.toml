@@ -314,9 +314,11 @@ auth_token = "not-a-secret-sms-hook-rejects"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# المخضر (T23 C1): إلزامي للأدمن والموظف (current_user_role() يطلب aal2)، السائق والزبون بلا تغيير.
+# TOTP مجاني بكل الخطط (لا SMS). على السحابة: Authentication ← MFA ← TOTP مفعّل (RUNBOOK §6).
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
@@ -401,8 +403,10 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# T23 H1: أصول لوحة الأدمن المسموحة لـ CORS بالدالتين الإداريتين (مفصولة بفواصل، أبداً *). محلياً = أصل
+# لوحة التطوير وأصل e2e. على السحابة سر منفصل: supabase secrets set ALLOWED_ORIGINS=... (RUNBOOK §16، §17).
+[edge_runtime.secrets]
+ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3100,http://127.0.0.1:3100"
 
 # T07: تُستدعى من القاعدة (pg_net) بسر مشترك بترويسة x-dispatch-secret (يُتحقق منه بـ Vault)، لا بـ JWT.
 [functions.push-dispatch]

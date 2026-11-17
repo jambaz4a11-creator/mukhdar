@@ -1,4 +1,4 @@
-// من المستخدم الحالي ودوره باللوحة. يُستعمل بالـ proxy وبالتخطيط (حماية مزدوجة).
+// من المستخدم الحالي ودوره باللوحة ومستوى جلسته (aal). يُستعمل بالـ proxy وبالتخطيط (حماية مزدوجة).
 import type { MukhdarClient } from '@mukhdar/shared';
 import { isPanelRole, type PanelRole } from './access';
 
@@ -13,7 +13,20 @@ export type PanelUser =
       phone: string | null;
       /** رمز مؤقت (admin-create-user / admin-reset-pin): لا صفحة غير "تغيير الرمز" حتى يُغيَّر. */
       mustChangePin: boolean;
+      /**
+       * المصادقة الثنائية (T23 C1): الجلسة ليست aal2 بعد (الـ PIN وحده). قاعدة البيانات ترفض كل دوال
+       * الأدمن/الموظف بهذه الجلسة، فكل صفحة تحوّل لـ /mfa.
+       */
+      mfaRequired: boolean;
+      /** عنده عامل TOTP مُفعَّل: /mfa تطلب الرمز؛ وإلا تعرض التسجيل (QR + المفتاح). */
+      hasTotp: boolean;
     };
+
+type AuthUser = { factors?: { factor_type: string; status: string }[] | null };
+
+export function hasVerifiedTotp(user: AuthUser): boolean {
+  return (user.factors ?? []).some((f) => f.factor_type === 'totp' && f.status === 'verified');
+}
 
 export async function getPanelUser(
   supabase: Pick<MukhdarClient, 'auth' | 'from'>,
@@ -27,6 +40,8 @@ export async function getPanelUser(
     .eq('id', data.user.id)
     .maybeSingle();
   if (!profile || !profile.is_active || !isPanelRole(profile.role)) return { state: 'forbidden' };
+  // مستوى الجلسة من نفس الرمز الذي تحقق منه getUser أعلاه
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   return {
     state: 'ok',
     id: data.user.id,
@@ -34,5 +49,7 @@ export async function getPanelUser(
     name: profile.full_name,
     phone: profile.phone,
     mustChangePin: profile.must_change_pin,
+    mfaRequired: aal?.currentLevel !== 'aal2',
+    hasTotp: hasVerifiedTotp(data.user),
   };
 }

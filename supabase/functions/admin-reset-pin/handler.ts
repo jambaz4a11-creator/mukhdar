@@ -19,6 +19,7 @@ import {
   requireAdmin,
   UUID_RE,
 } from '../_shared/admin.ts';
+import { withCors } from '../_shared/cors.ts';
 
 export const RESETS_PER_HOUR = 20;
 /** محاولات إضافية لخطوات ما بعد تغيير الرمز (مراجعة جلسة C، M2). */
@@ -129,4 +130,12 @@ export function createResetPinHandler(deps: ResetPinDeps): (req: Request) => Pro
     deps.log?.('admin-reset-pin done', { user_id: userId, by: admin });
     return json(200, { ok: true });
   };
+}
+
+/** ما تخدمه index.ts: المعالج + CORS (OPTIONS والترويسات) بأصول ALLOWED_ORIGINS فقط (T23 H1). */
+export function createResetPinServer(
+  deps: ResetPinDeps,
+  allowedOrigins: ReadonlySet<string>,
+): (req: Request) => Promise<Response> {
+  return withCors(createResetPinHandler(deps), allowedOrigins);
 }
