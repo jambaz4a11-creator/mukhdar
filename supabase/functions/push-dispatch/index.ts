@@ -1,14 +1,17 @@
 // Edge Function: push-dispatch
 // تُستدعى من القاعدة (trigger بعد insert بـ notification_outbox، و pg_cron كل دقيقة) عبر pg_net.
-// SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY تحقنهما Supabase تلقائياً. EXPO_ACCESS_TOKEN اختياري.
+// المفاتيح تحقنها Supabase تلقائياً (keys.ts). EXPO_ACCESS_TOKEN اختياري. verify_jwt = false: التفويض بسر
+// x-dispatch-secret (Vault) لا بمفتاح.
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { dispatchAll, type OutboxRow, type RowResult, type Store } from './dispatch.ts';
 import { createExpoSender } from './expo.ts';
 import { createHandler } from './handler.ts';
+import { keyKind, secretKey, supabaseUrl } from '../_shared/keys.ts';
 
-const url = Deno.env.get('SUPABASE_URL');
-const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing');
+// T23 F H2: المفتاح الجديد (SUPABASE_SECRET_KEYS) أولاً، والقديم (SUPABASE_SERVICE_ROLE_KEY) احتياطاً
+const url = supabaseUrl();
+const key = secretKey();
+console.log('keys', JSON.stringify({ secret: keyKind(key) })); // النوع فقط، لا القيمة
 
 const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 

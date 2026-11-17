@@ -1,13 +1,16 @@
 // Edge Function: delete-account
 // يستدعيها التطبيق (الزبون أو السائق) بـ JWT المستخدم:
 //   supabase.functions.invoke('delete-account', { method: 'POST' })
-// SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY تحقنهما Supabase تلقائياً (لا يغادران الخادم).
+// المفاتيح تحقنها Supabase (لا تغادر الخادم). T23 F H2: verify_jwt = false؛ التحقق من المستخدم هنا بـ
+// auth.getUser (رمز ناقص أو غير صالح ← 401 قبل أي شيء، handler.ts).
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { createDeleteAccountHandler } from './handler.ts';
+import { keyKind, secretKey, supabaseUrl } from '../_shared/keys.ts';
 
-const url = Deno.env.get('SUPABASE_URL');
-const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing');
+// T23 F H2: المفتاح الجديد (SUPABASE_SECRET_KEYS) أولاً، والقديم (SUPABASE_SERVICE_ROLE_KEY) احتياطاً
+const url = supabaseUrl();
+const key = secretKey();
+console.log('keys', JSON.stringify({ secret: keyKind(key) })); // النوع فقط، لا القيمة
 
 const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 

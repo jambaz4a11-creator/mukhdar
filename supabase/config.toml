@@ -414,10 +414,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/push-dispatch/index.ts"
 
-# T08: يستدعيها التطبيق بـ JWT المستخدم (البوابة تتحقق منه، والدالة تتحقق ثانيةً عبر auth.getUser).
+# T08: يستدعيها التطبيق بـ JWT المستخدم. T23 F H2: verify_jwt = false (توصية Supabase مع المفاتيح الجديدة:
+# البوابة لا تفهمها)، والدالة تتحقق من المستخدم بنفسها عبر auth.getUser (بلا رمز صالح ← 401 قبل أي شيء).
 [functions.delete-account]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/delete-account/index.ts"
 
 # التسجيل (ADR 0001، تحديث 2026-11-15): قبل الدخول، فلا JWT (المفتاح المنشور ليس JWT). الحماية حدود
@@ -428,17 +429,18 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/signup/index.ts"
 
-# T19: لوحة الأدمن بـ JWT الأدمن (البوابة تتحقق منه، والدالة تتحقق ثانيةً: auth.getUser + دور admin نشط).
+# T19: لوحة الأدمن بـ JWT الأدمن. T23 F H2: verify_jwt = false والدالة تتحقق بنفسها (_shared/admin.ts
+# requireAdmin: auth.getUser ← دور admin نشط ← aal2 ← تغيير الرمز ← خمول 12 ساعة؛ بلا رمز صالح ← 401).
 # import_map يربط قواعد الرقم والـ PIN من packages/shared.
 [functions.admin-reset-pin]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/admin-reset-pin/index.ts"
 
 [functions.admin-create-user]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/admin-create-user/index.ts"
 

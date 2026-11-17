@@ -1,6 +1,7 @@
 // Edge Function: admin-create-user (T19، SPEC-admin §2.6)
 // لوحة الأدمن: supabase.functions.invoke('admin-create-user', { body: { phone, full_name, role, pin } })
-// verify_jwt = true (البوابة) + auth.getUser + profiles.role = 'admin' ونشط + جلسة aal2 (المعالج، T23 C1).
+// verify_jwt = false (T23 F H2: البوابة لا تفهم المفاتيح الجديدة) والتحقق كله هنا: auth.getUser (رمز ناقص أو غير
+// صالح ← 401) + profiles.role = 'admin' ونشط + جلسة aal2 (المعالج، T23 C1) + خمول 12 ساعة.
 // CORS: الأصول من سر ALLOWED_ORIGINS فقط (T23 H1)؛ الـ preflight يُرد عليه هنا.
 import { createAdminCreateUserServer } from './handler.ts';
 import { adminAuthDeps, allowedOrigins, log, rateHit, serviceClient } from '../_shared/supabase.ts';

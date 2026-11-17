@@ -2,13 +2,15 @@
 // التسجيل العام بـ GoTrue مطفأ (Allow new users to sign up: OFF)؛ هذه الطريقة الوحيدة لإنشاء حساب:
 //   supabase.functions.invoke('signup', { body: { phone, pin } })  ثم  signInWithPassword(...)
 // verify_jwt = false (قبل الدخول؛ المفتاح المنشور ليس JWT). الحماية: حدود المعدل بقاعدة البيانات.
-// SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY تحقنهما Supabase تلقائياً (لا يغادران الخادم).
+// المفاتيح تحقنها Supabase تلقائياً (keys.ts؛ لا تغادر الخادم).
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { createSignupHandler } from './handler.ts';
+import { keyKind, secretKey, supabaseUrl } from '../_shared/keys.ts';
 
-const url = Deno.env.get('SUPABASE_URL');
-const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing');
+// T23 F H2: المفتاح الجديد (SUPABASE_SECRET_KEYS) أولاً، والقديم (SUPABASE_SERVICE_ROLE_KEY) احتياطاً
+const url = supabaseUrl();
+const key = secretKey();
+console.log('keys', JSON.stringify({ secret: keyKind(key) })); // النوع فقط، لا القيمة
 
 const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 

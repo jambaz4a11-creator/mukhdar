@@ -1,23 +1,31 @@
-// عميل الخدمة وتنفيذ AdminAuthDeps للدوال الإدارية (T19). SUPABASE_URL وSUPABASE_SERVICE_ROLE_KEY
-// تحقنهما Supabase تلقائياً ولا يغادران الخادم.
+// عميل الخدمة وتنفيذ AdminAuthDeps للدوال الإدارية (T19). المفاتيح تحقنها Supabase ولا تغادر الخادم؛
+// T23 F H2: المفتاح الجديد (sb_secret_ / sb_publishable_) أولاً والقديم احتياطاً (keys.ts).
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { type AdminAuthDeps, jwtAal, type ProfileRow } from './admin.ts';
 import { parseAllowedOrigins } from './cors.ts';
+import { keyKind, publishableKey, secretKey, supabaseUrl } from './keys.ts';
 
 /** سر الدالة ALLOWED_ORIGINS (T23 H1): أصول لوحة الأدمن المسموحة، مفصولة بفواصل. */
 export const allowedOrigins = () => parseAllowedOrigins(Deno.env.get('ALLOWED_ORIGINS'));
 
 export function serviceClient(): SupabaseClient {
-  const url = Deno.env.get('SUPABASE_URL');
-  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing');
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const key = secretKey();
+  // نوع المفتاح فقط (new = sb_secret_، legacy = service_role)، لا قيمته: دليل بالسجل قبل إطفاء القديمة (RUNBOOK §17.5)
+  console.log(
+    'keys',
+    JSON.stringify({ secret: keyKind(key), publishable: keyKind(publishableKey()) }),
+  );
+  return createClient(supabaseUrl(), key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export function adminAuthDeps(admin: SupabaseClient): AdminAuthDeps {
   return {
     async getUser(jwt) {
-      // getUser يتحقق من الرمز (التوقيع والجلسة) عند Auth؛ بعدها فقط نقرأ aal من نفس الرمز
+      // getUser يتحقق من الرمز (التوقيع والجلسة) عند Auth؛ بعدها فقط نقرأ aal من نفس الرمز. هذا هو التحقق
+      // الوحيد من المستخدم (verify_jwt = false منذ T23 F H2: بوابة Supabase لا تفهم المفاتيح الجديدة)، ويقبل
+      // رموز HS256 القديمة ورموز مفاتيح التوقيع غير المتماثلة (ES256) معاً.
       const { data, error } = await admin.auth.getUser(jwt);
       if (error || !data.user) return null;
       return { id: data.user.id, aal: jwtAal(jwt) };
@@ -32,11 +40,9 @@ export function adminAuthDeps(admin: SupabaseClient): AdminAuthDeps {
       return (data as ProfileRow | null) ?? null;
     },
     async touchSession(jwt) {
-      // بجلسة المستدعي نفسها (auth.jwt() بقاعدة البيانات)، لا بمفتاح الخدمة
-      const url = Deno.env.get('SUPABASE_URL');
-      const key = Deno.env.get('SUPABASE_ANON_KEY');
-      if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_ANON_KEY missing');
-      const user = createClient(url, key, {
+      // بجلسة المستدعي نفسها (auth.jwt() بقاعدة البيانات)، لا بمفتاح الخدمة. المفتاح المنشور بـ apikey
+      // والـ JWT بـ Authorization (المفتاح الجديد ليس JWT فلا يوضع بـ Bearer).
+      const user = createClient(supabaseUrl(), publishableKey(), {
         auth: { persistSession: false, autoRefreshToken: false },
         global: { headers: { Authorization: `Bearer ${jwt}` } },
       });
