@@ -149,7 +149,7 @@ select set_eq(
       where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
         and has_function_privilege('authenticated', p.oid, 'execute')
         and pg_get_function_result(p.oid) ~ '^(jsonb?|record|setof record|TABLE\()' $$,
-  $$ values ('available_orders'), ('dashboard_today'), ('list_drivers'), ('place_order'), ('ratings_list'),
+  $$ values ('admin_cancel_customer_orders'), ('available_orders'), ('dashboard_today'), ('list_drivers'), ('place_order'), ('ratings_list'),
             ('ratings_summary'), ('report_daily'), ('report_drivers'), ('report_orders_placed'),
             ('report_summary'), ('report_top_products'), ('report_waste') $$,
   'every authenticated RPC returning jsonb / record / TABLE is reviewed (a new one must be classified here)');

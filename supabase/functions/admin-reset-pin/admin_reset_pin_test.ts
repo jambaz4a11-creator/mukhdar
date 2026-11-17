@@ -15,6 +15,7 @@ const JWTS: Record<string, { id: string; aal: string | null }> = {
   'jwt-admin': { id: ADMIN, aal: 'aal2' },
   'jwt-admin-aal1': { id: ADMIN, aal: 'aal1' },
   'jwt-admin-no-aal': { id: ADMIN, aal: null },
+  'jwt-idle': { id: ADMIN, aal: 'aal2' }, // جلسة خاملة > 12 ساعة (T23 M7)
   'jwt-staff': { id: STAFF, aal: 'aal2' },
   'jwt-off-admin': { id: OFF_ADMIN, aal: 'aal2' },
   'jwt-customer': { id: CUSTOMER, aal: 'aal1' },
@@ -37,6 +38,7 @@ function setup(overrides: Partial<ResetPinDeps> = {}, count = 1) {
   const deps: ResetPinDeps = {
     getUser: (jwt) => Promise.resolve(JWTS[jwt] ?? null),
     getProfile: (id) => Promise.resolve(PROFILES[id] ?? null),
+    touchSession: (jwt) => Promise.resolve(jwt !== 'jwt-idle'),
     rateHit() {
       calls.push('rate');
       return Promise.resolve(count);
@@ -103,6 +105,26 @@ Deno.test(
       );
     }
     assert.deepEqual(calls, []); // لا حد معدل ولا تغيير
+  },
+);
+
+Deno.test(
+  'admin-reset-pin: a panel session idle for more than 12 h → 401 SESSION_EXPIRED, nothing changes (T23 M7)',
+  async () => {
+    const { handler, calls } = setup();
+    await expectResponse(
+      await handler(post({ user_id: CUSTOMER, new_pin: '482915' }, 'Bearer jwt-idle')),
+      401,
+      { error: 'SESSION_EXPIRED' },
+    );
+    assert.deepEqual(calls, []);
+    const broken = setup({ touchSession: () => Promise.reject(new Error('db down')) });
+    await expectResponse(
+      await broken.handler(post({ user_id: CUSTOMER, new_pin: '482915' })),
+      500,
+      { error: 'INTERNAL' },
+    );
+    assert.deepEqual(broken.calls, []); // يفشل مغلقاً
   },
 );
 

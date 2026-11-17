@@ -20,8 +20,9 @@ begin
 end $$;
 
 -- حد الطلبات غير المنتهية للزبون (افتراضي 3) يُرفع للتجهيز؛ 03_place_order يختبره بقيمته الحقيقية.
--- حدا الطلب (T23 H2: 20 وحدة لكل منتج، 30 منتجاً) يُرفعان لأقصاهما للتجهيز؛ 28_order_caps يختبرهما.
-update public.app_settings set max_active_orders = 1000, max_line_qty = 99, max_order_lines = 50;
+-- حدا الطلب (T23 H2: 20 وحدة لكل منتج، 30 منتجاً) وحد الحساب الجديد (طلب مفتوح واحد حتى أول تسليم) يُرفعان لأقصاها
+-- للتجهيز؛ 29_order_caps و30_e2 يختبرانها.
+update public.app_settings set max_active_orders = 1000, new_account_max_active_orders = 1000, max_line_qty = 99, max_order_lines = 50;
 
 create sequence tests.phone_seq start 9647900000000;
 
@@ -151,7 +152,13 @@ returns uuid language plpgsql as $$
 declare r jsonb;
 begin
   perform tests.set_uid(p_customer);
-  r := public.place_order(coalesce(p_address, tests.new_address(p_customer)), p_items, gen_random_uuid());
+  -- يعيد استعمال أحدث عنوان للزبون (حد 20 عنواناً لكل زبون، T23 L3) ويُنشئ واحداً إن لم يوجد
+  r := public.place_order(
+         coalesce(p_address,
+                  (select a.id from public.addresses a where a.customer_id = p_customer
+                    order by a.created_at desc, a.id limit 1),
+                  tests.new_address(p_customer)),
+         p_items, gen_random_uuid());
   perform set_config('request.jwt.claims', '{}', true);
   return (r ->> 'order_id')::uuid;
 end $$;

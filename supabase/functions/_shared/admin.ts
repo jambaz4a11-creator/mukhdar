@@ -18,6 +18,11 @@ export interface AdminAuthDeps {
   getUser(jwt: string): Promise<{ id: string; aal: string | null } | null>;
   /** profiles بمفتاح الخدمة: الدور والتفعيل والهاتف، أو null إن لم يوجد. */
   getProfile(userId: string): Promise<ProfileRow | null>;
+  /**
+   * يسجّل نشاط جلسة اللوحة (rpc touch_panel_session بجلسة المستدعي، T23 M7): true = حيّة، false = انتهت بخمول
+   * أكثر من 12 ساعة (وحذفها الخادم). الأدمن يستدعي الدالتين من جلسته، فكل طلب نشاط، ولا تُحيا جلسة منتهية.
+   */
+  touchSession(jwt: string): Promise<boolean>;
 }
 
 export function json(status: number, body: unknown): Response {
@@ -98,6 +103,14 @@ export async function requireAdmin(req: Request, deps: AdminAuthDeps): Promise<s
   if (!profile || profile.role !== 'admin' || !profile.is_active) return fail(403, 'NOT_ALLOWED');
   if (user.aal !== 'aal2') return fail(403, 'MFA_REQUIRED');
   if (profile.must_change_pin) return fail(403, 'PIN_CHANGE_REQUIRED');
+  // خمول اللوحة 12 ساعة (M7): الخادم يفرضه بـ current_user_role()، والدالتان تستعملان service_role فتفحصانه هنا
+  let alive: boolean;
+  try {
+    alive = await deps.touchSession(jwt);
+  } catch {
+    return fail(500, 'INTERNAL');
+  }
+  if (!alive) return fail(401, 'SESSION_EXPIRED');
   return userId;
 }
 

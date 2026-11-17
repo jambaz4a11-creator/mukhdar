@@ -20,6 +20,7 @@ const authDeps = {
     Promise.resolve(jwt === 'jwt-admin' ? { id: ADMIN, aal: 'aal2' } : null),
   getProfile: () =>
     Promise.resolve({ role: 'admin' as const, is_active: true, phone: '9647000000001' }),
+  touchSession: () => Promise.resolve(true),
 };
 const resetDeps: ResetPinDeps = {
   ...authDeps,

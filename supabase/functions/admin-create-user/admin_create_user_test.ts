@@ -16,6 +16,7 @@ const NEW_ID = '00000000-0000-4000-8000-0000000000aa';
 const JWTS: Record<string, { id: string; aal: string | null }> = {
   'jwt-admin': { id: ADMIN, aal: 'aal2' },
   'jwt-admin-aal1': { id: ADMIN, aal: 'aal1' },
+  'jwt-idle': { id: ADMIN, aal: 'aal2' }, // جلسة خاملة > 12 ساعة (T23 M7)
   'jwt-staff': { id: STAFF, aal: 'aal2' },
   'jwt-flagged': { id: FLAGGED, aal: 'aal2' },
 };
@@ -34,6 +35,7 @@ function setup(overrides: Partial<CreateUserDeps> = {}, count = 1) {
   const deps: CreateUserDeps = {
     getUser: (jwt) => Promise.resolve(JWTS[jwt] ?? null),
     getProfile: (id) => Promise.resolve(PROFILES[id] ?? null),
+    touchSession: (jwt) => Promise.resolve(jwt !== 'jwt-idle'),
     rateHit() {
       calls.push('rate');
       return Promise.resolve(count);
@@ -140,6 +142,17 @@ Deno.test(
     const { handler, calls } = setup();
     await expectResponse(await handler(post(VALID, 'Bearer jwt-admin-aal1')), 403, {
       error: 'MFA_REQUIRED',
+    });
+    assert.deepEqual(calls, []);
+  },
+);
+
+Deno.test(
+  'admin-create-user: a panel session idle for more than 12 h → 401 SESSION_EXPIRED, nothing changes (T23 M7)',
+  async () => {
+    const { handler, calls } = setup();
+    await expectResponse(await handler(post(VALID, 'Bearer jwt-idle')), 401, {
+      error: 'SESSION_EXPIRED',
     });
     assert.deepEqual(calls, []);
   },

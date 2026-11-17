@@ -1,5 +1,5 @@
 -- 12: حذف الحساب (T08): begin/abort_account_deletion، وما يبقى بعد حذف المستخدم من auth.users
-select plan(39);
+select plan(43);
 
 select tests.remember('cust', tests.new_user('customer'));
 select tests.remember('busy', tests.new_user('customer'));
@@ -108,8 +108,17 @@ select is((select count(*)::int from public.orders where id in (tests.id('o_del'
 select is((select count(*)::int from public.orders
             where id in (tests.id('o_del'), tests.id('o_can')) and customer_id is null), 2,
   'kept orders have customer_id = null');
-select isnt((select customer_name from public.orders where id = tests.id('o_del')), null,
-  'order keeps the customer name snapshot (invoices)');
+select is((select customer_name from public.orders where id = tests.id('o_del')), null,
+  'order loses the customer name (T23 M5)');
+select is((select customer_phone from public.orders where id = tests.id('o_del')), null,
+  'order loses the customer phone (T23 M5)');
+select is((select address_snapshot from public.orders where id = tests.id('o_del')) ? 'sector'
+      and (select address_snapshot from public.orders where id = tests.id('o_del')) ? 'subsection', true,
+  'order keeps sector and unit (T23 M5)');
+select is((select address_snapshot - 'sector' - 'subsection' from public.orders where id = tests.id('o_del')),
+  '{}'::jsonb, 'order keeps nothing else of the address: no building, apartment, note, address_id (T23 M5)');
+select is((select subtotal_iqd > 0 and total_iqd > 0 from public.orders where id = tests.id('o_del')), true,
+  'order keeps its amounts for accounting (T23 M5)');
 select is((select driver_id from public.orders where id = tests.id('o_del')), null,
   'deleted driver → driver_id = null on finished orders');
 select is((select count(*)::int from public.order_items where order_id = tests.id('o_del')) > 0, true,

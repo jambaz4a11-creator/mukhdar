@@ -31,6 +31,19 @@ export function adminAuthDeps(admin: SupabaseClient): AdminAuthDeps {
       if (error) throw new Error(error.message);
       return (data as ProfileRow | null) ?? null;
     },
+    async touchSession(jwt) {
+      // بجلسة المستدعي نفسها (auth.jwt() بقاعدة البيانات)، لا بمفتاح الخدمة
+      const url = Deno.env.get('SUPABASE_URL');
+      const key = Deno.env.get('SUPABASE_ANON_KEY');
+      if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_ANON_KEY missing');
+      const user = createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${jwt}` } },
+      });
+      const { data, error } = await user.rpc('touch_panel_session');
+      if (error) throw new Error(error.message);
+      return data === true;
+    },
   };
 }
 
