@@ -16,3 +16,19 @@ Which one?
 ## 2. Floor range (Part 2, 2026-11-18)
 Assumed **0..20**, with 0 = ground floor ("الطابق الأرضي"). Bismayah buildings have 10 floors; 20 leaves a
 margin. If you want a different maximum, or the ground floor written differently (e.g. "أرضي"), say so.
+
+## 3. Admin panel hosting: Cloudflare Workers plan (Part 4, 2026-11-18) — **needs a decision**
+The deployed admin panel (`mukhdar-admin.jambaz4a11.workers.dev`) intermittently answers
+**`503 error code: 1102` "Worker exceeded resource limits"**: about 13 of 30 plain `/login` requests in one
+sample, and also `/orders`. Rendering Next.js pages on the Worker needs more CPU per request than the
+Workers Free plan allows. Supabase auth logs show `GET /user … context canceled` from Cloudflare at the
+same times. The panel then treats the failed session check as "signed out" and sends the user to the
+login page. The customer PWA (Cloudflare Pages, static) is not affected.
+- **Option A (recommended):** Workers Paid plan (about 5 USD/month; CPU per request far above the
+  free limit). No code change. This is a billing change on your Cloudflare account, so it was not done.
+- **Option B:** keep Free and reduce server work per page (cache, fewer server-rendered pages). Needs a
+  measurement first; it may not get under the free limit.
+- **Follow-up either way (proposed, not done):** when the session check fails because Supabase or the
+  network is unreachable, show "تعذّر التحقق، أعد المحاولة" instead of the login page. Access stays
+  denied either way. It touches the proxy and four layouts, so I left it for a reviewed PR.
+Details: `docs/reviews/preview-check.md`.

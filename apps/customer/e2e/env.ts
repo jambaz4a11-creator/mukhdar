@@ -16,6 +16,9 @@ const repo = join(appDir, '..', '..');
 
 export const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? readVar(join(appDir, '.env'), 'EXPO_PUBLIC_SUPABASE_URL');
+export const PUBLISHABLE_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  readVar(join(appDir, '.env'), 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
 export const SERVICE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ??
   readVar(join(repo, '.env.local'), 'SUPABASE_SERVICE_ROLE_KEY');
