@@ -7,3 +7,6 @@ allowBuilds:
   '@parcel/watcher': false
   # binary only for source-map upload (EAS build with SENTRY_AUTH_TOKEN, later)
   '@sentry/cli': false
+  # Cloudflare preview (admin via OpenNext): wrangler's local runtime and its bundler binary
+  esbuild: true
+  workerd: true
