@@ -37,3 +37,6 @@ scripts/load/.run/
 .open-next/
 .wrangler/
 .dev.vars
+
+# صور المنتجات: مرشحون وملفات مؤقتة
+scripts/product-images/.cache/
