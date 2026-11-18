@@ -620,3 +620,14 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 - [ ] **مفتاح الإنتاج السري (L7):** لا يُحفظ بـ `.env.local` (الملف للتطوير). يُحفظ بمدير كلمات سر، ويُمرَّر بمتغير بيئة وقت تشغيل سكربت الطوارئ وحده (`SUPABASE_SERVICE_ROLE_KEY=… pnpm admin:break-glass-reset …`). بالإنتاج استعمل مفتاح `sb_secret_…` باسم `break-glass` وبدّله بعد كل استعمال؛ BitLocker على جهاز المالك.
 - [ ] **GitHub (L10، يدوي، غير مفعّل بعد):** Dependabot alerts وsecurity updates (Settings ← Code security) ومصادقة ثنائية لحساب المالك. ثم شغّل `pnpm audit` قبل T24 (المعروف: moderate اثنان بأدوات البناء فقط).
 - [ ] **L9:** إن وُجد خيار "Require current password when changing password" ينطبق على مستخدمي الهاتف بالإنتاج فعّله بعد اختباره على dev؛ وإلا المخاطرة مقبولة (ADR 0003).
+
+## صور المنتجات الحقيقية (2026-11-18)
+
+`scripts/product-images/`: صور منتجات حقيقية **CC0 / ملكية عامة فقط** (بلا إسناد)، من Openverse أو ويكيميديا كومنز، والمصادر والرخص بـ `docs/product-images-sources.md` (مولَّد من `manifest.json`).
+
+- **المعاينة (لا يكتب شيئاً):** `pnpm product-images -- --remote` ← يتحقق من رخصة كل صورة من المصدر الآن، وينزّلها ويعالجها (مربع 800×800 WebP أقل من 200KB) إلى `scripts/product-images/.cache/processed/`.
+- **التنفيذ:** `pnpm product-images -- --remote --apply` ← يرفع إلى `product-images/<product_id>/<timestamp>.webp` (نفس مسار لوحة الأدمن) ويضبط `products.image_path`. يتخطى منتجاً له صورة حقيقية (`--force` للاستبدال، `--only=<اسم>` لمنتج واحد). لا يغيّر اسماً ولا سعراً ولا رصيداً ولا قسماً.
+- **الإنتاج:** مرفوض افتراضياً (حارس seed:demo). مسار صريح ثلاثي فقط: `--target=prod` + `MUKHDAR_TARGET=prod` + `--confirm-ref=<ref الإنتاج>`، وبمفتاح `SUPABASE_SERVICE_ROLE_KEY` للإنتاج من بيئتك (لا من الـ repo).
+- **أداة البحث:** `node scripts/product-images/search.mjs` (مرشحون + شبكات معاينة بـ `.cache/` المتجاهَل بـ git) ثم `pick.mjs "اسم=رقم"` لإضافة الاختيار إلى `manifest.json`.
+- **بلا صورة حقيقية بعد (يبقى placeholder لحين وجود صورة حرة مناسبة):** بطيخ أصفر، تفاح أصفر، شبنت، كرفس، كزبرة، لهانة، دبس تمر، تين مجفف، جوز، زبيب، مشمش مجفف.
+- **السلال (2026-11-18):** عشر منتجات "سلة …" كلها بتاريخ طلبات/مخزون، فأُخفيت (`is_active = false`) لا حُذفت، بـ `scripts/hide-products.mjs --match=سلة --apply` (على mukhdar-dev فقط).
