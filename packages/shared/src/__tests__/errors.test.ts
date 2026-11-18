@@ -5,6 +5,7 @@ import {
   ERROR_CODES,
   ERROR_MESSAGES,
   NETWORK_ERROR_MESSAGE,
+  PERMISSION_ERROR_MESSAGE,
   errorMessage,
   parseBackendError,
   parseFunctionError,
@@ -138,18 +139,40 @@ describe('parseBackendError', () => {
   });
 
   it.each([
-    [{ message: 'permission denied for table orders', code: '42501' }],
-    [new Error('something odd')],
-    [null],
-    [undefined],
-    [42],
-    ['constructor'],
-    ['toString'],
-  ])('falls back to the default message for %p, never the raw text', (input) => {
+    [{ message: 'permission denied for function clean_user_text', code: '42501' }],
+    [
+      {
+        message: 'new row violates row-level security policy for table "addresses"',
+        code: '42501',
+      },
+    ],
+    [{ message: 'permission denied for table orders' }],
+  ])('maps a permission error (42501 without a known code) to its own message: %p', (input) => {
     expect(parseBackendError(input)).toEqual({
       code: null,
-      message: DEFAULT_ERROR_MESSAGE,
+      message: PERMISSION_ERROR_MESSAGE,
       detail: null,
     });
+    expect(PERMISSION_ERROR_MESSAGE).not.toBe(DEFAULT_ERROR_MESSAGE);
   });
+
+  it('a known code raised with 42501 keeps its own message', () => {
+    expect(errorMessage({ message: 'NOT_ALLOWED', code: '42501' })).toBe(
+      ERROR_MESSAGES.NOT_ALLOWED,
+    );
+    expect(errorMessage({ message: 'PIN_CHANGE_REQUIRED', code: '42501' })).toBe(
+      ERROR_MESSAGES.PIN_CHANGE_REQUIRED,
+    );
+  });
+
+  it.each([[new Error('something odd')], [null], [undefined], [42], ['constructor'], ['toString']])(
+    'falls back to the default message for %p, never the raw text',
+    (input) => {
+      expect(parseBackendError(input)).toEqual({
+        code: null,
+        message: DEFAULT_ERROR_MESSAGE,
+        detail: null,
+      });
+    },
+  );
 });

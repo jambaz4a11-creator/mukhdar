@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "export:web": "expo export -p web --max-workers 2 && node scripts/postexport-web.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.4.2",
@@ -47,6 +48,7 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.19.2",
@@ -62,6 +64,10 @@
     ],
     "setupFilesAfterEnv": [
       "./jest.setup.ts"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/e2e/"
     ]
   }
 }

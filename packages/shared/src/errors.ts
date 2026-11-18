@@ -91,6 +91,12 @@ export const ERROR_CODES = Object.keys(ERROR_MESSAGES) as ErrorCode[];
 
 export const DEFAULT_ERROR_MESSAGE = 'حدث خطأ غير متوقع، حاول مرة ثانية';
 export const NETWORK_ERROR_MESSAGE = 'تعذّر الاتصال، تحقق من الإنترنت وحاول مرة ثانية';
+/**
+ * Postgres 42501 بلا رمز معروف (صلاحية ناقصة أو سياسة RLS رفضت الصف): خطأ من جهتنا لا من المستخدم
+ * (بلاغ iOS Safari 2026-11-18). رسالة محددة بدل العامة حتى يعرف أنه ليس انقطاعاً وأن يتواصل مع المتجر.
+ */
+export const PERMISSION_ERROR_MESSAGE =
+  'ما قدرنا نحفظ هذا التغيير لأن حسابك ما عنده صلاحية له. سجّل الخروج وادخل من جديد، وإذا تكرر تواصل مع المتجر على واتساب';
 
 export function isErrorCode(value: unknown): value is ErrorCode {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, value);
@@ -107,6 +113,7 @@ export interface BackendError {
 
 const NETWORK_PATTERN =
   /failed to fetch|network request failed|networkerror|load failed|fetch failed/i;
+const PERMISSION_PATTERN = /permission denied|violates row-level security/i;
 
 /**
  * يحوّل أي خطأ (رمز نصي، خطأ PostgREST {message, details}، جسم رد Edge Function {error}، أو Error)
@@ -135,6 +142,12 @@ export function parseBackendError(error: unknown): BackendError {
   const code = raw.trim();
 
   if (isErrorCode(code)) return { code, message: ERROR_MESSAGES[code], detail };
+  const sqlState =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code: unknown }).code
+      : null;
+  if (sqlState === '42501' || PERMISSION_PATTERN.test(raw))
+    return { code: null, message: PERMISSION_ERROR_MESSAGE, detail: null };
   if (NETWORK_PATTERN.test(raw))
     return { code: null, message: NETWORK_ERROR_MESSAGE, detail: null };
   return { code: null, message: DEFAULT_ERROR_MESSAGE, detail: null };
