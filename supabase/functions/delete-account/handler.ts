@@ -2,6 +2,8 @@
 // الرد دائماً JSON: نجاح {deleted: true}، أو {error: CODE} حيث CODE من رموز SPEC-backend §5
 // (التطبيق يترجمه بـ parseBackendError)، عدا الخطأ الداخلي (500) فرسالته عامة.
 
+import { withCors } from '../_shared/cors.ts';
+
 export interface DeleteAccountDeps {
   /** يتحقق من JWT المستخدم عبر Auth (لا يكفي فك الترميز) ويرجع معرّفه، أو null. */
   getUserId(jwt: string): Promise<string | null>;
@@ -76,4 +78,12 @@ export function createDeleteAccountHandler(
     deps.log?.('delete-account done', { userId });
     return json(200, { deleted: true });
   };
+}
+
+/** ما تخدمه index.ts: المعالج + CORS بأصول ALLOWED_ORIGINS فقط (تطبيق الزبون على الويب، PWA). */
+export function createDeleteAccountServer(
+  deps: DeleteAccountDeps,
+  allowedOrigins: ReadonlySet<string>,
+): (req: Request) => Promise<Response> {
+  return withCors(createDeleteAccountHandler(deps), allowedOrigins);
 }

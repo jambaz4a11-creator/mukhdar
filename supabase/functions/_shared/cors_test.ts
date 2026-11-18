@@ -5,6 +5,8 @@
 import assert from 'node:assert/strict';
 import { createResetPinServer, type ResetPinDeps } from '../admin-reset-pin/handler.ts';
 import { createAdminCreateUserServer, type CreateUserDeps } from '../admin-create-user/handler.ts';
+import { createSignupServer, type SignupDeps } from '../signup/handler.ts';
+import { createDeleteAccountServer, type DeleteAccountDeps } from '../delete-account/handler.ts';
 import { jwtAal } from './admin.ts';
 import { CORS_ALLOW_HEADERS, parseAllowedOrigins, withCors } from './cors.ts';
 
@@ -37,9 +39,19 @@ const createDeps: CreateUserDeps = {
   deleteUser: never,
 };
 
+const signupDeps: SignupDeps = { rateHit: never, createUser: never };
+const deleteDeps: DeleteAccountDeps = {
+  getUserId: () => Promise.resolve(null),
+  begin: never,
+  deleteUser: never,
+  abort: never,
+};
+
 const SERVERS = [
   ['admin-reset-pin', createResetPinServer(resetDeps, ALLOWED)],
   ['admin-create-user', createAdminCreateUserServer(createDeps, ALLOWED)],
+  ['signup', createSignupServer(signupDeps, ALLOWED)],
+  ['delete-account', createDeleteAccountServer(deleteDeps, ALLOWED)],
 ] as const;
 
 /** ما يرسله المتصفح قبل functions.invoke من لوحة على أصل آخر. */
@@ -86,19 +98,26 @@ for (const [name, serve] of SERVERS) {
   Deno.test(
     `${name}: the real response (here 401) carries the CORS header for the panel`,
     async () => {
-      const res = await serve(
-        new Request('https://x', { method: 'POST', headers: { Origin: PANEL }, body: '{}' }),
-      );
-      assert.equal(res.status, 401); // بلا JWT: الرمز يبقى مقروءاً بالمتصفح بفضل CORS
+      // signup بلا JWT: نختبر ردّ 405 الحقيقي (PUT) بدل استدعاء اعتمادية
+      const probe = name === 'signup' ? { method: 'PUT' } : { method: 'POST', body: '{}' };
+      const res = await serve(new Request('https://x', { ...probe, headers: { Origin: PANEL } }));
+      const expected =
+        name === 'signup'
+          ? { status: 405, body: { error: 'SIGNUP_FAILED' } }
+          : { status: 401, body: { error: 'NOT_AUTHENTICATED' } };
+      assert.equal(res.status, expected.status); // الرمز يبقى مقروءاً بالمتصفح بفضل CORS
       assert.equal(res.headers.get('Access-Control-Allow-Origin'), PANEL);
-      assert.deepEqual(await res.json(), { error: 'NOT_AUTHENTICATED' });
+      assert.deepEqual(await res.json(), expected.body);
     },
   );
 
   Deno.test(`${name}: index.ts serves the CORS-wrapped handler with ALLOWED_ORIGINS`, async () => {
     const src = await Deno.readTextFile(new URL(`../${name}/index.ts`, import.meta.url));
     assert.match(src, /Deno\.serve\(\s*create\w+Server\(/);
-    assert.match(src, /allowedOrigins\(\)/);
+    assert.match(
+      src,
+      /allowedOrigins\(\)|parseAllowedOrigins\(Deno\.env\.get\('ALLOWED_ORIGINS'\)\)/,
+    );
   });
 }
 

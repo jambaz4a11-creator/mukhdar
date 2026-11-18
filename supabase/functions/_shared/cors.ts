@@ -1,10 +1,11 @@
-// CORS للدالتين الإداريتين (T23 H1): لوحة الأدمن تستدعيهما من المتصفح (functions.invoke). Supabase المستضاف
+// CORS للدوال التي تستدعيها المتصفحات (T23 H1 + معاينة الويب): لوحة الأدمن (admin-reset-pin وadmin-create-user)
+// وتطبيق الزبون PWA (signup وdelete-account). لوحة الأدمن تستدعيهما من المتصفح (functions.invoke). Supabase المستضاف
 // لا يضيف CORS للدوال (Kong المحلي يضيفه، فكان CI يخفي الخلل)، فالدالة نفسها ترد على الـ preflight.
 // - الأصول المسموحة من سر الدالة ALLOWED_ORIGINS (مفصولة بفواصل). فارغ أو غير مضبوط = لا أصل مسموح (يغلق).
 // - يُرجَع الأصل نفسه فقط إن كان بالقائمة، أبداً '*'، مع Vary: Origin.
 // - OPTIONS من أصل مسموح ← 204؛ من غيره ← 403 بلا ترويسات CORS (المتصفح يمنع الطلب).
 // - طلب بلا Origin (سكربت، تطبيق أصلي) يمر بلا ترويسات CORS: الحماية هي JWT الأدمن لا CORS.
-// signup وdelete-account بلا CORS عمداً (التطبيقات الأصلية فقط).
+// التطبيقات الأصلية لا ترسل Origin فلا تتأثر.
 
 export const CORS_ALLOW_HEADERS =
   'authorization, apikey, content-type, x-client-info, x-region, x-supabase-api-version';

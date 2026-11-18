@@ -11,6 +11,7 @@
 // قواعد الرقم والرمز هي نفسها بالتطبيقات: نفس ملفات packages/shared (لا نسخة).
 import { normalizeIraqiPhone, toStoredPhone } from '../../../packages/shared/src/phone.ts';
 import { normalizePin, validatePin } from '../../../packages/shared/src/pin.ts';
+import { withCors } from '../_shared/cors.ts';
 
 export type CreateUserResult = 'created' | 'exists';
 
@@ -94,4 +95,12 @@ export function createSignupHandler(deps: SignupDeps): (req: Request) => Promise
     deps.log?.('signup done');
     return json(201, { created: true });
   };
+}
+
+/** ما تخدمه index.ts: المعالج + CORS بأصول ALLOWED_ORIGINS فقط (تطبيق الزبون على الويب، PWA). */
+export function createSignupServer(
+  deps: SignupDeps,
+  allowedOrigins: ReadonlySet<string>,
+): (req: Request) => Promise<Response> {
+  return withCors(createSignupHandler(deps), allowedOrigins);
 }
