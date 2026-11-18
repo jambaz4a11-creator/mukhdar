@@ -365,6 +365,8 @@ GOOGLE_SERVICES_JSON=                                     # T14، اختياري
 - `expo export` محلياً يحتاج ذاكرة أكبر لـ Node على هذا الجهاز: `NODE_OPTIONS=--max-old-space-size=6144`.
 - الاختبارات: `pnpm --filter @mukhdar/customer test` (jest-expo + RNTL)، وهي ضمن `pnpm test` و CI.
 - **E2E على المتصفح (2026-11-18):** `apps/customer/e2e` (Playwright، مشروعان: `webkit-iphone` = Safari الآيفون، و`chromium-android`). المسار: تسجيل ← الاسم ← أول عنوان ← إضافة للسلة ← تأكيد الطلب ← إلغاؤه ← الاسم بحسابي ← حذف الحساب. **يكتب على mukhdar-dev** (حساب مؤقت بالبادئة `9647008`، يُحذف بنهاية الاختبار، وتنظيف احتياطي بـ `global-teardown` بمفتاح الخدمة من `.env.local`؛ الطلب يُلغى فيرجع المخزون ويبقى مجهّلاً). يرفض أي مشروع غير dev. ليس بـ CI (يحتاج dev ومفتاح الخدمة).
+  - `catalog-cards.spec.ts` (2026-11-18): بطاقة المنتج على 360px بلا حساب (قراءة فقط): الصورة مربعة بعرض البطاقة وأكبر عنصر و`contain`، بالرئيسية وبقسم وبنتائج البحث، والعداد داخل البطاقة.
+  - لقطات للمراجعة بالعين: `E2E_SHOTS=<مجلد موجود>` (الملفان).
   - مرة واحدة: `pnpm --filter @mukhdar/customer exec playwright install webkit chromium`.
   - ضد النسخة المنشورة: `E2E_BASE_URL=https://mukhdar-app.pages.dev pnpm --filter @mukhdar/customer test:e2e`.
   - محلياً: `pnpm --filter @mukhdar/customer test:e2e` (يبني `dist` بـ `export:web` ويخدمه على `127.0.0.1:3000`، الأصل المسموح بـ `ALLOWED_ORIGINS` على dev؛ أوقف `admin dev` أولاً؛ `E2E_SKIP_BUILD=1` لاستعمال `dist` الحالي). كل تشغيل كامل يستهلك تسجيلين من حد `signup` (20/ساعة لكل IP).

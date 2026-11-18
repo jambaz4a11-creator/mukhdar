@@ -1,5 +1,6 @@
 // الرئيسية والكتالوج (T11، SPEC-customer §2.2، تصميم Home): "التوصيل إلى" (T12)، بحث، شريط "المتجر مغلق"، الأقسام،
-// شبكة عمودين بتمرير لانهائي (30 بالصفحة)، سحب للتحديث، وشريط السلة العائم.
+// شبكة عمودين بتمرير لانهائي (30 بالصفحة)، سحب للتحديث، وشريط السلة العائم. نفس الشبكة والبطاقة (صورة مربعة
+// بعرض البطاقة، 2026-11-18) لكل المنتجات والأقسام ونتائج البحث.
 import { errorMessage } from '@mukhdar/shared';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -17,7 +18,7 @@ import { AppText } from '../../components/AppText';
 import { CART_BAR_SPACE, CartBar } from '../../components/CartBar';
 import { CategoryChips } from '../../components/CategoryChips';
 import { DeliveryAddressHeader } from '../../components/DeliveryAddressHeader';
-import { CARD_HEIGHT, ProductCard } from '../../components/ProductCard';
+import { cardHeight, ProductCard } from '../../components/ProductCard';
 import { SearchBox } from '../../components/SearchBox';
 import { StoreClosedBanner } from '../../components/StoreClosedBanner';
 import type { Product } from '../../features/catalog/api';
@@ -32,7 +33,6 @@ import { OfflineState } from '../../components/OfflineState';
 import { isFirstLoad, isOfflineEmpty } from '../../lib/network';
 
 export const SEARCH_DEBOUNCE_MS = 300;
-const ROW_HEIGHT = CARD_HEIGHT + spacing.md;
 /** عنوان القائمة بارتفاع ثابت حتى تبقى إزاحات getItemLayout صحيحة */
 const HEADING_HEIGHT = 40;
 
@@ -70,7 +70,9 @@ function Catalog() {
   const hasCart = useCart((s) => Object.keys(s.items).length > 0);
   const [refreshing, setRefreshing] = useState(false);
   const { width } = useWindowDimensions();
-  const cardWidth = (width - spacing.screen * 2 - spacing.md) / 2;
+  // عرض البطاقة صحيح (بلا كسور) حتى تبقى الصورة مربعة تماماً وإزاحات getItemLayout دقيقة
+  const cardWidth = Math.floor((width - spacing.screen * 2 - spacing.md) / 2);
+  const rowHeight = cardHeight(cardWidth) + spacing.md;
 
   const products: Product[] = searching ? (results.data ?? []) : (list.data?.pages.flat() ?? []);
   const active = searching ? results : list;
@@ -131,14 +133,12 @@ function Catalog() {
           hasCart && { paddingBottom: CART_BAR_SPACE + spacing.lg },
         ]}
         renderItem={({ item }) => (
-          <View style={{ width: cardWidth }}>
-            <ProductCard product={item} onOpen={openProduct} />
-          </View>
+          <ProductCard product={item} onOpen={openProduct} width={cardWidth} />
         )}
         // بطاقات بارتفاع ثابت: الفهرس هنا فهرس الصف (عمودان بالصف)
         getItemLayout={(_, index) => ({
-          length: ROW_HEIGHT,
-          offset: HEADING_HEIGHT + ROW_HEIGHT * index,
+          length: rowHeight,
+          offset: HEADING_HEIGHT + rowHeight * index,
           index,
         })}
         ListHeaderComponent={
