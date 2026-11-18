@@ -1,34 +1,28 @@
 # Open questions for the owner
 
-Decisions that were not mine to make during the 2026-11-18 session. Each item says what was done in the
-meantime, so nothing is blocked. Answer in one line and it will be applied.
+Decisions that were not mine to make during the 2026-11-18 session. All were answered by the owner on
+2026-11-18 and are applied; nothing is open except the billing step in item 3.
 
-## 1. Address wording everywhere: "بلوك/بناية" or "وحدة/عمارة"? (Part 2, 2026-11-18)
-The customer form now uses the words you asked for: **البلوك ← البناية ← الطابق ← رقم الشقة**.
-Everywhere else the address is still written with the old words: the customer's order screen, the form's
-preview line, the admin order details and receipt, and the push text to drivers
-("قطاع A · وحدة A3 · عمارة 12 · طابق 3 · شقة 5", push "وحدة A3 - عمارة 12").
-- **Option A (kept for now):** leave the display as is. No change for the admin, staff or the driver app.
-- **Option B:** show "بلوك A3 · بناية 12 · طابق 3 · شقة 5" everywhere (one shared function, the admin
-  address pages and a migration for the push text; the driver developer must be told).
-Which one?
+## 1. Address wording everywhere — ✅ resolved (2026-11-18)
+**Decision:** use "بلوك / بناية / الطابق / شقة" everywhere (order screens, admin, receipts, driver data and
+notifications, reports, CSV). Example: `بلوك A3 · بناية 12 · الطابق 3 · شقة 10`. The word "قطاع" is no longer
+printed (the sector is part of the block name `A3`).
+**Done:** one function (`formatAddress` / `formatAddressShort` in `packages/shared`) drives every screen;
+admin address-management labels, public privacy/delete pages and the account-deletion text use the new
+words; migration `20261205000001_address_wording_block.sql` (dev only, RUNBOOK §17 item 35) changes the push
+text to `بلوك A3 - بناية 12`. Stored values are unchanged. The driver developer must be told: see
+"Changes for the driver app (address wording)" in `docs/DRIVER-API.md`.
 
-## 2. Floor range (Part 2, 2026-11-18)
-Assumed **0..20**, with 0 = ground floor ("الطابق الأرضي"). Bismayah buildings have 10 floors; 20 leaves a
-margin. If you want a different maximum, or the ground floor written differently (e.g. "أرضي"), say so.
+## 2. Floor range — ✅ resolved (2026-11-18)
+**Decision:** 0..20, with 0 = "الطابق الأرضي" (approved as assumed). Floors display as "الطابق 3".
 
-## 3. Admin panel hosting: Cloudflare Workers plan (Part 4, 2026-11-18) — **needs a decision**
-The deployed admin panel (`mukhdar-admin.jambaz4a11.workers.dev`) intermittently answers
-**`503 error code: 1102` "Worker exceeded resource limits"**: about 13 of 30 plain `/login` requests in one
-sample, and also `/orders`. Rendering Next.js pages on the Worker needs more CPU per request than the
-Workers Free plan allows. Supabase auth logs show `GET /user … context canceled` from Cloudflare at the
-same times. The panel then treats the failed session check as "signed out" and sends the user to the
-login page. The customer PWA (Cloudflare Pages, static) is not affected.
-- **Option A (recommended):** Workers Paid plan (about 5 USD/month; CPU per request far above the
-  free limit). No code change. This is a billing change on your Cloudflare account, so it was not done.
-- **Option B:** keep Free and reduce server work per page (cache, fewer server-rendered pages). Needs a
-  measurement first; it may not get under the free limit.
-- **Follow-up either way (proposed, not done):** when the session check fails because Supabase or the
-  network is unreachable, show "تعذّر التحقق، أعد المحاولة" instead of the login page. Access stays
-  denied either way. It touches the proxy and four layouts, so I left it for a reviewed PR.
-Details: `docs/reviews/preview-check.md`.
+## 3. Admin panel hosting: Cloudflare Workers plan — ✅ code follow-up done; billing is the owner's
+The deployed admin panel (`mukhdar-admin.jambaz4a11.workers.dev`) intermittently answered
+**`503 error code: 1102` "Worker exceeded resource limits"** on the Workers Free plan
+(`docs/reviews/preview-check.md`).
+- **Owner:** will upgrade to Workers Paid (a billing change on their Cloudflare account, not done by me).
+- **Done (code):** a failed session check caused by a server/network error (Supabase 5xx, unparseable reply
+  such as Cloudflare 1102, network failure) no longer sends staff to the login page. The proxy and the
+  layouts now show "صار خلل، حاول مرة ثانية" with a retry button (HTTP 503, `/unavailable`). Access stays
+  denied. A real missing/invalid/expired/idle session (4xx, no session) still goes to the login page.
+  Tests: `apps/admin/src/lib/panelUser.test.ts`, `access.test.ts`.

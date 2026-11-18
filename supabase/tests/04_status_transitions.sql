@@ -136,7 +136,7 @@ select tests.as_postgres();
 select row_eq($$ select title, body, data ->> 'type' from public.notification_outbox
                    where data ->> 'order_id' = tests.id('o_ready')::text and audience = 'drivers' $$,
   row('طلب جديد #' || (select order_number from public.orders where id = tests.id('o_ready')),
-      'وحدة A1 - عمارة 12'::text, 'new_order'::text),
+      'بلوك A1 - بناية 12'::text, 'new_order'::text),
   'ready (unassigned) notifies all active drivers: new order available');
 select row_eq($$ select title, data ->> 'status' from public.notification_outbox
                    where data ->> 'order_id' = tests.id('o_ready')::text and audience = 'user' and user_id = tests.id('cust')

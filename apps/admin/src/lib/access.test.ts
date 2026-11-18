@@ -6,6 +6,7 @@ import {
   isPanelRole,
   isPublicPath,
   navItems,
+  retryTarget,
   safeNext,
   type PanelRole,
 } from './access';
@@ -60,9 +61,12 @@ describe('roles', () => {
 });
 
 describe('public pages', () => {
-  it.each(['/privacy', '/terms', '/delete-account', '/delete-account/'])('%s is public', (p) => {
-    expect(isPublicPath(p)).toBe(true);
-  });
+  it.each(['/privacy', '/terms', '/delete-account', '/delete-account/', '/unavailable'])(
+    '%s is public',
+    (p) => {
+      expect(isPublicPath(p)).toBe(true);
+    },
+  );
   it.each(['/', '/login', '/orders', '/privacy-x', '/settings'])('%s is not public', (p) => {
     expect(isPublicPath(p)).toBe(false);
   });
@@ -167,5 +171,13 @@ describe('safeNext', () => {
         expect(new URL(out, 'https://panel.test').origin).toBe('https://panel.test');
       }
     }
+  });
+});
+
+describe('retryTarget', () => {
+  it('goes home from /unavailable, reloads the original page otherwise', () => {
+    expect(retryTarget('/unavailable')).toBe('/');
+    expect(retryTarget('/orders')).toBeNull();
+    expect(retryTarget('/')).toBeNull();
   });
 });

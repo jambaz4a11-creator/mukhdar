@@ -204,7 +204,7 @@ select results_eq($$ select audience from public.notification_outbox
                      where data ->> 'order_id' = tests.id('o1')::text order by audience $$,
   array['admins'], 'a new order notifies admins/staff only (drivers are notified when it is ready)');
 select ok((select body from public.notification_outbox
-            where data ->> 'order_id' = tests.id('o1')::text and audience = 'admins') like 'وحدة A1 - عمارة 12 · المجموع %',
+            where data ->> 'order_id' = tests.id('o1')::text and audience = 'admins') like 'بلوك A1 - بناية 12 · المجموع %',
   'admin push names the unit and the building (numbers repeat across units)');
 select is((select address_snapshot ->> 'subsection' || '/' || (address_snapshot ->> 'building')
              from public.orders where id = tests.id('o1')),

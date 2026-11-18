@@ -4,11 +4,13 @@ import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/Sidebar';
 import { PanelProviders } from '@/components/PanelProviders';
+import { ServiceUnavailable } from '@/components/ServiceUnavailable';
 
 // حماية ثانية بعد الـ proxy: لا تُعرض صفحات اللوحة لغير الأدمن والموظف.
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const user = await getPanelUser(supabase);
+  if (user.state === 'unavailable') return <ServiceUnavailable />;
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
   if (user.mfaRequired) redirect(MFA_PATH);

@@ -390,7 +390,7 @@ function AddressSummary() {
               <span className="num text-[13px] text-text-muted">
                 {units.length} وحدات
                 {units.length > 0 &&
-                  ` (${units[0]?.name} إلى ${units[units.length - 1]?.name})`} · {buildings} عمارة
+                  ` (${units[0]?.name} إلى ${units[units.length - 1]?.name})`} · {buildings} بناية
               </span>
             </div>
           );

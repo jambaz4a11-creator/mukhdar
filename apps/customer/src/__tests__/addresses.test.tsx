@@ -314,7 +314,7 @@ describe('address form', () => {
     expect(screen.getByTestId('label-input').props.value).toBe('البيت');
     await fireEvent.changeText(screen.getByTestId('note-input'), 'الباب الأخضر');
     expect(screen.getByTestId('address-preview')).toHaveTextContent(
-      'قطاع A · وحدة A3 · عمارة 45 · طابق 2 · شقة 12',
+      'بلوك A3 · بناية 45 · الطابق 2 · شقة 12',
     );
     // أول عنوان: افتراضي إجباري
     const toggle = screen.getByTestId('default-toggle');
@@ -430,8 +430,8 @@ describe('my addresses', () => {
   it('lists addresses with formatAddress and one default badge', async () => {
     setup(list());
     await renderUi(<AddressesScreen />);
-    expect(await screen.findByText('قطاع A · وحدة A3 · عمارة 12 · شقة 5')).toBeTruthy();
-    expect(screen.getByText('قطاع B · وحدة B4 · عمارة 60 · شقة 7')).toBeTruthy();
+    expect(await screen.findByText('بلوك A3 · بناية 12 · شقة 5')).toBeTruthy();
+    expect(screen.getByText('بلوك B4 · بناية 60 · شقة 7')).toBeTruthy();
     expect(screen.getAllByText(ar.address.defaultBadge)).toHaveLength(1);
     // "اجعله افتراضياً" للعناوين غير الافتراضية فقط
     expect(screen.getAllByLabelText(ar.address.setDefault)).toHaveLength(2);
@@ -440,15 +440,13 @@ describe('my addresses', () => {
   it('shows the floor in the list when the address has one', async () => {
     setup([makeAddress('a1', { isDefault: true, floor: 0 })]);
     await renderUi(<AddressesScreen />);
-    expect(
-      await screen.findByText('قطاع A · وحدة A3 · عمارة 12 · الطابق الأرضي · شقة 5'),
-    ).toBeTruthy();
+    expect(await screen.findByText('بلوك A3 · بناية 12 · الطابق الأرضي · شقة 5')).toBeTruthy();
   });
 
   it('set default: one atomic RPC call (set_default_address)', async () => {
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
-    await screen.findByText('قطاع B · وحدة B4 · عمارة 60 · شقة 7');
+    await screen.findByText('بلوك B4 · بناية 60 · شقة 7');
     await fireEvent.press(screen.getAllByLabelText(ar.address.setDefault)[0] as never);
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(rpcAddress(writes(calls)[0] as Call)).toBe('a2');
@@ -463,7 +461,7 @@ describe('my addresses', () => {
     useSelectedAddress.setState({ selectedId: 'a1' });
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
-    await screen.findByText('قطاع A · وحدة A3 · عمارة 12 · شقة 5');
+    await screen.findByText('بلوك A3 · بناية 12 · شقة 5');
     await act(async () => {
       fireEvent.press(screen.getAllByLabelText(ar.address.delete)[0] as never);
     });
@@ -480,7 +478,7 @@ describe('my addresses', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
-    await screen.findByText('قطاع A · وحدة A3 · عمارة 12 · شقة 5');
+    await screen.findByText('بلوك A3 · بناية 12 · شقة 5');
     await fireEvent.press(screen.getAllByLabelText(ar.address.delete)[1] as never);
     expect(alert).toHaveBeenCalled();
     expect(writes(calls)).toHaveLength(0);
@@ -492,7 +490,7 @@ describe('my addresses', () => {
     setup(list());
     await renderUi(<AddressesScreen />);
     expect(await screen.findByText(ar.address.selectTitle)).toBeTruthy();
-    await fireEvent.press(await screen.findByLabelText('قطاع B · وحدة B4 · عمارة 60 · شقة 7'));
+    await fireEvent.press(await screen.findByLabelText('بلوك B4 · بناية 60 · شقة 7'));
     expect(useSelectedAddress.getState().selectedId).toBe('a2');
     expect(mockRouter.back).toHaveBeenCalled();
   });
@@ -511,7 +509,7 @@ describe('delivery address header', () => {
   it('shows the default address (formatAddressShort); tap opens address selection', async () => {
     setup([makeAddress('a2', { unit: 24, building: 60 }), makeAddress('a1', { isDefault: true })]);
     await renderUi(<DeliveryAddressHeader />);
-    expect(await screen.findByText('وحدة A3 - عمارة 12')).toBeTruthy();
+    expect(await screen.findByText('بلوك A3 - بناية 12')).toBeTruthy();
     // مراجعة S6: مساحة لمس ≥ 44
     expectTouchTarget(screen.getByTestId('delivery-address'));
     await fireEvent.press(screen.getByTestId('delivery-address'));
@@ -525,7 +523,7 @@ describe('delivery address header', () => {
     useSelectedAddress.setState({ selectedId: 'a2' });
     setup([makeAddress('a1', { isDefault: true }), makeAddress('a2', { unit: 24, building: 60 })]);
     await renderUi(<DeliveryAddressHeader />);
-    expect(await screen.findByText('وحدة B4 - عمارة 60')).toBeTruthy();
+    expect(await screen.findByText('بلوك B4 - بناية 60')).toBeTruthy();
   });
 
   it('signed in without addresses: tap goes to adding the first address', async () => {

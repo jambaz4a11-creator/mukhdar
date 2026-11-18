@@ -64,8 +64,8 @@ test.describe.serial('orders (admin, read)', () => {
     test.skip(num === null, 'no orders in this database');
     const panel = page.getByTestId('order-detail');
     await expect(panel.getByRole('heading', { name: `الطلب #${num}` })).toBeVisible();
-    await expect(panel.getByTestId('order-address')).toContainText('قطاع');
-    await expect(panel.getByTestId('order-address')).toContainText('عمارة');
+    await expect(panel.getByTestId('order-address')).toContainText('بلوك');
+    await expect(panel.getByTestId('order-address')).toContainText('بناية');
     await expect(panel.getByTestId('customer-phone')).toHaveText(/^07\d{9}$/);
     await expect(panel.getByRole('link', { name: 'اتصال' })).toHaveAttribute(
       'href',

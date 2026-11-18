@@ -1,15 +1,15 @@
-// منطق نماذج T19 بلا واجهة (يُختبر بـ vitest): تحليل أرقام العمارات بالجملة، ونموذج الإعدادات.
+// منطق نماذج T19 بلا واجهة (يُختبر بـ vitest): تحليل أرقام البنايات بالجملة، ونموذج الإعدادات.
 import { ERROR_MESSAGES, isErrorCode, normalizePin, parseBackendError } from '@mukhdar/shared';
 
-/** عمارة 1..100 داخل كل وحدة (CLAUDE.md)؛ قاعدة البيانات تفرضها أيضاً (buildings_number_format). */
+/** بناية 1..100 داخل كل وحدة (CLAUDE.md)؛ قاعدة البيانات تفرضها أيضاً (buildings_number_format). */
 export const MAX_BUILDING_NUMBER = 100;
 const BUILDING_NUMBER_RE = /^([1-9][0-9]?|100)$/;
 
-/** رقم عمارة واحد (تعديل الاسم): رسالة الخطأ، أو null. الأرقام العربية تُحوَّل قبل الفحص. */
+/** رقم بناية واحد (تعديل الاسم): رسالة الخطأ، أو null. الأرقام العربية تُحوَّل قبل الفحص. */
 export function validateBuildingNumber(input: string): string | null {
   return BUILDING_NUMBER_RE.test(normalizePin(input))
     ? null
-    : `رقم العمارة من 1 إلى ${MAX_BUILDING_NUMBER}`;
+    : `رقم البناية من 1 إلى ${MAX_BUILDING_NUMBER}`;
 }
 
 export interface BuildingParse {
@@ -31,7 +31,7 @@ export function parseBuildingNumbers(input: string): BuildingParse {
     .filter(Boolean)
     .map((p) => normalizePin(p));
   if (spaced.length === 0)
-    return { numbers: [], error: 'اكتب أرقام العمارات، مثل 1-100 أو 1,2,5-9' };
+    return { numbers: [], error: 'اكتب أرقام البنايات، مثل 1-100 أو 1,2,5-9' };
   const set = new Set<number>();
   for (const part of spaced) {
     const range = /^(\d+)-(\d+)$/.exec(part);
@@ -48,7 +48,7 @@ export function parseBuildingNumbers(input: string): BuildingParse {
   return { numbers: [...set].sort((a, b) => a - b).map(String), error: null };
 }
 
-/** معاينة: الأرقام الجديدة والموجودة أصلاً بالوحدة (تُتجاهل). */
+/** معاينة: الأرقام الجديدة والموجودة أصلاً بالبلوك (تُتجاهل). */
 export function splitNew(numbers: readonly string[], existing: Iterable<string>) {
   const have = new Set(existing);
   return {

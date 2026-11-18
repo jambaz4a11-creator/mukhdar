@@ -188,7 +188,7 @@ export interface SectorRow {
 const bySort = <T extends { sort_order: number; id: number }>(a: T, b: T) =>
   a.sort_order - b.sort_order || a.id - b.id;
 
-/** الشجرة كاملة (قطاعان، 17 وحدة، ~1700 عمارة): استعلام واحد متداخل. */
+/** الشجرة كاملة (قطاعان، 17 بلوك، ~1700 بناية): استعلام واحد متداخل. */
 export async function fetchAddressTree(supabase: MukhdarClient): Promise<SectorRow[]> {
   const rows = await unwrap<SectorRow[]>(
     supabase
@@ -198,7 +198,7 @@ export async function fetchAddressTree(supabase: MukhdarClient): Promise<SectorR
       )
       .order('sort_order')
       .order('id')
-      .limit(100), // حد الصفوف (max_rows) على القطاعات فقط، لا على الوحدات والعمارات المتداخلة
+      .limit(100), // حد الصفوف (max_rows) على القطاعات فقط، لا على الوحدات والبنايات المتداخلة
   );
   return rows.sort(bySort).map((s) => ({
     ...s,
@@ -211,7 +211,7 @@ export async function fetchAddressTree(supabase: MukhdarClient): Promise<SectorR
 
 export type AddressTable = 'sectors' | 'subsections' | 'buildings';
 
-/** عدد عناوين الزبائن المحفوظة تحت قطاع/وحدة/عمارة: إعادة التسمية تغيّر نصها عندهم كلهم. */
+/** عدد عناوين الزبائن المحفوظة تحت قطاع/بلوك/بناية: إعادة التسمية تغيّر نصها عندهم كلهم. */
 export function fetchAddressUsage(
   supabase: MukhdarClient,
   table: AddressTable,

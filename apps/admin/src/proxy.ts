@@ -9,6 +9,7 @@ import {
   LOGIN_PATH,
   MFA_PATH,
   NOT_AUTHORIZED_PATH,
+  UNAVAILABLE_PATH,
   canAccess,
   isKnownPanelPath,
   isPublicPath,
@@ -73,6 +74,15 @@ async function handle(request: NextRequest): Promise<NextResponse> {
     if (user.state !== 'ok') return response;
     const home = !user.mfaRequired ? '/' : pinBeforeMfa(user) ? CHANGE_PIN_PATH : MFA_PATH;
     return withCookies(NextResponse.redirect(new URL(home, request.url)));
+  }
+  // تعذّر التحقق (خلل Supabase أو الشبكة أو حد موارد Cloudflare): ليس جلسة منتهية، فلا نحوّل لصفحة الدخول.
+  // 503 برسالة وزر إعادة المحاولة؛ الوصول ممنوع بكل الأحوال. الجلسة المنتهية فعلاً تبقى تذهب للدخول.
+  if (user.state === 'unavailable') {
+    const res = withCookies(
+      NextResponse.rewrite(new URL(UNAVAILABLE_PATH, request.url), { status: 503 }),
+    );
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   }
   if (user.state === 'anonymous') {
     if (pathname === NOT_AUTHORIZED_PATH) {

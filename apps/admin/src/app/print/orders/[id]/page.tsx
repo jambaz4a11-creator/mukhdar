@@ -6,6 +6,7 @@ import { asAddress, displayPhone, formatDateTime, fullAddress } from '@/features
 import { LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
 import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
+import { ServiceUnavailable } from '@/components/ServiceUnavailable';
 import { AutoPrint } from './AutoPrint';
 import './receipt.css';
 
@@ -16,6 +17,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const supabase = await createClient();
   const user = await getPanelUser(supabase);
+  if (user.state === 'unavailable') return <ServiceUnavailable />;
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
   if (user.mfaRequired) redirect(MFA_PATH);
