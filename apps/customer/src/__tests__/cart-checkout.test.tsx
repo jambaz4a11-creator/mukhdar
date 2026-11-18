@@ -72,6 +72,7 @@ function address(id: string, isDefault: boolean, label: string | null = null): C
   return {
     id,
     apartment: '12',
+    floor: 2,
     note: null,
     label,
     is_default: isDefault,
@@ -377,7 +378,7 @@ describe('checkout', () => {
 
   async function ready() {
     await renderUi(<CheckoutScreen />);
-    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · شقة 12');
+    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · طابق 2 · شقة 12');
     await waitFor(() => expect(isDisabled('checkout-confirm')).toBe(false));
   }
 
@@ -594,7 +595,7 @@ describe('checkout', () => {
     const { placeOrderCalls } = setup({ settings: { store_open: false } });
     await renderUi(<CheckoutScreen />);
     expect(await screen.findByTestId('store-closed-banner')).toBeTruthy();
-    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · شقة 12');
+    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · طابق 2 · شقة 12');
     expect(isDisabled('checkout-confirm')).toBe(true);
     await fireEvent.press(screen.getByTestId('checkout-confirm'));
     expect(placeOrderCalls).toHaveLength(0);
@@ -603,7 +604,7 @@ describe('checkout', () => {
   it('offline: confirm disabled until the connection is back (SPEC §1, review S4)', async () => {
     const { placeOrderCalls } = setup();
     await renderUi(<CheckoutScreen />);
-    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · شقة 12');
+    await screen.findAllByText('قطاع A · وحدة A3 · عمارة 45 · طابق 2 · شقة 12');
     await waitFor(() => expect(isDisabled('checkout-confirm')).toBe(false));
     await act(async () => onlineManager.setOnline(false));
     expect(isDisabled('checkout-confirm')).toBe(true);

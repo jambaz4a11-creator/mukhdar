@@ -34,6 +34,7 @@ export type Database = {
           building_id: number;
           created_at: string;
           customer_id: string;
+          floor: number | null;
           id: string;
           is_default: boolean;
           label: string | null;
@@ -45,6 +46,7 @@ export type Database = {
           building_id: number;
           created_at?: string;
           customer_id: string;
+          floor?: number | null;
           id?: string;
           is_default?: boolean;
           label?: string | null;
@@ -55,6 +57,7 @@ export type Database = {
           building_id?: number;
           created_at?: string;
           customer_id?: string;
+          floor?: number | null;
           id?: string;
           is_default?: boolean;
           label?: string | null;
@@ -1308,9 +1311,9 @@ export type Database = {
           p_with_comment?: boolean;
         };
         Returns: {
-          comment: string | null;
+          comment: string;
           created_at: string;
-          customer_name: string | null;
+          customer_name: string;
           order_id: string;
           order_number: number;
           stars: number;

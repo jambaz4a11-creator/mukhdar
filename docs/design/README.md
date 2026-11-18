@@ -67,7 +67,7 @@ Font: **IBM Plex Sans Arabic** in four weights. It covers both Arabic and Latin 
 | Login | phone number (07XXXXXXXXX) + 6-digit PIN; sign-in / new-account modes, "forgot PIN?" opens WhatsApp |
 | ~~OTP~~ | not built: no SMS/OTP (ADR 0001, 2026-11-14) |
 | Name | full name on first sign-in |
-| Address | sector A/B → unit (A1..A9 / B1..B8) → building number 1-100 (typed, checked against active buildings) → apartment; optional label (home/work), note, default. Home shows "delivery to" (`formatAddressShort`) |
+| Address | (2026-11-18, "like local apps in Bismayah") one **"البلوك"** dropdown (sector + unit: A1..A9 under "قطاع A", B1..B8 under "قطاع B", active only; inline grid of 4 per row, 44+ px buttons, closes on pick) → **"البناية"** number 1-100 (typed, checked against active buildings) → **"الطابق"** (0 = ground .. 20, required for new addresses) and **"رقم الشقة"** side by side → optional short label (free text up to 20, chips "البيت"/"الشغل") → note → default. Footer preview `formatAddress` ("… · عمارة 12 · طابق 3 · شقة 5"). Home shows "delivery to" (`formatAddressShort`) |
 
 Product images are **placeholders** until real photos exist (a neutral tile on `primarySoft`
 with the product's first letter or a generic produce icon).

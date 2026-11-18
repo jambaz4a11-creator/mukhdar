@@ -14,6 +14,24 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 
 ---
 
+## Changes for the driver app (2026-11-18, address floor)
+
+Migration `20261204000001` (applied to the development project). **No function signature changed and no
+driver call needs to change.**
+
+1. **New optional key `floor` in `orders.address_snapshot`** (integer, `0` = ground floor, up to `20`),
+   copied from the customer's address when the order is placed. New addresses always have it; orders to
+   addresses saved before 2026-11-18 have **no `floor` key**. Example in §4. Show it next to the building,
+   e.g. "عمارة 12 · طابق 3 · شقة 5" (`0` → "الطابق الأرضي"). Treat it as optional.
+2. **Not in `available_orders`:** like the apartment, the floor is only visible after you accept the order
+   (in your own order rows). The list before accepting is unchanged.
+3. **Deleted customers:** the anonymized snapshot (`sector`, `subsection` only) has no `floor` either.
+4. Customer-facing wording: the customer app now asks "البلوك" (unit with its sector, e.g. `A3`) →
+   "البناية" (building) → "الطابق" (floor) → "رقم الشقة". The stored values and the push text
+   ("وحدة A3 - عمارة 12") are unchanged.
+
+---
+
 ## Changes for the driver app (2026-11-17, security review T23 sessions E1, E2 and F)
 
 Short version to send to the driver-app developer. Migrations `20261130000001`, `20261201000001` and
@@ -335,8 +353,10 @@ All writes go through the functions above; there are no insert/update/delete gra
 `orders.address_snapshot` (jsonb, frozen at order time):
 ```json
 { "address_id": "uuid", "sector": "قطاع A", "subsection": "A3", "building": "12",
-  "apartment": "5", "note": "optional text or null" }
+  "floor": 3, "apartment": "5", "note": "optional text or null" }
 ```
+`floor` (since 2026-11-18): integer `0..20`, `0` = ground floor; **absent** for orders to addresses saved
+before that date.
 After the customer deletes their account (T23 E2/F), the same order's snapshot is reduced to:
 ```json
 { "sector": "قطاع A", "subsection": "A3" }

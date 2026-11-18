@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { formatAddress, formatAddressShort, formatSector } from '../address';
+import { formatAddress, formatAddressShort, formatFloor, formatSector } from '../address';
 
 const snapshot = {
   address_id: 'a',
@@ -22,6 +22,18 @@ describe('formatAddress', () => {
     expect(formatAddress({ sector: 'B', subsection: 'B8', building: '100', apartment: ' ' })).toBe(
       'قطاع B · وحدة B8 · عمارة 100',
     );
+  });
+
+  it('shows the floor between building and apartment (2026-11-18); ground floor by name', () => {
+    expect(formatAddress({ ...snapshot, floor: 3 })).toBe(
+      'قطاع A · وحدة A3 · عمارة 12 · طابق 3 · شقة 5',
+    );
+    expect(formatAddress({ ...snapshot, floor: 0 })).toBe(
+      'قطاع A · وحدة A3 · عمارة 12 · الطابق الأرضي · شقة 5',
+    );
+    expect(formatAddress({ ...snapshot, floor: null })).toBe('قطاع A · وحدة A3 · عمارة 12 · شقة 5');
+    expect(formatFloor(-1)).toBe('');
+    expect(formatFloor(2.5)).toBe('');
   });
 
   it('short form matches the push text written by the database', () => {

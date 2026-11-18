@@ -128,6 +128,7 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - حماية الحسابات (trigger `before insert/update of phone` على `auth.users`، migration `20261116000001`، ADR 0001): `PHONE_INVALID` لحساب بلا هاتف أو برقم ليس `9647XXXXXXXXX` (يصل للتطبيق كخطأ GoTrue عام "Database error"؛ التطبيق يتحقق من الرقم قبل الإرسال).
 
 - رموز جلسة E2 (T23، §12.6): `NOT_A_CUSTOMER` (`admin_cancel_customer_orders` لهدف ليس زبوناً)، `ADDRESS_LIMIT` (`detail` = 20: حد عناوين الحساب).
+- رمز الطابق (2026-11-18، §12.9): `FLOOR_REQUIRED` (trigger العناوين: عنوان جديد من التطبيق بلا طابق، أو مسح طابق مسجَّل).
 - رموز جلسة F (T23، §12.7): `ORDER_TOO_LARGE` (`place_order`: المجموع مع التوصيل فوق `max_order_iqd`؛ `detail` = الحد)، `NEW_ACCOUNT_ORDER_LIMIT` (`place_order`: حساب بلا طلب مسلّم ومجموعه فوق `new_account_max_order_iqd`؛ `detail` = الحد)، `PIN_RESET_REQUIRED` (`set_user_role`: ترقية زبون أو سائق لموظف أو أدمن قبل إعادة ضبط رمزه)، `MFA_REQUIRED` (`register_push_token` لأدمن أو موظف بلا جلسة aal2 فعّالة).
 
 كل رموز هذا القسم لها رسالة عربية بـ `packages/shared/src/errors.ts`، واختبار Jest يفشل إن نقص رمز أو اختلف هذا القسم عن الرموز التي يرفعها SQL.
@@ -278,6 +279,12 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
 - **الإصلاح:** الدالتان SECURITY DEFINER بـ `search_path = ''`، وEXECUTE مسحوب من كل الأدوار (لا يُفحص EXECUTE لدالة trigger عند تشغيلها).
 - **تدقيق القاعدة كلها لنفس الصنف** (mukhdar-dev): دوال triggers الأخرى بـ INVOKER (`set_updated_at`، `tg_profiles_pin_reset_at`، `tg_require_valid_phone` على `auth.users`) لا تستدعي إلا `now()`/regex؛ سياسات RLS تعتمد على `private.is_admin`/`is_staff_or_admin`/`current_user_role` (definer) و`baghdad_today` و`auth.uid`، وكلها قابلة للتنفيذ من `anon` و`authenticated` مع USAGE على `private`؛ القيم الافتراضية `gen_random_uuid()`/`now()`؛ دوال INVOKER القابلة للاستدعاء (`set_default_address`، `panel_session_alive`، `round_iqd`، `baghdad_today`، أغلفة الأدوار، `finish_push_notifications` لـ service_role) لا تصل لشيء محجوب. **لا مشكلة أخرى**؛ `32_real_role_writes.sql` يحرس الصنف آلياً.
 - **رسالة الصلاحية:** خطأ `42501` بلا رمز معروف (صلاحية ناقصة أو سياسة RLS رفضت الصف) يُعرض بـ `PERMISSION_ERROR_MESSAGE` (`packages/shared/src/errors.ts`): "ما قدرنا نحفظ هذا التغيير لأن حسابك ما عنده صلاحية له…" بدل الرسالة العامة. الرموز المعروفة التي تُرفع بـ 42501 (`NOT_ALLOWED`، `PIN_CHANGE_REQUIRED`…) تبقى برسائلها. ليست رمزاً بـ §5 (لا ترفعها دالة).
+
+### 12.9 الطابق بالعنوان (قرار المالك 2026-11-18، migration `20261204000001`)
+- `addresses.floor smallint` (قيد `addresses_floor_range`: 0..20، 0 = الأرضي). **null مسموح للعناوين القديمة فقط.** trigger `addresses_clean_text` (definer) يرفض `FLOOR_REQUIRED` لعنوان **جديد من دور `authenticated`** بلا طابق، أو مسح طابق مسجَّل؛ عنوان قديم بلا طابق يبقى يُعدَّل ويُطلب إليه. سكربتات التطوير بدور المالك غير مقيّدة (`seed:demo` يضع طابقاً 0..9 على أي حال). `authenticated` له `insert/update (floor)`.
+- **اللقطة:** trigger `orders_snapshot_floor` (before insert على `orders`، definer) يضيف `"floor"` (رقم) لـ `address_snapshot` من العنوان وقت الطلب، فلا تُعاد كتابة `place_order`. عنوان بلا طابق ← لا مفتاح. تجهيل حساب محذوف يبني اللقطة من `sector` و`subsection` فقط، فيُحذف الطابق.
+- **لا تغيير:** شجرة قطاع ← وحدة ← عمارة، `available_orders` (لا شقة ولا طابق قبل القبول)، نص الإشعارات ("وحدة A3 - عمارة 12").
+- العرض: `formatAddress` بـ `packages/shared` يضيف "طابق N" ("الطابق الأرضي" لـ 0) بين العمارة والشقة: تطبيق الزبون، تفاصيل الطلب والإيصال باللوحة.
 
 ## افتراضات
 1. أسعار المنتجات وأجرة التوصيل **مضاعفات 250** (قيد بقاعدة البيانات). لذلك التقريب عملياً لا يغيّر المجموع، ويبقى كحماية.

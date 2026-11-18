@@ -27,6 +27,8 @@ export function asAddress(snapshot: unknown): AddressSnapshot {
     subsection: str(s.subsection),
     building: str(s.building),
     apartment: str(s.apartment),
+    // الطابق (2026-11-18): رقم صحيح 0..20، غائب لعنوان قديم أو طلب حساب محذوف
+    floor: typeof s.floor === 'number' && Number.isInteger(s.floor) ? s.floor : null,
     note: typeof s.note === 'string' && s.note.trim() !== '' ? s.note : null,
   };
 }

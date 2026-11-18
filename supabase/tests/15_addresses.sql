@@ -35,25 +35,25 @@ select is(tests.affected(format($$ delete from public.addresses where id = %L $$
   0, 'cannot delete another customer''s address');
 select throws_ok(format($$ update public.addresses set customer_id = %L where id = %L $$, tests.id('c2'), tests.id('a1')),
   '42501', null, 'cannot move an address to another customer (customer_id not updatable)');
-select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '') $$,
+select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 1, '') $$,
                         tests.id('c1'), current_setting('t.bld')),
   '23514', null, 'an empty apartment is rejected');
-select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, %L) $$,
+select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 1, %L) $$,
                         tests.id('c1'), current_setting('t.bld'), repeat('9', 21)),
   '23514', null, 'an apartment longer than 20 characters is rejected');
 
 -- عنوان جديد افتراضي: التطبيق يلغي الافتراضي القديم أولاً ثم يضيف
-select lives_ok(format($$ insert into public.addresses (customer_id, building_id, apartment, is_default)
-                         values (%L, %s, '1', true) $$, tests.id('c1'), current_setting('t.bld')),
+select lives_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment, is_default)
+                         values (%L, %s, 1, '1', true) $$, tests.id('c1'), current_setting('t.bld')),
   'first default address');
-select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment, is_default)
-                          values (%L, %s, '2', true) $$, tests.id('c1'), current_setting('t.bld')),
+select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment, is_default)
+                          values (%L, %s, 1, '2', true) $$, tests.id('c1'), current_setting('t.bld')),
   '23505', null, 'a second default without clearing the first is rejected (one default per customer)');
 select lives_ok(format($$ update public.addresses set is_default = false
                           where customer_id = %L and is_default $$, tests.id('c1')),
   'clear the old default (app step 1)');
-select lives_ok(format($$ insert into public.addresses (customer_id, building_id, apartment, is_default)
-                         values (%L, %s, '2', true) $$, tests.id('c1'), current_setting('t.bld')),
+select lives_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment, is_default)
+                         values (%L, %s, 1, '2', true) $$, tests.id('c1'), current_setting('t.bld')),
   'then add the new default (app step 2)');
 
 -- تعيين عنوان موجود افتراضياً (setDefaultAddress)
