@@ -17,6 +17,7 @@ import {
 import { readPublicEnv } from './lib/env';
 import { getPanelUser, pinBeforeMfa } from './lib/panelUser';
 import {
+  STATIC_SECURITY_HEADERS,
   TOUCH_COOKIE,
   TOUCH_THROTTLE_S,
   buildCsp,
@@ -37,6 +38,9 @@ export async function proxy(request: NextRequest) {
 
   const response = await handle(request);
   response.headers.set('Content-Security-Policy', csp);
+  // على Cloudflare (OpenNext) لا تُطبَّق headers() من next.config على ردود الـ proxy (إعادة التوجيه)،
+  // فنضع الترويسات الثابتة هنا أيضاً؛ على Node تتطابق القيم فلا فرق.
+  for (const { key, value } of STATIC_SECURITY_HEADERS) response.headers.set(key, value);
   return response;
 }
 
