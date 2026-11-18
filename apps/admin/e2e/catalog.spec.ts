@@ -175,18 +175,21 @@ test.describe.serial('catalog (writes: categories, products, images, stock, wast
 
     // الترتيب: تقديم القسم خطوة (استدعاء ذرّي واحد)
     const order = async () =>
-      page.locator('[data-testid="category-cards"] [data-category]').evaluateAll((els) =>
-        els.map((e) => e.getAttribute('data-category')),
-      );
+      page
+        .locator('[data-testid="category-cards"] [data-category]')
+        .evaluateAll((els) => els.map((e) => e.getAttribute('data-category')));
     const before = await order();
     const idx = before.indexOf(renamed);
     await renamedCard.getByRole('button', { name: `تقديم قسم ${renamed}` }).click();
-    await expect.poll(order).toEqual(
-      before.map((_, i, a) => (i === idx - 1 ? a[idx] : i === idx ? a[idx - 1] : a[i])),
-    );
+    await expect
+      .poll(order)
+      .toEqual(before.map((_, i, a) => (i === idx - 1 ? a[idx] : i === idx ? a[idx - 1] : a[i])));
 
     // قسم فيه منتجات لا يُحذف (يُخفى بدل ذلك)
-    const withProducts = page.locator('[data-category]').filter({ hasText: /[1-9]\d* منتج/ }).first();
+    const withProducts = page
+      .locator('[data-category]')
+      .filter({ hasText: /[1-9]\d* منتج/ })
+      .first();
     const withName = await withProducts.getAttribute('data-category');
     await withProducts.getByRole('button', { name: `تعديل قسم ${withName}` }).click();
     await expect(page.getByTestId('category-delete-blocked')).toBeVisible();
