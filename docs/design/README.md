@@ -56,7 +56,8 @@ Font: **IBM Plex Sans Arabic** in four weights. It covers both Arabic and Latin 
 ## Screens
 | Screen | Notes |
 |---|---|
-| Home | categories, products, store-closed banner from `app_settings` |
+| Home | categories, products, store-closed banner from `app_settings`. Same 2-column grid and card for all products, a category and search results |
+| Product card | (2026-11-18) the **square image is the largest element**: full card width (edge to edge inside the 1px border, top corners from the 16 card radius), `contain` fit on white `surface` so the whole product shows uncropped, a `divider` hairline under it. Then name (1 line, semibold) and price per sale unit, then the add button (44 high) at the bottom, which becomes the half-kilo stepper. Height = card width + 118 (fixed part), so the list keeps `getItemLayout`. 360px: cards 154 wide, image 152. Out of stock: dimmed image with the "غير متوفر حالياً" tag and a grey button. Missing image: neutral `divider` tile with a leaf icon and the first letter |
 | Product | large image, price per sale unit, quantity stepper (`formatQuantity`) |
 | Cart | lines with stepper, minimum-order warning, total |
 | Checkout | address, note, cash on delivery, confirm (56 high primary button) |
@@ -70,7 +71,9 @@ Font: **IBM Plex Sans Arabic** in four weights. It covers both Arabic and Latin 
 | Address | (2026-11-18, "like local apps in Bismayah") one **"البلوك"** dropdown (sector + unit: A1..A9 under "قطاع A", B1..B8 under "قطاع B", active only; inline grid of 4 per row, 44+ px buttons, closes on pick) → **"البناية"** number 1-100 (typed, checked against active buildings) → **"الطابق"** (0 = ground .. 20, required for new addresses) and **"رقم الشقة"** side by side → optional short label (free text up to 20, chips "البيت"/"الشغل") → note → default. Footer preview `formatAddress` ("… · عمارة 12 · طابق 3 · شقة 5"). Home shows "delivery to" (`formatAddressShort`) |
 
 Product images are **placeholders** until real photos exist (a neutral tile on `primarySoft`
-with the product's first letter or a generic produce icon).
+with the product's first letter or a generic produce icon; in the product card a `divider` tile with a
+leaf icon and the letter). Real photos work best square on a white or transparent background (`contain`
+never crops them).
 
 # Design system: admin panel (لوحة الأدمن)
 
