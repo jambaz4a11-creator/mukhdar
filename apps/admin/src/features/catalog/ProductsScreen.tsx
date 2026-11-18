@@ -386,7 +386,7 @@ export function ProductsScreen() {
       {dialog?.kind === 'category' && (
         <CategoryDialog
           category={dialog.category}
-          nextSortOrder={cats.length + 1}
+          productCount={dialog.category ? (counts.get(dialog.category.id) ?? 0) : 0}
           onClose={() => setDialog(null)}
         />
       )}

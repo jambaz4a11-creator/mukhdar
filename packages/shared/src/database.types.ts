@@ -1343,6 +1343,9 @@ export type Database = {
         Returns: undefined;
       };
       reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
+      admin_save_category: { Args: { p: Json }; Returns: number };
+      delete_category: { Args: { p_id: number }; Returns: string };
+      reorder_categories: { Args: { p_ids: number[] }; Returns: undefined };
       report_daily: {
         Args: { p_from: string; p_to: string };
         Returns: {

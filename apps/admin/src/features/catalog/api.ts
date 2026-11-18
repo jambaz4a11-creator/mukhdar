@@ -113,29 +113,28 @@ export async function reorderProducts(supabase: MukhdarClient, ids: string[]) {
   await unwrap(supabase.rpc('reorder_products', { p_ids: ids }));
 }
 
-// ---------------------------------------------------------------- الأقسام (RLS: أدمن)
-export async function createCategory(supabase: MukhdarClient, name: string, sortOrder: number) {
-  return unwrap<{ id: number }>(
-    supabase.from('categories').insert({ name, sort_order: sortOrder }).select('id').single(),
-  );
+// ---------------------------------------------------------------- الأقسام (دوال قاعدة البيانات، أدمن فقط، مُدقّقة)
+export async function createCategory(supabase: MukhdarClient, name: string) {
+  const id = await unwrap<number>(supabase.rpc('admin_save_category', { p: { name } }));
+  return { id };
 }
 
 export async function updateCategory(
   supabase: MukhdarClient,
   id: number,
-  patch: Partial<Pick<Category, 'name' | 'image_path' | 'is_active' | 'sort_order'>>,
+  patch: Partial<Pick<Category, 'name' | 'image_path' | 'is_active'>>,
 ) {
-  await unwrap(supabase.from('categories').update(patch).eq('id', id).select('id'));
+  await unwrap(supabase.rpc('admin_save_category', { p: { id, ...patch } }));
 }
 
-/** الترتيب بالسحب: sort_order = الموضع (الأقسام قليلة، تحديث لكل قسم تغيّر موضعه). */
+/** الترتيب بالسحب: استدعاء ذرّي واحد بكل الأقسام بالترتيب الجديد. */
 export async function reorderCategories(supabase: MukhdarClient, ordered: Category[]) {
-  await Promise.all(
-    ordered
-      .map((c, i) => ({ c, pos: i + 1 }))
-      .filter(({ c, pos }) => c.sort_order !== pos)
-      .map(({ c, pos }) => updateCategory(supabase, c.id, { sort_order: pos })),
-  );
+  await unwrap(supabase.rpc('reorder_categories', { p_ids: ordered.map((c) => c.id) }));
+}
+
+/** حذف قسم بلا منتجات (وإلا CATEGORY_HAS_PRODUCTS). يرجع مسار صورته لحذفها من التخزين. */
+export async function deleteCategory(supabase: MukhdarClient, id: number) {
+  return unwrap<string | null>(supabase.rpc('delete_category', { p_id: id }));
 }
 
 // ---------------------------------------------------------------- المخزون (دوال، أدمن)

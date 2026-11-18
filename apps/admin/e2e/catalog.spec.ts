@@ -156,6 +156,56 @@ test.describe.serial('catalog (writes: categories, products, images, stock, wast
     expect(hidden.data).toHaveLength(0);
   });
 
+  test('categories: duplicate name refused, rename, reorder, delete only when empty, audited', async () => {
+    await openProducts(page);
+    const renamed = `${categoryName} معدّل`;
+    const card = page.locator(`[data-category="${categoryName}"]`);
+    await card.getByRole('button', { name: `تعديل قسم ${categoryName}` }).click();
+    const dialog = page.getByTestId('category-dialog');
+    // اسم قسم موجود ← رفض بالقاعدة برسالة عربية
+    const existing = await page.locator('[data-category]').first().getAttribute('data-category');
+    await dialog.getByLabel('اسم القسم').fill(existing ?? '');
+    await dialog.getByRole('button', { name: 'حفظ القسم' }).click();
+    await expect(dialog.getByRole('alert')).toContainText('يوجد قسم بنفس الاسم');
+    await dialog.getByLabel('اسم القسم').fill(renamed);
+    await dialog.getByRole('button', { name: 'حفظ القسم' }).click();
+    await expect(dialog).toBeHidden();
+    const renamedCard = page.locator(`[data-category="${renamed}"]`);
+    await expect(renamedCard).toBeVisible();
+
+    // الترتيب: تقديم القسم خطوة (استدعاء ذرّي واحد)
+    const order = async () =>
+      page.locator('[data-testid="category-cards"] [data-category]').evaluateAll((els) =>
+        els.map((e) => e.getAttribute('data-category')),
+      );
+    const before = await order();
+    const idx = before.indexOf(renamed);
+    await renamedCard.getByRole('button', { name: `تقديم قسم ${renamed}` }).click();
+    await expect.poll(order).toEqual(
+      before.map((_, i, a) => (i === idx - 1 ? a[idx] : i === idx ? a[idx - 1] : a[i])),
+    );
+
+    // قسم فيه منتجات لا يُحذف (يُخفى بدل ذلك)
+    const withProducts = page.locator('[data-category]').filter({ hasText: /[1-9]\d* منتج/ }).first();
+    const withName = await withProducts.getAttribute('data-category');
+    await withProducts.getByRole('button', { name: `تعديل قسم ${withName}` }).click();
+    await expect(page.getByTestId('category-delete-blocked')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'حذف القسم' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // القسم الفارغ يُحذف بعد تأكيد
+    await renamedCard.getByRole('button', { name: `تعديل قسم ${renamed}` }).click();
+    await page.getByRole('button', { name: 'حذف القسم' }).click();
+    await page.getByRole('button', { name: 'تأكيد الحذف' }).click();
+    await expect(renamedCard).toHaveCount(0);
+
+    // تدقيق: إنشاء، تعديل، ترتيب، حذف
+    const admin = await signedInClient(ACCOUNTS.admin);
+    const audit = await admin.from('admin_audit').select('before, after').eq('action', 'category');
+    const ops = (audit.data ?? []).map((r) => (r.after?.op ?? r.before?.op) as string);
+    for (const op of ['create', 'update', 'reorder', 'delete']) expect(ops).toContain(op);
+  });
+
   test('create a half-kilo product with a 5MB photo: price per kilo saved per half kilo', async () => {
     await openProducts(page);
     await page.getByRole('button', { name: '+ منتج جديد' }).click();

@@ -34,13 +34,13 @@ select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
   array['accept_order', 'add_buildings', 'address_usage', 'adjust_stock', 'adjust_stock_bulk', 'admin_cancel_customer_orders', 'admin_reset_mfa',
-        'admin_save_product', 'assign_driver', 'available_orders', 'dashboard_today', 'dismiss_failed_notifications', 'failed_notifications_count',
+        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'dashboard_today', 'delete_category', 'dismiss_failed_notifications', 'failed_notifications_count',
         'list_drivers', 'place_order', 'rate_order', 'ratings_list', 'ratings_summary', 'recompute_daily_stats',
         'register_push_token',
-        'reorder_products', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
+        'reorder_categories', 'reorder_products', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
         'report_top_products', 'report_waste', 'set_order_status', 'set_product_price', 'set_user_role',
         'stuck_notifications_count', 'touch_panel_session', 'update_app_settings'],
-  'authenticated can execute exactly the 33 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session)');
+  'authenticated can execute exactly the 36 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session)');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');

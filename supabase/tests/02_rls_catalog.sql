@@ -62,7 +62,7 @@ select isnt_empty($$ select 1 from public.products where id = tests.id('p_hidden
 select isnt_empty($$ select 1 from public.sectors where name = 'test-hidden-sector' $$, 'admin sees inactive sector');
 select results_eq($$ select cost_iqd from public.product_costs where product_id = tests.id('p_active') $$,
   array[600::bigint], 'admin reads product_costs');
-select lives_ok($$ insert into public.categories (name) values ('test admin category') $$, 'admin inserts a category');
+select lives_ok($$ select public.admin_save_category('{"name": "test admin category"}'::jsonb) $$, 'admin adds a category through the function');
 select throws_ok($$ update public.products set price_iqd = 1250 where id = tests.id('p_active') $$,
   '42501', null, 'even admin cannot update a product directly (functions only, T18)');
 select throws_ok($$ update public.app_settings set delivery_fee_iqd = 1500 $$,
