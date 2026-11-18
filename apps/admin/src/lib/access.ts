@@ -4,9 +4,11 @@
 export type PanelRole = 'admin' | 'staff';
 
 /** الصفحات العامة: بلا دخول (Google Play وApp Store يطلبان روابطها). */
-export const PUBLIC_PATHS = ['/privacy', '/terms', '/delete-account'] as const;
+export const PUBLIC_PATHS = ['/privacy', '/terms', '/delete-account', '/unavailable'] as const;
 export const LOGIN_PATH = '/login';
 export const NOT_AUTHORIZED_PATH = '/not-authorized';
+/** "صار خلل، حاول مرة ثانية": الـ proxy يعيد كتابة المسار لها (503) حين يتعذّر التحقق من الجلسة. */
+export const UNAVAILABLE_PATH = '/unavailable';
 /** تغيير رمز الدخول (SPEC-admin §2.6): إجباري برمز مؤقت، ومتاح دائماً من القائمة. */
 export const CHANGE_PIN_PATH = '/change-pin';
 /** المصادقة الثنائية (T23 C1): تسجيل تطبيق المصادقة أول مرة، ثم رمزه بكل دخول. إجبارية قبل أي صفحة. */
@@ -137,4 +139,9 @@ export function safeNext(next: string | null | undefined): string {
   if (url.origin !== NEXT_BASE || url.pathname.startsWith('//')) return '/';
   if (url.pathname.startsWith(LOGIN_PATH)) return '/';
   return url.pathname + url.search;
+}
+
+/** زر إعادة المحاولة: على /unavailable مباشرة (بلا صفحة أصلية) يرجع للرئيسية، وإلا null = أعد تحميل الصفحة نفسها. */
+export function retryTarget(pathname: string): string | null {
+  return firstSegment(pathname) === UNAVAILABLE_PATH ? '/' : null;
 }

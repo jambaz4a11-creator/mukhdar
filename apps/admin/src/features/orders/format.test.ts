@@ -22,14 +22,12 @@ const snapshot = {
 
 describe('detail panel: full address and phone', () => {
   it('full address via formatAddress (sector → unit → building → apartment)', () => {
-    expect(fullAddress(snapshot)).toBe('قطاع A · وحدة A3 · عمارة 45 · شقة 12');
-    expect(shortAddress(snapshot)).toBe('وحدة A3 - عمارة 45');
+    expect(fullAddress(snapshot)).toBe('بلوك A3 · بناية 45 · شقة 12');
+    expect(shortAddress(snapshot)).toBe('بلوك A3 - بناية 45');
   });
 
   it('shows the floor on the details and the receipt (2026-11-18), ignores bad values', () => {
-    expect(fullAddress({ ...snapshot, floor: 4 })).toBe(
-      'قطاع A · وحدة A3 · عمارة 45 · طابق 4 · شقة 12',
-    );
+    expect(fullAddress({ ...snapshot, floor: 4 })).toBe('بلوك A3 · بناية 45 · الطابق 4 · شقة 12');
     expect(fullAddress({ ...snapshot, floor: 0 })).toContain('الطابق الأرضي');
     expect(asAddress({ ...snapshot, floor: '4' }).floor).toBeNull();
     expect(asAddress(snapshot).floor).toBeNull();

@@ -5,6 +5,7 @@ import { isPanelRole, type PanelRole } from './access';
 export type PanelUser =
   | { state: 'anonymous' }
   | { state: 'forbidden' } // زبون، سائق، أو حساب معطّل
+  | { state: 'unavailable' } // تعذّر التحقق (خلل خادم أو شبكة): لا نعرف إن كانت الجلسة صالحة، فلا نحوّل لصفحة الدخول
   | {
       state: 'ok';
       id: string;
@@ -36,20 +37,44 @@ export function pinBeforeMfa(user: { mustChangePin: boolean; hasTotp: boolean })
   return user.mustChangePin && !user.hasTotp;
 }
 
+/**
+ * خطأ خادم أو شبكة (لا رفض حقيقي للجلسة): انقطاع/مهلة (AuthRetryableFetchError)، رد غير مفهوم (AuthUnknownError،
+ * مثل صفحة خطأ Cloudflare 1102)، أو حالة HTTP 5xx. غير ذلك (لا جلسة، رمز غير صالح/منتهٍ 401/403) رفض حقيقي.
+ */
+export function isServiceError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { name?: unknown; status?: unknown };
+  if (e.name === 'AuthRetryableFetchError' || e.name === 'AuthUnknownError') return true;
+  return typeof e.status === 'number' && e.status >= 500;
+}
+
 export async function getPanelUser(
   supabase: Pick<MukhdarClient, 'auth' | 'from'>,
 ): Promise<PanelUser> {
+  try {
+    return await readPanelUser(supabase);
+  } catch {
+    // استثناء أثناء الاتصال (انقطاع شبكة): لا نعرف حالة الجلسة
+    return { state: 'unavailable' };
+  }
+}
+
+async function readPanelUser(supabase: Pick<MukhdarClient, 'auth' | 'from'>): Promise<PanelUser> {
   // getUser يتحقق من الرمز عند Supabase (لا نثق بـ cookie غير مُتحقق منه).
   const { data, error } = await supabase.auth.getUser();
+  if (error && isServiceError(error)) return { state: 'unavailable' };
   if (error || !data.user) return { state: 'anonymous' };
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role, is_active, full_name, phone, must_change_pin')
     .eq('id', data.user.id)
     .maybeSingle();
+  // فشل القراءة ≠ لا حساب: لا نحكم بـ "غير مصرح" على خطأ عابر
+  if (profileError) return { state: 'unavailable' };
   if (!profile || !profile.is_active || !isPanelRole(profile.role)) return { state: 'forbidden' };
   // مستوى الجلسة من نفس الرمز الذي تحقق منه getUser أعلاه
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aalError) return { state: 'unavailable' };
   return {
     state: 'ok',
     id: data.user.id,

@@ -1,8 +1,8 @@
 'use client';
-// العناوين (أدمن، SPEC-admin §2.4): قطاع ← وحدة ← عمارة. إضافة، تعديل الاسم، إخفاء (is_active)، وترتيب
-// (القطاعات والوحدات بالأسهم أو بالسحب). العمارات مرتبة بالرقم، وتُضاف بالجملة لوحدة ("1-100"،
+// العناوين (أدمن، SPEC-admin §2.4): قطاع ← بلوك ← بناية. إضافة، تعديل الاسم، إخفاء (is_active)، وترتيب
+// (القطاعات والبلوكات بالأسهم أو بالسحب). البنايات مرتبة بالرقم، وتُضاف بالجملة لبلوك ("1-100"،
 // "1,2,5-9") مع معاينة قبل الحفظ، والمكرر يُتجاهل (add_buildings، on conflict do nothing).
-// الكتابة المباشرة للأدمن بـ RLS؛ لا حذف (العناوين القديمة تشير للعمارات).
+// الكتابة المباشرة للأدمن بـ RLS؛ لا حذف (العناوين القديمة تشير للبنايات).
 import { errorMessage, formatSector, normalizePin } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -67,7 +67,7 @@ export function AddressesScreen() {
       <header className="flex flex-col gap-0.5">
         <h1 className="m-0 text-[26px] font-bold">العناوين</h1>
         <span className="text-sm text-text-muted">
-          قطاع ← وحدة ← عمارة. المخفي ما يظهر للزبون، والعناوين المحفوظة عليه ما تقدر تطلب لحد ما
+          قطاع ← بلوك ← بناية. المخفي ما يظهر للزبون، والعناوين المحفوظة عليه ما تقدر تطلب لحد ما
           ترجّعه.
         </span>
         <span className="text-sm text-text-muted">
@@ -86,7 +86,7 @@ export function AddressesScreen() {
 
       <div className="flex flex-wrap items-start gap-4">
         <section
-          aria-label="القطاعات والوحدات"
+          aria-label="القطاعات والبلوكات"
           className="flex min-w-0 flex-[1_1_380px] flex-col gap-3"
         >
           <SectorList
@@ -111,14 +111,14 @@ export function AddressesScreen() {
           />
         </section>
         <section
-          aria-label="العمارات"
+          aria-label="البنايات"
           className="flex min-w-0 flex-[2_1_480px] flex-col gap-3 rounded-card border border-border bg-surface p-[18px]"
         >
           {unit ? (
             <UnitBuildings key={unit.id} unit={unit} />
           ) : (
             <p className="m-0 text-sm text-text-muted">
-              اختر وحدة لعرض عماراتها وإضافة عمارات بالجملة.
+              اختر بلوك لعرض بناياتها وإضافة بنايات بالجملة.
             </p>
           )}
         </section>
@@ -206,12 +206,12 @@ function UnitList({
               aria-pressed={selected === u.id}
               className="flex min-h-10 flex-1 items-center gap-2 text-right text-sm"
             >
-              <span className="font-semibold">وحدة {u.name}</span>
-              <span className="num text-xs text-text-muted">{active} عمارة</span>
+              <span className="font-semibold">بلوك {u.name}</span>
+              <span className="num text-xs text-text-muted">{active} بناية</span>
               {!u.is_active && <span className="text-xs text-warning-text">مخفية</span>}
             </button>
             <MoveButtons
-              label={`وحدة ${u.name}`}
+              label={`بلوك ${u.name}`}
               index={i}
               count={units.length}
               onMove={(to) => onReorder('subsections', moveItem(units, i, to))}
@@ -220,7 +220,7 @@ function UnitList({
         );
       })}
       <AddRow
-        label={`وحدة جديدة بـ${sector.name}`}
+        label={`بلوك جديد بـ${sector.name}`}
         placeholder="مثلاً: A10"
         compact
         onAdd={(name) =>
@@ -481,7 +481,7 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
   const add = useMutation({
     mutationFn: (numbers: string[]) => addBuildings(supabase, unit.id, numbers),
     onSuccess: async (n) => {
-      setResult(`انضافت ${n} عمارة لوحدة ${unit.name}`);
+      setResult(`انضافت ${n} بناية لبلوك ${unit.name}`);
       setInput('');
       await qc.invalidateQueries({ queryKey: adminKeys.addresses });
     },
@@ -491,9 +491,9 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
       <RowHeader
         table="subsections"
         row={unit}
-        label={`وحدة ${unit.name}`}
+        label={`بلوك ${unit.name}`}
         value={unit.name}
-        title={<h2 className="m-0 inline text-[17px] font-bold">وحدة {unit.name}</h2>}
+        title={<h2 className="m-0 inline text-[17px] font-bold">بلوك {unit.name}</h2>}
         normalize={(v) => v.toUpperCase()}
       />
 
@@ -506,7 +506,7 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
         }}
       >
         <label htmlFor="bulk-buildings" className="text-sm font-semibold">
-          إضافة عمارات بالجملة
+          إضافة بنايات بالجملة
         </label>
         <span className="text-xs text-text-muted">مثال: 1-100 أو 1,2,5-9</span>
         <input
@@ -528,7 +528,7 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
           <p className="m-0 text-[13px]" data-testid="bulk-preview">
             {preview.fresh.length > 0 ? (
               <>
-                تنضاف <strong className="num">{preview.fresh.length}</strong> عمارة:{' '}
+                تنضاف <strong className="num">{preview.fresh.length}</strong> بناية:{' '}
                 <span className="num">{compactRanges(preview.fresh)}</span>
               </>
             ) : (
@@ -551,7 +551,7 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
           {add.isPending
             ? 'جارٍ الإضافة…'
             : preview?.fresh.length
-              ? `إضافة ${preview.fresh.length} عمارة`
+              ? `إضافة ${preview.fresh.length} بناية`
               : 'إضافة'}
         </button>
         {add.error && (
@@ -568,8 +568,8 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
 
       <div className="flex flex-col gap-2">
         <span className="num text-sm text-text-muted">
-          {unit.buildings.length} عمارة ({unit.buildings.filter((b) => !b.is_active).length} مخفية).
-          اضغط على عمارة لتعديل رقمها أو إخفائها.
+          {unit.buildings.length} بناية ({unit.buildings.filter((b) => !b.is_active).length} مخفية).
+          اضغط على بناية لتعديل رقمها أو إخفائها.
         </span>
         <div className="flex flex-wrap gap-1.5" data-testid="buildings">
           {unit.buildings.map((b) => (
@@ -594,9 +594,9 @@ function UnitBuildings({ unit }: { unit: SubsectionRow }) {
               key={editing.id}
               table="buildings"
               row={unit.buildings.find((b) => b.id === editing.id) ?? editing}
-              label={`عمارة ${editing.number}`}
+              label={`بناية ${editing.number}`}
               value={editing.number}
-              title={<span className="text-sm font-semibold">عمارة {editing.number}</span>}
+              title={<span className="text-sm font-semibold">بناية {editing.number}</span>}
               normalize={normalizePin}
             />
           </div>

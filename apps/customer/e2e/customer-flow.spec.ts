@@ -63,7 +63,7 @@ test('customer: sign up → name → address → order → cancel → delete acc
     await page.getByTestId('floor-input').fill('3');
     await page.getByTestId('apartment-input').fill('12');
     await page.getByTestId('label-input').fill('البيت');
-    await expect(page.getByTestId('address-preview')).toContainText('عمارة 1 · طابق 3 · شقة 12');
+    await expect(page.getByTestId('address-preview')).toContainText('بناية 1 · الطابق 3 · شقة 12');
     await shot(page, 'address-form');
     await page.getByTestId('address-save').click();
     await expect(page.getByTestId('delivery-address')).toBeVisible({ timeout: 30_000 });
@@ -87,7 +87,7 @@ test('customer: sign up → name → address → order → cancel → delete acc
     await expect(page.getByTestId('checkout-total')).toBeVisible();
     await page.getByTestId('checkout-confirm').click();
     await expect(page.getByTestId('order-hero')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('order-address')).toContainText('عمارة 1 · طابق 3 · شقة 12');
+    await expect(page.getByTestId('order-address')).toContainText('بناية 1 · الطابق 3 · شقة 12');
   });
 
   await test.step('cancel the pending order (stock returns)', async () => {

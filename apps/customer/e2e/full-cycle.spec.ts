@@ -201,7 +201,7 @@ test('preview: customer → admin → staff → driver → rating → reports �
     await page.getByTestId('cart-continue').click();
     await page.getByTestId('checkout-confirm').click();
     await expect(page.getByTestId('order-hero')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('order-address')).toContainText('طابق 3 · شقة 12');
+    await expect(page.getByTestId('order-address')).toContainText('الطابق 3 · شقة 12');
     orderId = /\/order\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
     expect(orderId).not.toBe('');
     const row = await readOrder(orderId);
@@ -216,7 +216,7 @@ test('preview: customer → admin → staff → driver → rating → reports �
     });
     const panel = await openOrder(admin, orderNumber, orderId);
     await expect(panel.locator('[data-status="pending"]')).toBeVisible();
-    await expect(panel).toContainText('طابق 3');
+    await expect(panel).toContainText('الطابق 3');
     await expect(panel).toContainText(NAME);
     await shot(admin, 'admin-order');
   });

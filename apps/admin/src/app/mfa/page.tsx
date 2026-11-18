@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { CHANGE_PIN_PATH, LOGIN_PATH, NOT_AUTHORIZED_PATH, safeNext } from '@/lib/access';
 import { getPanelUser, pinBeforeMfa } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
+import { ServiceUnavailable } from '@/components/ServiceUnavailable';
 import { MfaForm } from './MfaForm';
 
 export const metadata: Metadata = { title: 'المصادقة الثنائية' };
@@ -15,6 +16,7 @@ export default async function MfaPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const user = await getPanelUser(await createClient());
+  if (user.state === 'unavailable') return <ServiceUnavailable />;
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
   // T23 F M2: لا تسجيل لتطبيق المصادقة برمز مؤقت: تغيير الرمز أولاً

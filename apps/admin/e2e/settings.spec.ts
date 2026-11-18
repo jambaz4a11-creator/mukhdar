@@ -5,7 +5,7 @@ import { ALLOW_WRITES, signedInClient } from './supabase';
 import { freshTotp } from './totp';
 
 // T19: الإعدادات والموظفون والعناوين. القراءة (ومحاولات تُرفض بلا كتابة) تعمل على أي بيانات seed؛
-// الكتابة (حفظ الإعدادات، ترقية، تصفير رمز، إنشاء سائق، عمارات) فقط مع E2E_ALLOW_WRITES=1
+// الكتابة (حفظ الإعدادات، ترقية، تصفير رمز، إنشاء سائق، بنايات) فقط مع E2E_ALLOW_WRITES=1
 // (CI: Supabase محلي مع Edge Functions).
 
 // زبائن العرض 07000000101..112 لـ placeOrder (orders.spec)؛ هنا آخر الزبائن فقط.
@@ -83,9 +83,9 @@ test.describe.serial('settings, staff, addresses (admin, read / refused)', () =>
     await expect(page.locator('[data-sector]').first()).toBeVisible();
     await page.locator('[data-unit]').first().getByRole('button').first().click();
     await expect(page.getByTestId('buildings').locator('button').first()).toBeVisible();
-    await page.getByLabel('إضافة عمارات بالجملة').fill('1-5');
+    await page.getByLabel('إضافة بنايات بالجملة').fill('1-5');
     await expect(page.getByTestId('bulk-preview')).toContainText('موجودة');
-    await page.getByLabel('إضافة عمارات بالجملة').fill('9-5');
+    await page.getByLabel('إضافة بنايات بالجملة').fill('9-5');
     await expect(page.getByText('مقلوب')).toBeVisible();
   });
 
@@ -101,7 +101,7 @@ test.describe.serial('settings, staff, addresses (admin, read / refused)', () =>
 
     await page.goto('/addresses');
     await page.locator(`[data-unit="${unitName}"]`).getByRole('button').first().click();
-    const panel = page.getByRole('region', { name: 'العمارات' });
+    const panel = page.getByRole('region', { name: 'البنايات' });
     await panel.getByRole('button', { name: 'تعديل الاسم' }).first().click();
     await panel.getByRole('textbox', { name: /^الاسم الجديد/ }).fill('ZZ9');
     await panel.getByRole('button', { name: 'حفظ', exact: true }).click();
@@ -118,7 +118,7 @@ test.describe.serial('settings, staff, addresses (admin, read / refused)', () =>
   test('building numbers outside 1-100 are refused by the bulk form', async () => {
     await page.goto('/addresses');
     await page.locator('[data-unit]').first().getByRole('button').first().click();
-    await page.getByLabel('إضافة عمارات بالجملة').fill('99-101');
+    await page.getByLabel('إضافة بنايات بالجملة').fill('99-101');
     await expect(page.getByText('الأرقام من 1 إلى 100')).toBeVisible();
   });
 });
@@ -368,16 +368,16 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     const unitName = `Z${Math.floor(Math.random() * 900 + 100)}`;
     await page.goto('/addresses');
     const sector = page.locator('[data-sector]').first();
-    await sector.getByRole('button', { name: /^\+ وحدة جديدة/ }).click();
-    await sector.getByLabel(/^وحدة جديدة/).fill(unitName);
+    await sector.getByRole('button', { name: /^\+ بلوك جديد/ }).click();
+    await sector.getByLabel(/^بلوك جديد/).fill(unitName);
     await sector.getByRole('button', { name: 'إضافة', exact: true }).click();
     await sector.locator(`[data-unit="${unitName}"]`).getByRole('button').first().click();
-    const bulk = page.getByLabel('إضافة عمارات بالجملة');
+    const bulk = page.getByLabel('إضافة بنايات بالجملة');
     await bulk.fill('1-100');
     await expect(page.getByTestId('bulk-preview')).toContainText('100');
-    await page.getByRole('button', { name: 'إضافة 100 عمارة' }).click();
+    await page.getByRole('button', { name: 'إضافة 100 بناية' }).click();
     await expect(page.getByTestId('bulk-result')).toContainText(
-      `انضافت 100 عمارة لوحدة ${unitName}`,
+      `انضافت 100 بناية لبلوك ${unitName}`,
     );
     await expect(page.getByTestId('buildings').locator('button')).toHaveCount(100);
     // كلها موجودة الآن: لا شيء جديد للإضافة (المكرر يُتجاهل)
@@ -386,9 +386,9 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     // 101 خارج 1..100 (قيد قاعدة البيانات أيضاً): الواجهة ترفضه قبل الإرسال
     await bulk.fill('1,2,5-9, 101');
     await expect(page.getByText('الأرقام من 1 إلى 100')).toBeVisible();
-    // إخفاء الوحدة التجريبية (لا حذف)
+    // إخفاء البلوك التجريبية (لا حذف)
     await page
-      .getByRole('region', { name: 'العمارات' })
+      .getByRole('region', { name: 'البنايات' })
       .getByRole('button', { name: 'إخفاء' })
       .first()
       .click();

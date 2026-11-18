@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH } from '@/lib/access';
 import { getPanelUser, pinBeforeMfa } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
+import { ServiceUnavailable } from '@/components/ServiceUnavailable';
 import { ChangePinForm } from './ChangePinForm';
 
 export const metadata: Metadata = { title: 'تغيير رمز الدخول' };
@@ -10,6 +11,7 @@ export const metadata: Metadata = { title: 'تغيير رمز الدخول' };
 // خارج تخطيط اللوحة: برمز مؤقت لا تظهر القائمة (كل صفحة أخرى تحوّل هنا، proxy.ts).
 export default async function ChangePinPage() {
   const user = await getPanelUser(await createClient());
+  if (user.state === 'unavailable') return <ServiceUnavailable />;
   if (user.state === 'anonymous') redirect(LOGIN_PATH);
   if (user.state === 'forbidden') redirect(NOT_AUTHORIZED_PATH);
   // T23 F M2: رمز مؤقت بلا عامل TOTP ← التغيير هنا بجلسة aal1 (التسجيل بعده)؛ غير ذلك المصادقة أولاً

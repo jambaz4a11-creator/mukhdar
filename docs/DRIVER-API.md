@@ -14,6 +14,18 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 
 ---
 
+## Changes for the driver app (2026-11-18, address wording: بلوك / بناية — **push text changed**)
+
+Migration `20261205000001` (applied to the development project only). **No function signature, column or
+stored value changed; only display wording.** Please update your UI strings and any code that matches the
+push body text:
+
+- The words are now **"بلوك"** (was "وحدة"; the value is still the unit `A3`), **"بناية"** (was "عمارة"),
+  **"الطابق"** (was "طابق"), **"شقة"**. The sector word is no longer printed (it is part of the block name).
+- Full address: `بلوك A3 · بناية 12 · الطابق 3 · شقة 10` (ground floor: `الطابق الأرضي`).
+- **Push body changed** (new orders for drivers, assignment, cancellation fallback): `بلوك A3 - بناية 12`
+  (was `وحدة A3 - عمارة 12`). Do not parse the body; use `data.order_id`.
+
 ## Changes for the driver app (2026-11-18, address floor)
 
 Migration `20261204000001` (applied to the development project). **No function signature changed and no
@@ -22,13 +34,13 @@ driver call needs to change.**
 1. **New optional key `floor` in `orders.address_snapshot`** (integer, `0` = ground floor, up to `20`),
    copied from the customer's address when the order is placed. New addresses always have it; orders to
    addresses saved before 2026-11-18 have **no `floor` key**. Example in §4. Show it next to the building,
-   e.g. "عمارة 12 · طابق 3 · شقة 5" (`0` → "الطابق الأرضي"). Treat it as optional.
+   e.g. "بناية 12 · الطابق 3 · شقة 5" (`0` → "الطابق الأرضي"). Treat it as optional.
 2. **Not in `available_orders`:** like the apartment, the floor is only visible after you accept the order
    (in your own order rows). The list before accepting is unchanged.
 3. **Deleted customers:** the anonymized snapshot (`sector`, `subsection` only) has no `floor` either.
-4. Customer-facing wording: the customer app now asks "البلوك" (unit with its sector, e.g. `A3`) →
-   "البناية" (building) → "الطابق" (floor) → "رقم الشقة". The stored values and the push text
-   ("وحدة A3 - عمارة 12") are unchanged.
+4. Customer-facing wording: the customer app asks "البلوك" (unit with its sector, e.g. `A3`) →
+   "البناية" (building) → "الطابق" (floor) → "رقم الشقة". Stored values are unchanged (the push text
+   changed later the same day, see the section above).
 
 ---
 
@@ -367,8 +379,8 @@ and `customer_name`, `customer_phone`, `note` are `null`. Treat every key except
 **Address layout (Bismayah):** two sectors, `قطاع A` and `قطاع B`. Sector A has units `A1`–`A9`, sector B
 has units `B1`–`B8` (table `subsections`), and each unit has buildings `1`–`100` (table `buildings`).
 **Building numbers repeat across units**, so always show the unit with the building. Arabic UI labels:
-subsection = **"وحدة"**, building = **"عمارة"**, e.g. `قطاع A، وحدة A3، عمارة 12، شقة 5`. Push bodies
-use the same wording (`وحدة A3 - عمارة 12`).
+subsection = **"بلوك"**, building = **"بناية"**, e.g. `بلوك A3 · بناية 12 · الطابق 3 · شقة 5` (decision
+2026-11-18). Push bodies use the same wording (`بلوك A3 - بناية 12`).
 
 **Quantities and units:** `order_items.qty` is an integer count of the product's sale unit
 (`unit_snapshot`). Produce is sold per **`نص كيلو`** (half kilo) at a fixed price per half kilo (no
