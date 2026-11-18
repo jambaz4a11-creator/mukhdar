@@ -304,8 +304,9 @@ async function seedDemo() {
   for (const c of customers) {
     const count = chance(0.25) ? 2 : 1;
     const { rows } = await q(
-      `insert into public.addresses (customer_id, building_id, apartment, label, is_default)
-       select $1, b, a, l, d from unnest($2::int[], $3::text[], $4::text[], $5::bool[]) as x(b, a, l, d)
+      `insert into public.addresses (customer_id, building_id, apartment, label, is_default, floor)
+       select $1, b, a, l, d, f
+         from unnest($2::int[], $3::text[], $4::text[], $5::bool[], $6::smallint[]) as x(b, a, l, d, f)
        returning id`,
       [
         c.id,
@@ -313,6 +314,7 @@ async function seedDemo() {
         Array.from({ length: count }, () => String(randInt(1, 40))),
         ['البيت', 'بيت أهلي'].slice(0, count),
         [true, false].slice(0, count),
+        Array.from({ length: count }, () => randInt(0, 9)), // الطابق (2026-11-18): 0 = الأرضي
       ],
     );
     c.addresses = rows.map((r) => r.id);
@@ -571,8 +573,9 @@ async function seedLoadCustomers() {
   const users = await createUsers(specs);
   await q(
     `with b as (select array_agg(id) as ids from public.buildings where is_active)
-     insert into public.addresses (customer_id, building_id, apartment, is_default)
-     select u, b.ids[1 + floor(random() * array_length(b.ids, 1))::int], (1 + floor(random() * 40))::text, true
+     insert into public.addresses (customer_id, building_id, apartment, is_default, floor)
+     select u, b.ids[1 + floor(random() * array_length(b.ids, 1))::int], (1 + floor(random() * 40))::text, true,
+            floor(random() * 10)::smallint
        from unnest($1::uuid[]) as u, b`,
     [users.map((u) => u.id)],
   );

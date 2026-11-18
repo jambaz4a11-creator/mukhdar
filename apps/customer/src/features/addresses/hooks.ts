@@ -6,6 +6,7 @@ import { getSupabase } from '../../lib/supabase';
 import { useAuth } from '../auth/store';
 import {
   addressKeys,
+  fetchBlocks,
   fetchBuildings,
   fetchMyAddresses,
   fetchSectors,
@@ -21,6 +22,17 @@ export function useSectors() {
   return useQuery({
     queryKey: addressKeys.sectors,
     queryFn: () => fetchSectors(client as MukhdarClient),
+    enabled: client !== null,
+    staleTime: HIERARCHY_STALE_MS,
+  });
+}
+
+/** البلوكات (قطاع + وحدة) للقائمة المنسدلة بنموذج العنوان. */
+export function useBlocks() {
+  const client = getSupabase();
+  return useQuery({
+    queryKey: addressKeys.blocks,
+    queryFn: () => fetchBlocks(client as MukhdarClient),
     enabled: client !== null,
     staleTime: HIERARCHY_STALE_MS,
   });

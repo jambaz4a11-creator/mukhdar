@@ -42,11 +42,11 @@ select throws_ok($$ delete from public.products where id = tests.id('p_active') 
 select throws_ok($$ update public.app_settings set store_open = false $$,
   '42501', null, 'customer cannot update app_settings');
 select results_eq($$ select id from public.addresses $$, array[tests.id('a1')], 'customer sees only own address');
-select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment)
-                           select %L, building_id, '9' from public.addresses limit 1 $$, tests.id('c2')),
+select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment)
+                           select %L, building_id, 1, '9' from public.addresses limit 1 $$, tests.id('c2')),
   '42501', null, 'customer cannot add an address for someone else');
-select lives_ok($$ insert into public.addresses (customer_id, building_id, apartment)
-                   select (select auth.uid()), building_id, '9' from public.addresses limit 1 $$,
+select lives_ok($$ insert into public.addresses (customer_id, building_id, floor, apartment)
+                   select (select auth.uid()), building_id, 1, '9' from public.addresses limit 1 $$,
   'customer can add own address');
 
 -- ---------------------------------------------------------------- staff

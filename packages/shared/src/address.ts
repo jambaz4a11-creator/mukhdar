@@ -4,7 +4,7 @@
 import type { AddressSnapshot } from './types';
 
 type AddressParts = Pick<AddressSnapshot, 'sector' | 'subsection' | 'building'> &
-  Partial<Pick<AddressSnapshot, 'apartment'>>;
+  Partial<Pick<AddressSnapshot, 'apartment' | 'floor'>>;
 
 const clean = (v: string | null | undefined) => (v ?? '').trim();
 
@@ -14,12 +14,19 @@ export function formatSector(sector: string): string {
   return s === '' || s.startsWith('قطاع') ? s : `قطاع ${s}`;
 }
 
-/** "قطاع A · وحدة A3 · عمارة 12 · شقة 5" (الأجزاء الفارغة تُحذف). للتفاصيل والإيصال. */
+/** الطابق للعرض: 0 ← "الطابق الأرضي"، 3 ← "طابق 3"؛ غائب أو غير صالح ← "". */
+export function formatFloor(floor: number | null | undefined): string {
+  if (typeof floor !== 'number' || !Number.isInteger(floor) || floor < 0) return '';
+  return floor === 0 ? 'الطابق الأرضي' : `طابق ${floor}`;
+}
+
+/** "قطاع A · وحدة A3 · عمارة 12 · طابق 3 · شقة 5" (الأجزاء الفارغة تُحذف). للتفاصيل والإيصال. */
 export function formatAddress(address: AddressParts): string {
   const parts = [
     formatSector(address.sector),
     clean(address.subsection) && `وحدة ${clean(address.subsection)}`,
     clean(address.building) && `عمارة ${clean(address.building)}`,
+    formatFloor(address.floor),
     clean(address.apartment) && `شقة ${clean(address.apartment)}`,
   ];
   return parts.filter((p) => p !== '').join(' · ');

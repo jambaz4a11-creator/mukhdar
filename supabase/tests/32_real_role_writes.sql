@@ -38,18 +38,18 @@ select is((select full_name from public.profiles where id = tests.id('cust')), '
   'customer: the name is cleaned by the trigger');
 
 -- العنوان: إضافة، تعديل، افتراضي، حذف
-select lives_ok(format($$ insert into public.addresses (customer_id, building_id, apartment, label, note)
-                          values (%L, %s, %L, %L, %L) $$,
+select lives_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment, label, note)
+                          values (%L, %s, 2, %L, %L, %L) $$,
                        tests.id('cust'), current_setting('t.bld'), E' 4‮ ', 'البيت', 'الباب الأخضر'),
   'customer: adds an address');
 select tests.remember('addr', (select id from public.addresses where customer_id = tests.id('cust') limit 1));
 select is((select apartment from public.addresses where id = tests.id('addr')), '4',
   'customer: apartment is cleaned by the trigger');
-select lives_ok(format($$ update public.addresses set apartment = '5', note = 'جنب المصعد' where id = %L $$, tests.id('addr')),
+select lives_ok(format($$ update public.addresses set apartment = '5', floor = 3, note = 'جنب المصعد' where id = %L $$, tests.id('addr')),
   'customer: edits the address');
 select lives_ok(format($$ select public.set_default_address(%L) $$, tests.id('addr')),
   'customer: sets the default address');
-select lives_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '9') $$,
+select lives_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 0, '9') $$,
                        tests.id('cust'), current_setting('t.bld')),
   'customer: adds a second address');
 select is(tests.affected(format($$ delete from public.addresses where customer_id = %L and apartment = '9' $$,

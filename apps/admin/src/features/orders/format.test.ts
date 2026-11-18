@@ -26,6 +26,15 @@ describe('detail panel: full address and phone', () => {
     expect(shortAddress(snapshot)).toBe('وحدة A3 - عمارة 45');
   });
 
+  it('shows the floor on the details and the receipt (2026-11-18), ignores bad values', () => {
+    expect(fullAddress({ ...snapshot, floor: 4 })).toBe(
+      'قطاع A · وحدة A3 · عمارة 45 · طابق 4 · شقة 12',
+    );
+    expect(fullAddress({ ...snapshot, floor: 0 })).toContain('الطابق الأرضي');
+    expect(asAddress({ ...snapshot, floor: '4' }).floor).toBeNull();
+    expect(asAddress(snapshot).floor).toBeNull();
+  });
+
   it('keeps the address note, drops blank notes', () => {
     expect(asAddress(snapshot).note).toBe('الطابق الثالث');
     expect(asAddress({ ...snapshot, note: '  ' }).note).toBeNull();

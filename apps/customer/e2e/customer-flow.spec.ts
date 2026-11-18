@@ -7,6 +7,16 @@ import { validatePin } from '@mukhdar/shared';
 import { E2E_PHONE_PREFIX, assertDev } from './env';
 
 const NAME = 'زبون تجربة';
+/** E2E_SHOTS=<مجلد>: لقطات شاشة بعرض 360 (أصغر هاتف مدعوم) لمراجعة التصميم بالعين. */
+const SHOTS = process.env.E2E_SHOTS;
+
+async function shot(page: Page, name: string) {
+  if (SHOTS)
+    await page.screenshot({
+      path: `${SHOTS}/${test.info().project.name}-${name}.png`,
+      fullPage: true,
+    });
+}
 
 function newCredentials() {
   const phone = `${E2E_PHONE_PREFIX}${String(randomInt(0, 1_000_000)).padStart(6, '0')}`;
@@ -25,6 +35,7 @@ test('customer: sign up → name → address → order → cancel → delete acc
   assertDev();
   page.on('dialog', (d) => void d.accept()); // Alert على الويب = window.alert/confirm (webShims.web.ts)
   const c = newCredentials();
+  if (SHOTS) await page.setViewportSize({ width: 360, height: 780 });
 
   await test.step('sign up', async () => {
     await page.goto('/auth/sign-up');
@@ -38,22 +49,30 @@ test('customer: sign up → name → address → order → cancel → delete acc
   await test.step('name (the reported bug)', async () => {
     await page.getByTestId('name-input').fill(NAME);
     await page.getByTestId('name-submit').click();
-    await expect(page.locator('[data-testid^="sector-"]').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('block-select')).toBeVisible({ timeout: 30_000 });
     await expectNoError(page);
   });
 
-  await test.step('first address (the reported bug)', async () => {
-    await page.locator('[data-testid^="sector-"]').first().click();
-    await page.locator('[data-testid^="unit-"]').first().click();
+  await test.step('first address: block → building → floor → apartment (+ label)', async () => {
+    await page.getByTestId('block-select').click();
+    await shot(page, 'address-blocks');
+    await page.getByTestId('block-list').getByRole('button', { name: 'A1', exact: true }).click();
+    await expect(page.getByTestId('block-value')).toHaveText(/^A1$/);
     await page.getByTestId('building-input').fill('1');
     await expect(page.getByTestId('building-found')).toBeVisible();
-    await page.getByTestId('apartment-input').fill('3');
+    await page.getByTestId('floor-input').fill('3');
+    await page.getByTestId('apartment-input').fill('12');
+    await page.getByTestId('label-input').fill('البيت');
+    await expect(page.getByTestId('address-preview')).toContainText('عمارة 1 · طابق 3 · شقة 12');
+    await shot(page, 'address-form');
     await page.getByTestId('address-save').click();
     await expect(page.getByTestId('delivery-address')).toBeVisible({ timeout: 30_000 });
     await expectNoError(page);
   });
 
   await test.step('browse and add to cart', async () => {
+    await expect(page.getByRole('button', { name: /^أضف .+ للسلة$/ }).first()).toBeVisible();
+    await shot(page, 'home');
     await page
       .getByRole('button', { name: /^أضف .+ للسلة$/ })
       .first()
@@ -68,7 +87,7 @@ test('customer: sign up → name → address → order → cancel → delete acc
     await expect(page.getByTestId('checkout-total')).toBeVisible();
     await page.getByTestId('checkout-confirm').click();
     await expect(page.getByTestId('order-hero')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('order-address')).toContainText('عمارة 1');
+    await expect(page.getByTestId('order-address')).toContainText('عمارة 1 · طابق 3 · شقة 12');
   });
 
   await test.step('cancel the pending order (stock returns)', async () => {
