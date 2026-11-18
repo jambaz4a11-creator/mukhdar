@@ -54,6 +54,9 @@ create function tests.gate_calls() returns table (grp text, sql text) language s
                      jsonb_build_object('id', tests.id('prod'), 'description', 'aal'))),
     ('admin', format($q$ select public.set_product_price(%L, 1250) $q$, tests.id('prod'))),
     ('admin', format($q$ select public.reorder_products(array[%L]::uuid[]) $q$, tests.id('prod'))),
+    ('admin', $q$ select public.admin_save_category('{"name": "aal matrix cat"}'::jsonb) $q$),
+    ('admin', $q$ select public.delete_category(999999) $q$),
+    ('admin', $q$ select public.reorder_categories(array[999999]) $q$),
     ('admin', $q$ select public.recompute_daily_stats(current_date, current_date) $q$),
     ('admin', format($q$ select public.set_user_role(%L, 'customer', true) $q$, tests.id('cust'))),
     ('admin', $q$ select public.update_app_settings('{}'::jsonb) $q$),
@@ -131,12 +134,12 @@ select tests.as_user_aal1(tests.id('admin'));
 select is((select count(*)::int from public.product_costs), 0, 'admin aal1: cannot read product_costs');
 select is((select count(*)::int from public.profiles), 1, 'admin aal1: reads only the own profile (to route to the MFA page)');
 select is((select count(*)::int from public.admin_audit), 0, 'admin aal1: cannot read admin_audit');
-select is(tests.gate_try($q$ insert into public.categories (name) values ('aal1 cat') $q$), '42501',
-  'admin aal1: cannot write categories (RLS)');
+select is(tests.gate_try($q$ select public.admin_save_category('{"name": "aal1 cat"}'::jsonb) $q$), '42501',
+  'admin aal1: cannot write categories (function gate)');
 select tests.as_user(tests.id('admin'));
 select ok((select count(*)::int from public.product_costs) > 0, 'admin aal2: reads product_costs');
 select ok((select count(*)::int from public.profiles) > 1, 'admin aal2: reads every profile');
-select is(tests.gate_try($q$ insert into public.categories (name) values ('aal2 cat') $q$), 'ok',
+select is(tests.gate_try($q$ select public.admin_save_category('{"name": "aal2 cat"}'::jsonb) $q$), 'ok',
   'admin aal2: writes categories');
 
 -- ================================================================ admin_reset_mfa

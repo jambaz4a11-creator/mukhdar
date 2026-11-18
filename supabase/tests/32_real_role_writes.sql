@@ -111,7 +111,7 @@ select lives_ok(format($$ select public.adjust_stock(%L, 10, 'purchase', null, 5
 select lives_ok(format($$ select public.adjust_stock_bulk(jsonb_build_array(jsonb_build_object('product_id', %L::text, 'qty', -1)), 'waste', 'تالف') $$,
                        tests.id('prod')),
   'admin: records daily waste');
-select lives_ok($$ insert into public.categories (name) values ('T32 قسم') $$, 'admin: adds a category');
+select lives_ok($$ select public.admin_save_category('{"name": "T32 قسم"}'::jsonb) $$, 'admin: adds a category (function)');
 select lives_ok(format($$ update public.subsections set is_active = false where id = %s $$, current_setting('t.sub')),
   'admin: hides a unit (audit trigger)');
 select lives_ok(format($$ select public.add_buildings(%s, array['8', '9']) $$, current_setting('t.sub')),

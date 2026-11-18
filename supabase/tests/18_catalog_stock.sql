@@ -266,11 +266,11 @@ select is_empty($$ select s.product_id from public.stock s
 
 -- ================================================================ الأقسام: كتابة الأدمن فقط
 select tests.as_user(tests.id('staff'));
-select is(tests.affected($$ update public.categories set is_active = false where id = current_setting('t.cat_id')::int $$),
-  0, 'staff cannot hide a category');
+select throws_ok($$ update public.categories set is_active = false where id = current_setting('t.cat_id')::int $$,
+  '42501', null, 'staff cannot hide a category directly');
 select tests.as_user(tests.id('admin'));
-select is(tests.affected($$ update public.categories set image_path = 'categories/1/1.webp', sort_order = 3
-                            where id = current_setting('t.cat_id')::int $$),
-  1, 'admin updates a category image and order');
+select lives_ok(format($$ select public.admin_save_category(jsonb_build_object('id', %s, 'image_path', 'categories/%s/1.webp', 'sort_order', 3)) $$,
+                       current_setting('t.cat_id'), current_setting('t.cat_id')),
+  'admin updates a category image and order through the function');
 
 select * from finish();
