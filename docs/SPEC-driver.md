@@ -1,58 +1,346 @@
-# SPEC-driver: تطبيق السائق (Expo)
+# SPEC-driver: تطبيق السائق (`apps/driver`، Expo)
 
-> **يصف السلوك المتوقع من تطبيق السائق الخارجي.** التطبيق يبنيه مطوّر منفصل خارج هذا الـ repo (لا `apps/driver` هنا) ويُربط لاحقاً. عقد الربط التقني (الدخول، الدوال، الأخطاء، RLS، Realtime، الإشعارات): [DRIVER-API.md](DRIVER-API.md). تطبيق منفصل عن الزبون (اسم وأيقونة مختلفة)، عربي RTL.
+> **الحالة: مسودة بانتظار موافقة المالك (2026-11-19).** تحل محل النسخة السابقة التي كانت تصف تطبيقاً خارجياً.
+> **قرار يتغيّر:** تطبيق السائق صار **داخل هذا الـ repo** (`apps/driver`) بدل مطوّر خارجي. عند الموافقة تُحدَّث معه بنفس الـ PR الأول للتنفيذ: `CLAUDE.md` (فقرة "تطبيق السائق خارجي")، `docs/tasks/00-README.md` و`21-driver-app.md`، مقدمة `DRIVER-API.md` (يبقى عقد الدوال، ويصير مرجعاً داخلياً)، وSPEC-backend §1/§4/§5/§8، وSPEC-admin (صفحة جديدة §2.10).
+> التصميم المعتمد: [تصميم تطبيق السائق](https://claude.ai/artifact/Q77gRRiwG3fT8Ju4DSeixY) (9 شاشات). عقد الدوال الموجودة: [DRIVER-API.md](DRIVER-API.md).
 
-## 1) الدخول والصلاحية
-- نفس دخول تطبيق الزبون: رقم الهاتف + رمز PIN من 6 أرقام، بلا رسائل (ADR 0001، DRIVER-API §2). "نسيت الرمز" ← واتساب المتجر، والأدمن يعيد الضبط.
-- بعد الدخول: إن كان `profiles.role ≠ 'driver'` أو الحساب معطّل ← شاشة "حسابك غير مفعّل كسائق، تواصل مع الإدارة" مع زر تحديث وتسجيل خروج.
-- الأدمن يفعّل السائق من اللوحة (`set_user_role`).
+---
 
-## 2) الشاشات
+## 1) الهدف
+
+تطبيق موبايل للسائق (عربي RTL، نفس هوية تطبيق الزبون: أخضر `#1F6B3A`، خط IBM Plex Sans Arabic، أزرار كبيرة ≥ 52px لأنه يُستخدم أثناء المشي/القيادة) يغطي:
+
+1. **تسجيل ذاتي للسائق** بالاسم والرقم ← طلب **معلّق** بلا أي حساب ← موافقة الأدمن بعد مكالمة ← **نفس الجهاز فقط** يختار الرمز ← حساب سائق فعّال.
+2. **التوصيل:** الطلبات الجاهزة وقبولها (أول سائق يفوز)، طلباتي، تفاصيل الطلب بالعنوان الكامل والاتصال بالزبون، "بالطريق" و"تم التوصيل"، سجل اليوم بالكاش، وحسابي.
+3. **إشعار** عند جاهزية طلب (موجود بالـ backend)، وعند الموافقة على طلب التسجيل.
+
+**النشر:** Android APK أولاً (EAS Build، `buildType: apk`، توزيع داخلي بلا متجر)؛ iOS Ad Hoc لاحقاً (يحتاج حساب Apple Developer وتسجيل UDID الأجهزة). لا متجر بالنسخة الأولى.
+
+### قصص المستخدم ومعايير القبول
+
+| # | القصة | القبول |
+|---|---|---|
+| U1 | كسائق جديد أسجّل باسمي ورقمي | الطلب يُحفظ `pending`؛ لا حساب Auth يُنشأ؛ التطبيق يعرض "طلبك وصل للمحل" |
+| U2 | كأدمن أشوف طلبات السواق وأوافق أو أرفض | صفحة "طلبات السواق" للأدمن فقط (aal2)؛ كل قرار يُكتب بـ `admin_audit` |
+| U3 | كسائق موافَق عليه أختار رمزي من نفس الجهاز | الرمز + تأكيده ← حساب `driver` فعّال بلا `must_change_pin` ← دخول مباشر. جهاز آخر (بلا سر الجهاز) لا يقدر |
+| U4 | كسائق معلّق أو مرفوض ما أقدر أدخل | لا حساب Auth موجود أصلاً ← الدخول يفشل؛ شاشة الانتظار تعرض الحالة |
+| U5 | كسائق أدخل بعدها برقمي ورمزي فقط | `signInWithPassword` بلا TOTP (aal1 يكفي للسائق، موجود) |
+| U6 | كسائق أشوف الطلبات الجاهزة وأقبل واحد | `accept_order`؛ إن سبقني غيري: "قبله سائق ثاني" وتحديث القائمة |
+| U7 | كسائق أوصل الطلب | تفاصيل كاملة، اتصال/واتساب، "بالطريق" ثم "تم التوصيل واستلمت المبلغ" (تأكيد مزدوج) |
+| U8 | كسائق أعرف الكاش اللي بيدي اليوم | مجموع `total_iqd` لطلباتي المسلّمة اليوم بتوقيت بغداد، وعددها، وقائمتها |
+| U9 | كسائق نسيت رمزي | "اتصل بالمحل / واتساب" ← الأدمن يعيد الضبط (`admin-reset-pin` الموجودة) ← رمز مؤقت ← تغيير إجباري |
+
+---
+
+## 2) الشاشات (مطابقة للتصميم المعتمد)
+
 ```
-(tabs) الطلبات المتاحة | طلباتي الحالية | السجل | حسابي
-order/[id]
+app/
+  _layout.tsx                 حارس الحالة (انظر §2.1)
+  auth/login.tsx              Login
+  auth/register.tsx           Register
+  auth/pending.tsx            Pending (ومعها حالات: مرفوض، منتهي)
+  auth/set-pin.tsx            ChangePin "اختار رمزك" (بعد الموافقة)
+  auth/change-pin.tsx         تغيير إجباري لرمز مؤقت من الأدمن (must_change_pin)
+  auth/not-driver.tsx         "حسابك غير مفعّل كسائق" (تحديث + خروج)
+  (tabs)/index.tsx            Main "الطلبات الجاهزة"
+  (tabs)/my-orders.tsx        MyOrders "طلباتي"
+  (tabs)/today.tsx            Today "سجل اليوم"
+  (tabs)/account.tsx          Account "حسابي"
+  account/change-pin.tsx      تغيير الرمز (الحالي + الجديد + التأكيد)
+  order/[id].tsx              OrderDetail
 ```
 
-### 2.1 الطلبات المتاحة
-- من `available_orders(20)` (طلبات `ready` غير المعيَّنة فقط، أي جاهزة بانتظار سائق): رقم الطلب، القطاع/الوحدة/العمارة، عدد وحدات البيع، المجموع (للتحصيل)، منذ كم دقيقة.
-- **لا يظهر هاتف الزبون أو اسمه قبل القبول.**
-- زر "قبول" ← `accept_order`. عند `ORDER_NOT_AVAILABLE`: "أخذه سائق آخر" وتحديث القائمة.
-- تحديث: عند وصول إشعار "طلب جديد"، وسحب للتحديث، وكل 30 ثانية والشاشة مفتوحة.
+### 2.1 حارس الحالة (`_layout.tsx`)
+بالترتيب عند كل تشغيل ورجوع للتطبيق:
+1. **جلسة موجودة:** اقرأ `profiles` (`role, is_active, must_change_pin, full_name, phone`).
+   - `must_change_pin` ← `auth/change-pin` (لا تخطي، فقط خروج).
+   - `role ≠ 'driver'` أو `!is_active` ← `auth/not-driver`.
+   - غير ذلك ← `(tabs)`.
+   - فشل تحديث الجلسة (HTTP 400، جلسة أُبطلت) ← خروج محلي ← `auth/login`.
+2. **لا جلسة، ويوجد طلب تسجيل محفوظ بالجهاز** (`request_id` + سر الجهاز بـ SecureStore) ← `auth/pending` (التي تتحول لـ `set-pin` عند `approved`).
+3. غير ذلك ← `auth/login`.
 
-### 2.2 طلباتي الحالية
-- الطلبات المعيَّنة لي وليست نهائية، مرتبة بالأقدم.
-- Realtime على `orders` بفلتر `driver_id=eq.<me>` (لتغيّر الحالة من الأدمن أو إعادة التعيين).
+### 2.2 الدخول (Login)
+- رقم الهاتف (`07XXXXXXXXX`، أرقام عربية مقبولة) + الرمز (6 أرقام، زر إظهار) ← `signInWithPassword(phonePinCredentials(phone, pin))` من `packages/shared`.
+- الأخطاء: `invalid_credentials` ← "الرقم أو الرمز غير صحيح"؛ 429 ← "محاولات كثيرة، انتظر قليلاً"؛ الشبكة ← "صار خلل، حاول مرة ثانية".
+- "سائق جديد؟ سجّل هنا" ← Register.
+- "نسيت الرمز؟" ← اتصال بالمحل (`tel:`) وواتساب المحل (`wa.me`) من `EXPO_PUBLIC_SHOP_PHONE` / `EXPO_PUBLIC_SHOP_WHATSAPP` (كتطبيق الزبون). التصميم يقول "اتصل بمدير المحل"؛ نضيف واتساب بجانبه لأنه مسار إعادة الضبط المعتمد (ADR 0001).
 
-### 2.3 تفاصيل الطلب `order/[id]`
-- العنوان كاملاً بخط كبير: القطاع، الوحدة، العمارة، الشقة، الملاحظة.
-- اسم الزبون، زر **اتصال** (`tel:`) وزر **واتساب** (`https://wa.me/964...`).
-- البنود والكميات بوحدتها ("1.5 كيلو"، "3 باقة"؛ قائمة تحقق للتسليم)، المجموع المطلوب تحصيله بخط واضح.
-- أزرار حسب الحالة:
-  - `ready` ← "استلمت الطلب، بالطريق" (`out_for_delivery`).
-  - `preparing` (طلب عيّنه الموظف مسبقاً) ← معطّل مع "بانتظار التحضير".
-  - `out_for_delivery` ← "تم التسليم واستلمت المبلغ" (تأكيد مزدوج) ← `delivered`.
-- السائق **لا يلغي**؛ زر "مشكلة بالطلب" يتصل بالإدارة.
+### 2.3 التسجيل (Register)
+- الاسم (2..80 حرفاً بعد القص) والرقم.
+- عند "إرسال الطلب":
+  1. يولّد التطبيق **سر الجهاز**: 32 بايت عشوائية (`expo-crypto` `getRandomBytesAsync`) بترميز base64url، ويحفظه بـ `expo-secure-store` (Keychain/Keystore) **قبل** الإرسال.
+  2. يطلب إذن الإشعارات (اختياري، مع شرح "حتى نبلغك أول ما يوافقون") وإن سُمح يأخذ رمز Expo.
+  3. `POST functions/v1/driver-register` بـ `{ full_name, phone, device_secret, push_token? }` (§4.2).
+  4. `201 { request_id }` ← يحفظ `request_id` بـ SecureStore ← Pending.
+- الأخطاء بالعربي (من `packages/shared/errors.ts`): `PHONE_INVALID`، `NAME_INVALID`، `PHONE_TAKEN` ("الرقم مسجّل عدنا. تواصل مع المحل حتى يفعّلك كسائق")، `REQUEST_EXISTS` ("أكو طلب لهذا الرقم بانتظار الموافقة")، `RATE_LIMITED`، `TOO_MANY_PENDING`، `REGISTER_FAILED`.
 
-### 2.4 السجل
-- الطلبات المسلّمة مني، صفحات 20. ملخص اليوم: عدد الطلبات ومجموع المبالغ المحصّلة (للتسوية مع الإدارة).
+### 2.4 بانتظار الموافقة (Pending)
+- يعرض الاسم والرقم المحفوظين محلياً، وشارة "بانتظار الموافقة"، وزر "تحقق من الموافقة".
+- **التحديث:** RPC `driver_request_status` (§4.3) عند فتح الشاشة، كل 30 ثانية والشاشة ظاهرة، عند الرجوع للتطبيق، عند الضغط، وعند وصول إشعار `driver_request_approved`.
+- الحالات:
+  - `pending` ← كما هي.
+  - `approved` ← `set-pin`.
+  - `rejected` ← "ما انقبل طلبك. للاستفسار اتصل بالمحل" + "طلب جديد" (يمسح البيانات المحلية ← Register).
+  - `expired` ← "انتهت مدة الموافقة، سجّل من جديد" + "طلب جديد".
+  - `completed` (اكتمل من هذا الجهاز سابقاً ثم انقطع قبل الدخول) ← يمسح البيانات المحلية ← Login.
+  - `not_found` (سر لا يطابق أو حُذف الطلب) ← يمسح البيانات المحلية ← Register.
+- رابط صغير "إلغاء وتسجيل برقم ثاني" (يمسح البيانات المحلية فقط؛ الطلب القديم يبقى للأدمن يرفضه أو ينتهي).
 
-### 2.5 حسابي
-- الاسم، الهاتف، مفتاح "متاح/غير متاح" *(مؤجل، انظر الافتراضات)*، تسجيل الخروج، حذف الحساب.
+### 2.5 اختيار الرمز بعد الموافقة (set-pin، تصميم ChangePin)
+- "وافق المحل على طلبك" ← الرمز + "أعد إدخال الرمز" ← `validatePin(pin, phone)` بالتطبيق (نفس القواعد) + تطابق الحقلين.
+- `POST functions/v1/driver-complete-registration` بـ `{ request_id, device_secret, pin }` (§4.4).
+- `201` ← `signInWithPassword` بنفس الرقم والرمز ← مسح `request_id` وسر الجهاز من SecureStore ← تسجيل رمز الإشعارات (`register_push_token`) ← `(tabs)`.
+- `409 PHONE_TAKEN` أو `REQUEST_NOT_APPROVED` ← يعيد قراءة الحالة؛ `completed` ← Login برسالة "حسابك جاهز، سجّل دخولك".
+- لا يرسل التطبيق الرمز لأي مكان غير هذه الدالة ثم GoTrue.
 
-## 3) الإشعارات
-- طلب الإذن مباشرة بعد الدخول (الإشعارات أساسية لعمل السائق)، مع شرح.
-- "طلب جديد": يصل لكل السائقين النشطين، يفتح "الطلبات المتاحة".
-- "تم تعيين طلب لك": يفتح `order/[id]`.
-- Android: قناة إشعارات بأولوية عالية وصوت مميز.
+### 2.6 الطلبات الجاهزة (Main)
+- `available_orders(20)` (الموجودة؛ `ready` غير المعيَّنة، الأقدم أولاً).
+- البطاقة: رقم الطلب، "جاهز من N دقيقة"، شرائح **بلوك** و**بناية**، "عدد القطع: N" (`item_count`)، "تستلم كاش: X د.ع" (`total_iqd`، `formatIqd`)، زر "قبول الطلب".
+- **انحراف عن التصميم:** التصميم يعرض الطابق والشقة قبل القبول؛ `available_orders` لا يرجعهما قصداً (خصوصية الزبون، DRIVER-API §3.1). النسخة الأولى تعرض البلوك والبناية فقط (سؤال مفتوح 1).
+- قبول ← `accept_order(id)`: النجاح ← `order/[id]`؛ `ORDER_NOT_AVAILABLE` ← البطاقة باهتة بعبارة "قبله سائق ثاني" ثم تُحذف بالتحديث التالي؛ `NOT_ALLOWED` ← إعادة فحص الملف الشخصي (§2.1).
+- التحديث: سحب للتحديث، كل 30 ثانية والشاشة ظاهرة، عند الرجوع للتطبيق، وعند إشعار `new_order`. الشارة بالرأس = عدد الطلبات.
+- قائمة فارغة: "ماكو طلبات جاهزة هسه. نبلغك أول ما يجهز طلب."
 
-## 4) الاختبارات
-- **مكونات:** بطاقة طلب متاح (بدون هاتف)، أزرار الحالة لكل حالة، تأكيد التسليم.
-- **تكامل (ضد Supabase محلي):** قبول متزامن من سائقين، فقط واحد ينجح؛ سائق لا يرى طلب سائق آخر.
-- **يدوي:** دورة كاملة مع تطبيق الزبون والأدمن على أجهزة حقيقية.
+### 2.7 طلباتي (MyOrders)
+- الطلبات المعيَّنة لي وليست نهائية (`preparing`/`ready`/`out_for_delivery`)، الأقدم أولاً (استعلام DRIVER-API §4).
+- البطاقة: الرقم، الحالة ("بالطريق" أخضر؛ `ready` = "مقبول، بعده بالمحل"؛ `preparing` = "بانتظار التحضير")، العنوان الكامل بـ `formatAddress` (مثل `بلوك A3 · بناية 12 · الطابق G · شقة 4`)، اسم الزبون، الكاش.
+- **Realtime** على `orders` بفلتر `driver_id=eq.<me>` + إعادة جلب عند الرجوع للتطبيق وإعادة الاتصال وكل 30 ثانية (النقل لسائق آخر لا يصل بـ Realtime، DRIVER-API §5). طلب يختفي أو يصير `cancelled` يُزال برسالة قصيرة.
 
-## افتراضات
-1. لا تتبع GPS مباشر للسائق بالمرحلة الأولى.
-2. كل السائقين النشطين يستلمون إشعار "طلب جديد" عندما يصبح الطلب `ready` (لا عند إنشائه)، إلا إذا كان معيَّناً مسبقاً فيُبلَّغ سائقه فقط. حالة "متاح/غير متاح" مؤجلة (تحتاج عمود `is_available` وفلتر بـ `push-dispatch`).
-3. لا حد لعدد الطلبات التي يحملها السائق معاً.
-4. السائق يحصّل `total_iqd` كاملاً نقداً؛ التسوية مع الإدارة خارج التطبيق.
-5. لا يمكن للسائق تعديل البنود (نقص منتج = اتصال بالإدارة، والأدمن يلغي/يعيد الطلب).
+### 2.8 تفاصيل الطلب (OrderDetail)
+- الرأس: "الطلب #N"، "قبلته الساعة HH:MM" (`assigned_at` بتوقيت بغداد)، شارة الحالة.
+- **العنوان** بمربعات كبيرة: البلوك، البناية، الطابق (`0` ← **G**؛ مفقود ← يُخفى المربع)، الشقة؛ وملاحظة العنوان إن وُجدت. نصوص اللقطة تُعرض كما هي بلا تحقق (عناوين قديمة ممكنة، DRIVER-API "Changes 2026-11-19"). لقطة زبون محذوف (قطاع ووحدة فقط) ← "حساب محذوف" وتُخفى أزرار الاتصال.
+- **الزبون:** الاسم، الرقم، زر اتصال (`tel:0…`) وزر واتساب (`https://wa.me/964…`).
+- **المنتجات:** الاسم والكمية بـ `formatQuantity` ("نص كيلو"، "1.5 كيلو"، "2 باقة")، ثم **ملاحظة الزبون** (`orders.note`) بصندوق مميز.
+- **تستلم كاش:** `total_iqd` بخط كبير.
+- **الزر الثابت أسفل الشاشة حسب الحالة:**
+  - `preparing` ← معطّل "بانتظار التحضير".
+  - `ready` ← "استلمت الطلب، بالطريق" ← `set_order_status(id, 'out_for_delivery')`.
+  - `out_for_delivery` ← "تم التوصيل واستلمت المبلغ" ← نافذة تأكيد ثانية تعرض المبلغ ← `set_order_status(id, 'delivered')`.
+  - `delivered`/`cancelled` ← لا أزرار.
+- أخطاء `set_order_status`: `INVALID_TRANSITION` (تغيّرت من اللوحة) ← إعادة جلب؛ `NOT_ALLOWED` ← "الطلب ما بقى إلك" ← طلباتي.
+- "مشكلة بالطلب؟ اتصل بالمحل" (السائق لا يلغي).
+
+### 2.9 سجل اليوم (Today)
+- **اليوم** = `[00:00, 24:00)` بتوقيت `Asia/Baghdad` (UTC+3 ثابت، بلا توقيت صيفي) محسوباً بدالة مشتركة `baghdadDayRange(now)` بـ `packages/shared` (باختبارات).
+- الاستعلام: `orders` حيث `driver_id = me` و`status = 'delivered'` و`delivered_at` ضمن اليوم، مرتب تنازلياً (قراءة مباشرة بـ RLS الموجودة؛ لا دالة جديدة).
+- بطاقتان: **"الكاش اللي بيدك"** = Σ `total_iqd` (يشمل أجرة التوصيل: السائق يستلم المجموع كاملاً؛ التسوية مع المحل خارج التطبيق)، و**"توصيلات اليوم"** = العدد.
+- القائمة: `#N · بلوك X · بناية Y`، الوقت، المبلغ. ملاحظة "الأرقام تتصفّر كل يوم الساعة 12 بالليل بتوقيت بغداد."
+- طلبات اليوم قليلة (عشرات)، فالمجموع بالتطبيق مقبول (DRIVER-API §4). حد أمان: 200 صف.
+
+### 2.10 حسابي (Account)
+- الاسم، الرقم، "سائق".
+- "تغيير الرمز السري" ← الحالي + الجديد + التأكيد ← `validatePin` والجديد ≠ الحالي ← `signInWithPassword` بالحالي ← `updateUser({ password })` ← `signOut({ scope: 'others' })` (نفس مسار ADR 0001 بلوحة الأدمن وتطبيق الزبون).
+- "اتصل بالمحل" (`tel:`) و"واتساب المحل".
+- "تسجيل الخروج": حذف صف `push_tokens` لهذا الجهاز ← إلغاء اشتراك Realtime ← `signOut()`.
+- **"حذف الحساب"** (إضافة على التصميم؛ مطلوب لـ iOS حسب CLAUDE.md): `delete-account` الموجودة؛ `ACTIVE_ORDER` ← "عندك طلب ما خلص، كمله أو كلّم المحل". زر ثانوي بأسفل الصفحة بتأكيد.
+
+### 2.11 الإشعارات بالتطبيق
+- قناة Android **`orders`** (أهمية عالية، صوت) عند التشغيل.
+- إذن الإشعارات: عند التسجيل (اختياري، §2.3) وبعد أول دخول. رفض الإذن ← شريط تنبيه بالطلبات الجاهزة "الإشعارات مطفية، راح تفوتك طلبات" مع رابط الإعدادات.
+- `register_push_token(token, platform, 'expo')` عند كل تشغيل بجلسة سائق فعّالة وبعد الدخول وتغيير الرمز المؤقت (DRIVER-API §3.4).
+- فتح الإشعار حسب `data.type`: `new_order` ← الجاهزة؛ `ready`/`assigned` ← `order/[id]`؛ `unassigned`/`cancelled` ← طلباتي + تحديث؛ `driver_request_approved` ← Pending (تتحول لـ set-pin).
+
+---
+
+## 3) التسجيل: تصميم الأمان
+
+**الفكرة:** الطلب لا يمنح أي دخول. الأدمن يتحقق من الرقم **بمكالمة** (RUNBOOK). بعد الموافقة، **من يملك سر الجهاز** فقط يقدر يحوّل الطلب لحساب. الحساب يُنشأ بالخادم (`auth.admin.createUser`) لأن التسجيل العام مطفأ.
+
+| التهديد | الحماية |
+|---|---|
+| إغراق قائمة الأدمن بطلبات وهمية | حد لكل IP (10/ساعة) ولكل رقم (3/يوم)، وطلب معلّق واحد لكل رقم، وسقف عام 50 طلباً معلّقاً (`TOO_MANY_PENDING`)، والأدمن يتصل قبل الموافقة |
+| شخص يسجّل برقم غيره | المكالمة قبل الموافقة (RUNBOOK)؛ صاحب الرقم الحقيقي يرد وينكر |
+| جهاز آخر يكمل طلباً موافَقاً عليه | سر الجهاز 256 بت، يُخزَّن بالخادم **SHA-256 فقط**؛ التطابق بمقارنة ثابتة الزمن؛ لا يمر بالسجلات |
+| تخمين `request_id` | بلا السر لا فائدة؛ الدالة ترجع `not_found` لأي عدم تطابق (لا تفرّق) |
+| موافقة قديمة تُستغل بعد شهور | الموافقة صالحة **7 أيام**، بعدها `expired` |
+| تسجيل مكرر بالسباق (ضغطتان) | قفل صف الطلب؛ الانتقال `approved → completed` شرطي؛ رقم واحد = حساب واحد (GoTrue + `profiles_phone_key`) |
+| بيانات شخصية لطلبات قديمة | حذف الطلبات `rejected`/`expired`/`completed` بعد 30 يوماً (`pg_cron` اليومي الموجود)؛ رمز الإشعار يُمسح عند أي قرار |
+| الرقم مسجّل أصلاً (زبون) | `PHONE_TAKEN` كدالة `signup` الحالية (نفس مستوى كشف الأرقام)؛ الأدمن يرقّيه بالمسار الموجود (`set_user_role`) |
+
+**الرمز:** يختاره السائق بنفسه، فلا `must_change_pin`. `validatePin` بالتطبيق **وبالخادم**. لا يُخزَّن ولا يُسجَّل.
+
+---
+
+## 4) تغييرات الـ backend (كل تغيير بقاعدة البيانات بـ migration جديدة، تُطبَّق بـ `pnpm sb db push` على dev فقط)
+
+### 4.1 قائمة كاملة بتغييرات قاعدة البيانات
+
+| # | التغيير | التفاصيل |
+|---|---|---|
+| D1 | جدول `public.driver_requests` | `id uuid pk default gen_random_uuid()`، `full_name text not null` (2..80 بعد التنظيف)، `phone text not null` (قيد `^9647[0-9]{9}$`)، `device_secret_hash text not null` (hex SHA-256، 64 حرفاً)، `status text not null default 'pending'` (`pending`/`approved`/`rejected`/`completed`)، `push_token text null` (Expo فقط، نفس فحص الصيغة)، `created_at`، `decided_at`، `decided_by uuid → profiles on delete set null`، `decision_note text null` (≤ 300، داخلي للأدمن)، `approved_until timestamptz null` (= `decided_at + 7 days`)، `user_id uuid → profiles on delete set null`، `completed_at`. فهرس فريد جزئي `(phone) where status in ('pending','approved')` (طلب مفتوح واحد لكل رقم). RLS مفعّل **بلا أي سياسة**؛ `revoke all` من `anon`/`authenticated`؛ الوصول عبر الدوال فقط. `expired` **محسوبة** (`approved` و`approved_until < now()`)، لا تُخزَّن |
+| D2 | حد المعدل `private.driver_request_rate_limits` + `public.driver_request_rate_hit(p_ip text, p_phone text) → boolean` | نفس تصميم `signup_rate_hit` (تجزئة، كل محاولة تُحسب): 10/ساعة لكل IP، 3/24 ساعة لكل رقم. **service_role فقط** |
+| D3 | `public.submit_driver_request(p_phone, p_full_name, p_secret_hash, p_push_token) → uuid` | service_role فقط. ينظّف الاسم (نفس منظّف الأسماء الحالي)؛ قفل استشاري لكل رقم؛ رقم له حساب ← `PHONE_TAKEN`؛ طلب مفتوح لنفس الرقم: **بنفس الـ hash** ← يرجع نفس `id` (إعادة إرسال آمنة)، بغيره ← `REQUEST_EXISTS`؛ عدد `pending` ≥ 50 ← `TOO_MANY_PENDING`؛ يُدرج ويكتب إشعار `admins_only` "طلب سائق جديد: <الاسم>" (`data.type = 'driver_request'`) |
+| D4 | `public.driver_request_status(p_request_id uuid, p_device_secret text) → text` | **`anon` و`authenticated`** (الجهاز بلا حساب). SECURITY DEFINER، `search_path = ''`. يحسب SHA-256 للسر ويقارن؛ يرجع `pending`/`approved`/`rejected`/`expired`/`completed`، أو `not_found` لأي عدم تطابق أو سر بطول خاطئ. لا يرجع أي بيانات أخرى |
+| D5 | `public.list_driver_requests(p_status text default 'pending', p_limit int default 50) → setof` | أدمن aal2 فقط (`NOT_ALLOWED`). الأعمدة: `id, full_name, phone, status (مع expired محسوبة), created_at, decided_at, decided_by_name, decision_note`. `p_status`: `pending` (الأقدم أولاً) أو `decided` (آخر 30 يوماً، الأحدث أولاً) |
+| D6 | `public.decide_driver_request(p_id uuid, p_approve boolean, p_note text default null) → text` | أدمن aal2 فقط. قفل الصف؛ فقط من `pending` (وإلا `REQUEST_ALREADY_DECIDED`، `detail` = الحالة)؛ غير موجود ← `REQUEST_NOT_FOUND`؛ الرقم صار له حساب ← `PHONE_TAKEN` (يبقى `pending`). الموافقة: `approved`، `approved_until = now() + 7 days`، وإشعار للجهاز إن كان له رمز (D9). الرفض: `rejected` ومسح `push_token`. سطر `admin_audit` (`action = 'driver_request'`، `before = {status}`، `after = {status, note, phone}`). يرجع الحالة الجديدة. **إعادة فتح** طلب منتهٍ: لا؛ السائق يسجّل من جديد |
+| D7 | `public.begin_driver_completion(p_request_id, p_secret_hash) → table(phone, full_name)` و`public.finish_driver_registration(p_request_id, p_user_id) → void` | service_role فقط. الأولى: قفل الصف، تطابق الـ hash (وإلا `REQUEST_NOT_FOUND`)، الحالة `approved` وغير منتهية (وإلا `REQUEST_NOT_APPROVED` / `REQUEST_EXPIRED`). الثانية بمعاملة: `profiles` ← `role = 'driver'`، `full_name`، `is_active = true`، `must_change_pin = false`؛ الطلب ← `completed`، `user_id`، `completed_at`، مسح `push_token`؛ شرطية على `status = 'approved'` (وإلا `REQUEST_NOT_APPROVED`) |
+| D8 | قيد `admin_audit_action_check` | يضاف `'driver_request'` (drop + add بنفس نمط `20261206000001`) |
+| D9 | إشعار جهاز بلا حساب | قيد `notification_outbox_audience_check` يضاف `'driver_request'`؛ عمود جديد `driver_request_id uuid null → driver_requests on delete cascade` وقيد `(audience = 'driver_request') = (driver_request_id is not null)`. `claim_push_notifications` (استبدال الدالة) يحلّ هذا الجمهور إلى `driver_requests.push_token` (مزوّد `expo`) **فقط إن كان الطلب ما زال `approved`**. العنوان "وافق المحل على طلبك"، `data = {type: 'driver_request_approved', request_id}`. لا تغيير بـ `push-dispatch` نفسها إن رجعت الدالة الرموز بنفس الشكل (يُتحقق بالتخطيط) |
+| D10 | التنظيف | إضافة لمهمة `pg_cron` اليومية الموجودة: حذف `driver_requests` بحالة `rejected`/`completed` أو منتهية، أقدم من 30 يوماً من آخر تغيير؛ وتنظيف `private.driver_request_rate_limits` الأقدم من يوم |
+| D11 | الصلاحيات و`01_schema.sql` | `grant execute` صريح لكل دالة جديدة؛ قائمة دوال service_role بـ `01_schema.sql` تُحدَّث (D2، D3، D7)؛ D4 تُضاف لقائمة الدوال المكشوفة لـ `anon` المقصودة (تحذير Advisor متوقع ومُوثَّق) |
+| D12 | الأنواع | `pnpm` توليد `database.types.ts` من جديد |
+
+**لا تغيير** بدوال السائق الحالية (`available_orders`، `accept_order`، `set_order_status`، `register_push_token`) ولا بسياسات `orders`. التطبيق يستخدمها كما بـ DRIVER-API.
+
+### 4.2 Edge Function جديدة: `driver-register`
+- `POST {full_name, phone, device_secret, push_token?}`، `verify_jwt = false`، بلا JWT (المفتاح المنشور فقط)، CORS بنفس `_shared/cors.ts` (لا متصفح متوقع).
+- بالترتيب: جسم صالح (وإلا `INVALID_REQUEST` 400) ← `driver_request_rate_hit(cf-connecting-ip, phone)` (فشل ← `RATE_LIMITED` 429؛ فشل الدالة نفسها ← `REGISTER_FAILED` 500، تفشل مغلقة) ← `normalizeIraqiPhone` (`PHONE_INVALID` 400) ← الاسم 2..80 (`NAME_INVALID` 400) ← `device_secret` base64url يفكّ لـ 32 بايت بالضبط (`INVALID_REQUEST` 400) ← `push_token` إن وُجد بصيغة Expo (وإلا يُتجاهل) ← SHA-256 للسر بالدالة ← `submit_driver_request`.
+- الرد: `201 {request_id}`؛ `PHONE_TAKEN` 409، `REQUEST_EXISTS` 409، `TOO_MANY_PENDING` 429، `REGISTER_FAILED` 500.
+- لا يُسجَّل الجسم ولا السر ولا الـ hash.
+
+### 4.3 الحالة: RPC مباشر
+`supabase.rpc('driver_request_status', { p_request_id, p_device_secret })` بالمفتاح المنشور (دور `anon`). لا Edge Function (أرخص وأبسط؛ السر 256 بت فلا تخمين).
+
+### 4.4 Edge Function جديدة: `driver-complete-registration`
+- `POST {request_id, device_secret, pin}`، `verify_jwt = false`.
+- بالترتيب: جسم صالح ← حد IP (نفس `driver_request_rate_hit` بلا رقم، أو مفتاح IP فقط) ← SHA-256 للسر ← `begin_driver_completion` (`REQUEST_NOT_FOUND` 404، `REQUEST_NOT_APPROVED` 409، `REQUEST_EXPIRED` 410) ← `validatePin(normalizePin(pin), phone)` (`PIN_INVALID` 400 مع `detail`) ← `auth.admin.createUser({ phone, password: pin, phone_confirm: true })` (موجود ← `PHONE_TAKEN` 409، والطلب يبقى `approved` ليحله الأدمن) ← `finish_driver_registration`؛ فشلها ← `auth.admin.deleteUser` للحساب المُنشأ (كـ `admin-create-user`) و`INTERNAL` 500.
+- الرد `201 {created: true}`؛ التطبيق يدخل بـ `signInWithPassword`.
+- لا يُسجَّل الرمز ولا السر (`errTextWithout` الموجود).
+
+### 4.5 الأخطاء الجديدة (`packages/shared/src/errors.ts` + SPEC-backend §5)
+`NAME_INVALID`، `REQUEST_EXISTS`، `TOO_MANY_PENDING`، `REGISTER_FAILED`، `REQUEST_NOT_FOUND`، `REQUEST_NOT_APPROVED`، `REQUEST_EXPIRED`، `REQUEST_ALREADY_DECIDED`. اختبار Jest الحالي يفشل إن نقص رمز.
+
+---
+
+## 5) لوحة الأدمن: "طلبات السواق" (`/driver-requests`، أدمن فقط)
+
+- بـ `apps/admin/src/lib/access.ts`: أدمن فقط، تحت "الإعدادات والموظفون" بجانب `/staff`، مع **شارة** بعدد الطلبات المعلّقة. الموظف ← 403 حتى بالرابط المباشر.
+- تبويبان: **"بانتظار الموافقة"** (`list_driver_requests('pending')`) و**"آخر القرارات"** (`'decided'`، 30 يوماً).
+- الصف: الاسم، الرقم (زر اتصال `tel:` ونسخ)، منذ متى، و(بالقرارات) الحالة ومن قرر ومتى والملاحظة.
+- **"موافقة"** ← نافذة: "اتصلت بالرقم 07… وتأكدت أنه نفس الشخص؟" (خانة إلزامية "اتصلت وتأكدت") ← `decide_driver_request(id, true)`. **"رفض"** ← نافذة بملاحظة اختيارية (≤ 300) ← `decide_driver_request(id, false, note)`.
+- الأخطاء: `REQUEST_ALREADY_DECIDED` ← تحديث القائمة؛ `PHONE_TAKEN` ← "الرقم صار له حساب. رقّيه كسائق من صفحة الموظفين".
+- إشعار جهاز للأدمن عند طلب جديد (`admins_only`، D3)؛ فتحه ← هذه الصفحة.
+- بعد اكتمال التسجيل يظهر السائق تلقائياً بـ `/staff` (دور `driver`)، والتعطيل والإدارة بالمسار الموجود.
+
+**RUNBOOK (قسم جديد "طلبات السواق"):** الأدمن **يتصل بالرقم قبل الموافقة** ويتأكد من الاسم وأنه فعلاً قدّم الطلب؛ لا موافقة من رسالة فقط. الموافقة صالحة 7 أيام. سائق غيّر جهازه قبل اختيار الرمز ← رفض الطلب القديم وتسجيل جديد. نسيان الرمز لاحقاً ← `admin-reset-pin` (§7 الموجود، مكالمة للسائق). نشر الدالتين الجديدتين على dev بموافقة صاحب المشروع.
+
+---
+
+## 6) التقنية والأوامر
+
+### Tech stack
+- Expo SDK ونفس إصدارات `apps/customer` (Expo Router، TypeScript، `@supabase/supabase-js` v2، TanStack Query، `expo-secure-store`، `expo-notifications`، `expo-crypto`، `expo-linking`). **لا اعتماديات جديدة** غير `expo-crypto` (إن لم تكن موجودة) — أي اعتمادية أخرى تُسأل قبلها.
+- `packages/shared`: `phonePinCredentials`، `validatePin`/`normalizePin`، `normalizeIraqiPhone`، `formatAddress`، `formatQuantity`، `formatIqd`، `errors.ts`، والجديدة `baghdadDayRange`.
+- المعرّف: `com.mukhdar.driver`، الاسم "سائق المخضر"، مشروع EAS منفصل (`push-dispatch` يدعم أكثر من مشروع Expo أصلاً)، تطبيق Firebase ثانٍ لـ FCM (ملف `google-services.json` كمتغير ملف بـ EAS، لا يُرفع لـ git).
+- حماية `app.config.ts` نفسها: بناء `production` لا يشير لمشروع dev.
+
+### الأوامر
+```
+pnpm install
+pnpm --filter @mukhdar/driver start            # Expo dev (development build؛ الإشعارات لا تعمل بـ Expo Go)
+pnpm --filter @mukhdar/driver test             # Jest + RNTL
+pnpm --filter @mukhdar/driver typecheck
+pnpm lint && pnpm typecheck && pnpm test       # كل الـ repo (CI)
+pnpm test:functions                            # deno check + deno test (تُضاف الدالتان للقائمة)
+pnpm db:test                                   # pgTAP محلياً (CI)
+pnpm db:test:remote                            # pgTAP على mukhdar-dev
+pnpm sb db push --dry-run && pnpm sb db push   # dev فقط، ثم: pnpm sb migration list --remote
+pnpm it:driver-register                        # تكامل جديد على dev (§7)
+pnpm --filter @mukhdar/admin test:e2e          # Playwright للوحة
+eas build -p android --profile preview         # APK داخلي (بموافقة المالك)
+```
+
+### هيكل المشروع
+```
+apps/driver/
+  app.config.ts  eas.json  package.json  .env.example
+  src/app/            الشاشات (§2)
+  src/features/       auth/ (register, pendingPoll, setPin, deviceSecret)، orders/ (available, mine, detail, transitions)، today/، account/
+  src/components/     OrderCard، AddressBlocks، StatusButton، ConfirmSheet، PinInput، PhoneInput
+  src/lib/            supabase.ts، push.ts، secureStore.ts
+  src/__tests__/
+supabase/migrations/2026120800000N_driver_requests.sql
+supabase/functions/driver-register/{index,handler,driver_register_test}.ts
+supabase/functions/driver-complete-registration/{index,handler,..._test}.ts
+supabase/tests/36_driver_requests.sql
+apps/admin/src/app/(panel)/driver-requests/  + e2e/driver-requests.spec.ts
+scripts/driver-register-it.mjs
+```
+
+### أسلوب الكود
+نفس أسلوب `apps/customer`: منطق الشاشة بـ `features/*` كدوال صرفة قابلة للاختبار، والشاشة تعرض فقط؛ كل نص للمستخدم عربي بملف `i18n`؛ أخطاء الخادم تُترجم عبر `errors.ts` لا نصوص داخل الشاشة. مثال:
+
+```ts
+// src/features/orders/transitions.ts
+export type DriverAction = { label: string; to: 'out_for_delivery' | 'delivered'; confirm: boolean } | null;
+
+export function nextAction(status: OrderStatus): DriverAction {
+  switch (status) {
+    case 'ready': return { label: t('order.pickedUp'), to: 'out_for_delivery', confirm: false };
+    case 'out_for_delivery': return { label: t('order.delivered'), to: 'delivered', confirm: true };
+    default: return null; // preparing: زر معطّل "بانتظار التحضير"
+  }
+}
+```
+
+---
+
+## 7) الاختبارات
+
+| المستوى | ماذا | أين |
+|---|---|---|
+| pgTAP **بالدور الحقيقي** | D4 كـ `anon` (سر صحيح/خاطئ/طول خاطئ ← `not_found`، كل الحالات ومنها `expired`)؛ D5/D6 كأدمن aal2 (موافقة، رفض، قرار مكرر، `PHONE_TAKEN`، سطر `admin_audit`) ومرفوضة لأدمن aal1 وموظف وسائق وزبون و`anon`؛ D2/D3/D7 مرفوضة لكل دور غير service_role؛ D3 (طلب مفتوح واحد، إعادة الإرسال بنفس الـ hash، `TOO_MANY_PENDING`، إشعار الأدمن)؛ D7 (الملف الشخصي سائق فعّال بلا `must_change_pin`، الانتقال الشرطي، المنتهي)؛ D9 (`claim_push_notifications` يرجع رمز الطلب الموافَق فقط)؛ D10 التنظيف؛ ثم كسائق جديد حقيقي: `available_orders` و`accept_order` تعمل. `anon`/`authenticated` لا يقرأان `driver_requests` مباشرة | `supabase/tests/36_driver_requests.sql`، و`32_real_role_writes.sql` و`01_schema.sql` تُحدَّث |
+| Deno | الدالتان بـ fetch مزيف: كل رمز خطأ، الحد، السر لا يُسجَّل، حذف الحساب عند فشل `finish`، الترتيب (الحد قبل أي عمل) | `supabase/functions/driver-*/..._test.ts` |
+| Jest/RNTL (التطبيق) | حارس الحالة لكل حالة؛ توليد السر وحفظه قبل الإرسال؛ استطلاع Pending وتوقفه بالخلفية؛ set-pin (تطابق، `validatePin`)؛ البطاقة الجاهزة بلا اسم/هاتف؛ "قبله سائق ثاني"؛ الزر لكل حالة والتأكيد المزدوج؛ العنوان بـ `G` وبلا طابق ولزبون محذوف؛ مجموع اليوم | `apps/driver/src/__tests__` |
+| وحدة (shared) | `baghdadDayRange` (حدود منتصف الليل UTC+3) | `packages/shared/src/__tests__` |
+| Playwright (اللوحة) | الأدمن يوافق ويرفض (خانة المكالمة إلزامية)؛ الموظف 403؛ الشارة | `apps/admin/e2e/driver-requests.spec.ts` |
+| تكامل على dev | `pnpm it:driver-register`: تسجيل ← حالة `pending` ← موافقة كأدمن aal2 ← جهاز بسر خاطئ يفشل ← اختيار الرمز ← دخول ← `available_orders` ← تنظيف الحساب | `scripts/driver-register-it.mjs` |
+| CI | التزامن الموجود (8 سائقين يقبلون طلباً واحداً، واحد ينجح) يبقى؛ يُضاف تطبيق السائق لـ lint/typecheck/test | `.github/workflows` |
+| يدوي (APK على جهازين Android) | الدورة الكاملة (§9) | تقرير بـ `docs/reviews/` |
+
+---
+
+## 8) الحدود
+
+- **دائماً:** فرع feature لكل مهمة ← push ← PR ← دمج بعد CI أخضر فقط (CLAUDE.md 11). مهمة واحدة بالمرة. migration جديدة لكل تغيير DB، `pnpm sb db push` على **dev فقط**. اختبار كل كتابة بدور حقيقي. `validatePin` بالتطبيق والخادم. المبالغ أعداد صحيحة. العنوان بـ `formatAddress` فقط.
+- **اسأل أولاً:** نشر الدالتين على dev وإعداد أسرارهما؛ أي EAS Build أو إنشاء مشروع EAS/Firebase؛ أي اعتمادية جديدة غير `expo-crypto`؛ أي تغيير بدوال السائق الحالية أو بـ `available_orders`؛ أي شيء على الإنتاج.
+- **ممنوع:** `service_role` بالتطبيق؛ تخزين السر أو الرمز بلا تشفير أو بالسجلات؛ تعطيل RLS؛ SMS/OTP؛ حساب Auth قبل الموافقة؛ تعديل migration قديمة؛ `apply_migration`/`execute_sql` عبر MCP.
+
+---
+
+## 9) معايير النجاح (النسخة الأولى منجزة عندما)
+
+1. كل فحوص CI خضراء، ومنها `36_driver_requests.sql` واختبارات Deno والتطبيق.
+2. `pnpm it:driver-register` ينجح على dev، و`pnpm sb migration list --remote` بلا اختلاف.
+3. على APK بجهازين Android حقيقيين: سائق يسجّل ← الأدمن يتصل ويوافق من اللوحة ← الجهاز يتحول لاختيار الرمز (بإشعار أو خلال 30 ثانية) ← يختار رمزه ويدخل. جهاز ثانٍ بنفس الرقم لا يقدر يكمل. طلب مرفوض لا يدخل.
+4. الدورة: زبون يطلب ← الأدمن يحضّر و"جاهز" ← **السائقان يستلمان إشعاراً** ← كلاهما يضغط قبول، واحد فقط ينجح والثاني يرى "قبله سائق ثاني" ← "بالطريق" ← "تم التوصيل" ← الزبون يقيّم ← سجل اليوم يعرض المبلغ الصحيح.
+5. العنوان يعرض `الطابق G` للأرضي، والاتصال والواتساب يفتحان رقم الزبون.
+6. نسيان الرمز: الأدمن يعيد الضبط ← السائق يدخل بالمؤقت ← تغيير إجباري ← يكمل.
+
+---
+
+## 10) خطة المهام المقترحة (تُفصَّل بعد الموافقة على هذا الـ SPEC)
+
+| # | المهمة | تعتمد على |
+|---|---|---|
+| T27 | DB: طلبات السواق (D1–D12) + pgTAP + تحديث الوثائق (CLAUDE.md، 00-README، T21، DRIVER-API، SPEC-backend) | — |
+| T28 | Edge Functions: `driver-register` و`driver-complete-registration` + Deno + `it:driver-register` | T27 |
+| T29 | اللوحة: صفحة "طلبات السواق" + Playwright + RUNBOOK + SPEC-admin §2.10 | T27 |
+| T30 | `apps/driver`: الهيكل، الحارس، الدخول، التسجيل، الانتظار، اختيار الرمز، تغيير الرمز الإجباري | T28 |
+| T31 | التوصيل: الجاهزة، طلباتي (Realtime)، التفاصيل والأزرار | T30 |
+| T32 | سجل اليوم، حسابي (تغيير الرمز، الاتصال، الخروج، الحذف)، الإشعارات | T31 |
+| T33 | EAS APK + الفحص اليدوي على جهازين + تقرير؛ ثم مراجعة `/review` | T32 |
+
+---
+
+## أسئلة مفتوحة (الافتراض المستخدم بين قوسين)
+
+1. **الطابق والشقة قبل القبول:** التصميم يعرضهما ببطاقة الطلبات الجاهزة؛ الـ backend يخفيهما قصداً. *(افتراض: نخفيهما ونعرض البلوك والبناية فقط. العرض يحتاج تغيير `available_orders`.)*
+2. **رقم مسجّل أصلاً كزبون** يحاول التسجيل كسائق. *(افتراض: `PHONE_TAKEN` ورسالة "تواصل مع المحل"، والأدمن يرقّيه بالمسار الموجود.)*
+3. **مدة صلاحية الموافقة.** *(افتراض: 7 أيام.)*
+4. **حذف الحساب** غير موجود بتصميم "حسابي". *(افتراض: نضيفه كزر ثانوي، لأن CLAUDE.md يشترطه لـ iOS.)*
+5. **عدد المنتجات بالبطاقة الجاهزة:** التصميم يقول "6 منتجات" لكن `item_count` = مجموع وحدات البيع (نص الكيلو = 1). *(افتراض: نكتب "عدد القطع: N" بلا تغيير DB.)*
+6. **المطوّر الخارجي:** هل أُلغي بناء التطبيق الخارجي نهائياً؟ *(افتراض: نعم؛ DRIVER-API يبقى عقداً داخلياً ولا تتغير دوال السائق الحالية.)*
+7. **حدود المعدل:** 10/ساعة لكل IP، 3/يوم لكل رقم، 50 طلباً معلّقاً كحد أعلى. *(افتراض كما هي.)*
+
+## افتراضات ثابتة
+1. لا GPS ولا خريطة بالنسخة الأولى (ملاحظة التصميم).
+2. كل السائقين النشطين يستلمون "طلب جديد" عند `ready`؛ لا مفتاح "متاح/غير متاح" (يحتاج `is_available` وفلتراً بـ `push-dispatch`).
+3. لا حد لعدد الطلبات التي يحملها السائق.
+4. السائق يحصّل `total_iqd` كاملاً نقداً؛ التسوية مع المحل خارج التطبيق.
+5. السائق لا يلغي ولا يعدّل البنود.
+6. لا مكتبة واجهة مشتركة (`packages/ui`) بالنسخة الأولى: مكوّنات السائق داخل `apps/driver` بنفس قيم الألوان والخط؛ الاستخراج لاحقاً إن تكرر الكود.
+7. لا PWA للسائق (تطبيق أصلي فقط؛ الإشعارات والتخزين الآمن أساسيان).
+8. الإشعار بالموافقة أفضل جهد؛ الاستطلاع كل 30 ثانية هو الضمان.
