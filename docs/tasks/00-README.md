@@ -41,7 +41,7 @@
 |---|---|---|---|---|---|
 | 27 | [قاعدة بيانات طلبات السواق + تحديث الوثائق](27-driver-requests-db.md) | - | Opus | migration | ✅ 2026-11-20 (migration `20261208000001` على mukhdar-dev) |
 | 28 | [Edge Functions تسجيل السائق](28-driver-register-functions.md) | 27 | Opus | نشر دالتين | ✅ |
-| 29 | [اللوحة: طلبات السواق](29-admin-driver-requests.md) | 27 | Sonnet | - | ⬜ |
+| 29 | [اللوحة: طلبات السواق](29-admin-driver-requests.md) | 27 | Sonnet | - | ✅ 2026-11-20 (PR #15، CI أخضر، نُشرت اللوحة على Cloudflare) |
 | 30 | [`apps/driver`: الهيكل والحارس والدخول والتسجيل](30-driver-app-auth.md) | 28 | Opus | - | ⬜ |
 | R1 | **مراجعة** (`/review`) لـ T27–T30: الأمان (سر الجهاز، صلاحيات `anon`)، الاختبارات بالدور الحقيقي، الحارس. البنود تُصلَح قبل T31 | 27–30 | Opus | - | ⬜ |
 | 31 | [الطلبات الجاهزة وطلباتي والتفاصيل](31-driver-app-delivery.md) | 30، R1 | Sonnet | - | ⬜ |
