@@ -2,7 +2,6 @@
 // التسجيل العام مطفأ، والحساب الجديد من Edge Function signup ثم signInWithPassword.
 import {
   authError,
-  normalizeIraqiPhone,
   parseFunctionError,
   type AuthError,
   type MukhdarClient,
@@ -94,17 +93,5 @@ export async function goAfterAuth(
   else router.replace(redirect);
 }
 
-/** "نسيت الرمز؟": رابط wa.me برسالة جاهزة فيها رقم الزبون. null إن لم يُضبط رقم المتجر. */
-export function forgotPinWhatsappUrl(shopNumber: string, phoneInput: string): string | null {
-  const shop = shopNumber.replace(/[\s+\-()]/g, '');
-  if (!/^\d{8,15}$/.test(shop)) return null;
-  const e164 = normalizeIraqiPhone(phoneInput);
-  const text = e164 ? `نسيت رمز الدخول، رقمي 0${e164.slice(4)}` : 'نسيت رمز الدخول';
-  return `https://wa.me/${shop}?text=${encodeURIComponent(text)}`;
-}
-
-/** 9647701234567 / +9647701234567 ← 07701234567 للعرض. */
-export function displayPhone(stored: string | null | undefined): string {
-  const e164 = stored ? normalizeIraqiPhone(stored) : null;
-  return e164 ? `0${e164.slice(4)}` : '';
-}
+// forgotPinWhatsappUrl وdisplayPhone من @mukhdar/shared (T30: مشتركة مع تطبيق السائق)
+export { displayPhone, forgotPinWhatsappUrl } from '@mukhdar/shared';
