@@ -7,6 +7,11 @@ import { createResetPinServer, type ResetPinDeps } from '../admin-reset-pin/hand
 import { createAdminCreateUserServer, type CreateUserDeps } from '../admin-create-user/handler.ts';
 import { createSignupServer, type SignupDeps } from '../signup/handler.ts';
 import { createDeleteAccountServer, type DeleteAccountDeps } from '../delete-account/handler.ts';
+import { createDriverRegisterServer, type DriverRegisterDeps } from '../driver-register/handler.ts';
+import {
+  createDriverCompleteServer,
+  type DriverCompleteDeps,
+} from '../driver-complete-registration/handler.ts';
 import { jwtAal } from './admin.ts';
 import { CORS_ALLOW_HEADERS, parseAllowedOrigins, withCors } from './cors.ts';
 
@@ -47,11 +52,23 @@ const deleteDeps: DeleteAccountDeps = {
   abort: never,
 };
 
+const driverRegisterDeps: DriverRegisterDeps = { rateHit: never, submit: never };
+const driverCompleteDeps: DriverCompleteDeps = {
+  rateHit: never,
+  begin: never,
+  createUser: never,
+  finish: never,
+  deleteUser: never,
+  accountExists: never,
+};
+
 const SERVERS = [
   ['admin-reset-pin', createResetPinServer(resetDeps, ALLOWED)],
   ['admin-create-user', createAdminCreateUserServer(createDeps, ALLOWED)],
   ['signup', createSignupServer(signupDeps, ALLOWED)],
   ['delete-account', createDeleteAccountServer(deleteDeps, ALLOWED)],
+  ['driver-register', createDriverRegisterServer(driverRegisterDeps, ALLOWED)],
+  ['driver-complete-registration', createDriverCompleteServer(driverCompleteDeps, ALLOWED)],
 ] as const;
 
 /** ما يرسله المتصفح قبل functions.invoke من لوحة على أصل آخر. */
@@ -98,13 +115,13 @@ for (const [name, serve] of SERVERS) {
   Deno.test(
     `${name}: the real response (here 401) carries the CORS header for the panel`,
     async () => {
-      // signup بلا JWT: نختبر ردّ 405 الحقيقي (PUT) بدل استدعاء اعتمادية
-      const probe = name === 'signup' ? { method: 'PUT' } : { method: 'POST', body: '{}' };
+      // الدوال بلا JWT (signup ودالتا السائق): نختبر ردّ 405 الحقيقي (PUT) بدل استدعاء اعتمادية
+      const noJwt = name === 'signup' || name.startsWith('driver-');
+      const probe = noJwt ? { method: 'PUT' } : { method: 'POST', body: '{}' };
       const res = await serve(new Request('https://x', { ...probe, headers: { Origin: PANEL } }));
-      const expected =
-        name === 'signup'
-          ? { status: 405, body: { error: 'SIGNUP_FAILED' } }
-          : { status: 401, body: { error: 'NOT_AUTHENTICATED' } };
+      const expected = noJwt
+        ? { status: 405, body: { error: name === 'signup' ? 'SIGNUP_FAILED' : 'INVALID_REQUEST' } }
+        : { status: 401, body: { error: 'NOT_AUTHENTICATED' } };
       assert.equal(res.status, expected.status); // الرمز يبقى مقروءاً بالمتصفح بفضل CORS
       assert.equal(res.headers.get('Access-Control-Allow-Origin'), PANEL);
       assert.deepEqual(await res.json(), expected.body);
@@ -119,6 +136,27 @@ for (const [name, serve] of SERVERS) {
       /allowedOrigins\(\)|parseAllowedOrigins\(Deno\.env\.get\('ALLOWED_ORIGINS'\)\)/,
     );
   });
+}
+
+// T28: دالتا السائق ترفضان طلباً من أصل غير مسموح (403) قبل أي عمل، وتقبلان بلا Origin (التطبيق الأصلي)
+for (const [name, serve] of SERVERS.filter(([n]) => n.startsWith('driver-'))) {
+  Deno.test(
+    `${name}: a foreign-origin POST is refused (403) before any work; no Origin passes`,
+    async () => {
+      const evil = await serve(
+        new Request('https://x', {
+          method: 'POST',
+          headers: { Origin: 'https://evil.example', 'Content-Type': 'text/plain' },
+          body: '{}',
+        }),
+      );
+      assert.equal(evil.status, 403); // اعتماديات never: أي عمل كان سيرمي
+      assert.deepEqual(await evil.json(), { error: 'NOT_ALLOWED' });
+      const app = await serve(new Request('https://x', { method: 'PUT' }));
+      assert.equal(app.status, 405); // بلا Origin: وصل للمعالج
+      assert.equal(app.headers.get('Access-Control-Allow-Origin'), null);
+    },
+  );
 }
 
 Deno.test('ALLOWED_ORIGINS: empty or unset allows nothing; "*" and junk are ignored', async () => {

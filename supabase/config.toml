@@ -444,6 +444,20 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/admin-create-user/index.ts"
 
+# T28 (SPEC-driver §4.2/§4.4): تسجيل السائق قبل أي حساب، فلا JWT (المفتاح المنشور ليس JWT). الحماية: حدود المعدل
+# بقاعدة البيانات (IP المنصة cf-connecting-ip فقط) وسر الجهاز. import_map يربط قواعد الرقم والـ PIN من packages/shared.
+[functions.driver-register]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/driver-register/index.ts"
+
+[functions.driver-complete-registration]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/driver-complete-registration/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

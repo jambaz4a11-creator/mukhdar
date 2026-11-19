@@ -474,6 +474,31 @@ migration `20261122000001` مطبّقة، والدالتان منشورتان (`
 - **طلب بالطريق والبضاعة ضاعت/تلفت:** إلغاء (أدمن) مع خانة "البضاعة طلعت مع السائق" ← تُسجَّل هدراً بكلفة الطلب.
 - **سجل التدقيق:** (يشمل منذ جلسة C تغيير اسم/رقم/تفعيل القطاع والوحدة والعمارة: `action = 'address'`، الجدول والمعرّف داخل before/after) `select * from public.admin_audit order by created_at desc limit 50;` (من، الإجراء، الهدف، قبل ← بعد).
 
+## 16b) تسجيل السائق: `driver-register` و`driver-complete-registration` (T28)
+تطبيق السائق يسجّل بلا حساب (طلب معلّق) ← الأدمن يتصل ويوافق (`decide_driver_request`، aal2) ← نفس الجهاز يختار رمزه. التصميم: SPEC-driver §3–§4، والجدول SPEC-backend §8.
+
+### النشر (لكل بيئة، بموافقة صاحب المشروع)، بعد migration `20261208000001` (§17 الصف 38)
+```sh
+pnpm sb functions deploy driver-register              --remote=<ref> --use-api --no-verify-jwt --yes
+pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api --no-verify-jwt --yes
+```
+`verify_jwt = false` (قبل أي حساب؛ المفتاح المنشور ليس JWT)، و`supabase/config.toml` يربط `import_map` (قواعد الرقم والـ PIN من `packages/shared`). لا سر جديد: `ALLOWED_ORIGINS` (§16) نفسه يحدد أصول الويب المسموحة؛ التطبيق الأصلي لا يرسل `Origin` فيمر، وأي `Origin` آخر ← 403 `NOT_ALLOWED` قبل أي عمل (لا يُحسب على الحد ولا يصل لقاعدة البيانات).
+
+### الـ IP لحد المعدل: `cf-connecting-ip` فقط (ولماذا)
+دوال Supabase المستضافة خلف Cloudflare، وCloudflare تضع `cf-connecting-ip` = IP الاتصال الحقيقي لكل طلب. العميل لا يقدر يزوّرها: **Cloudflare ترفض أي طلب يرسلها بنفسه** (Error 1000، 403 صفحة HTML، ولا يصل للدالة؛ ثبت على dev بـ `pnpm it:driver-register`). أما `x-forwarded-for` و`x-real-ip` فيتحكم بها العميل (أو تُلحق قيمته بأولها)، فلا تقرأها الدالتان أبداً (`_shared/driver.ts`، `platformClientIp`). بلا الترويسة (محلي/CI) ← مفتاح مشترك `unknown` (أحوط). الحدود (`driver_request_rate_hit`): 10/ساعة لكل IP (الدالتان تتشاركان العدّاد)، 3/يوم لكل رقم، و`TOO_MANY_PENDING` إن بلغت الطلبات المعلّقة 50 بالمجموع.
+
+### اختبار التكامل (`pnpm it:driver-register`، مشروع التطوير فقط)
+أرقام بالبادئة `9647008`: تسجيل ← لا حساب Auth، الحالة `pending` (anon) ← نفس السر = نفس المعرّف، سر آخر ← `REQUEST_EXISTS` ← إكمال قبل الموافقة ← 409 ← أدمن مؤقت aal1 مرفوض ثم aal2 يوافق ← سر خاطئ 404 ورمز سهل 400 بلا حساب ← ضغطتان متزامنتان: 201 + 409 وحساب واحد ← دخول بالرمز، سائق فعّال بلا `must_change_pin`، `available_orders` ← طلب مرفوض ← 409 بلا حساب ← CORS (preflight من `http://localhost:3000` أو `IT_WEB_ORIGIN` ← 204، أصل غريب ← 403 بلا عدّ) ← حد الـ IP مملوء: `x-forwarded-for`/`x-real-ip` مزوّرة ← 429 بالدالتين، و`cf-connecting-ip` مزوّرة ← رفض Cloudflare؛ لا مفتاح حد لقيمة مزوّرة. يحذف الطلبات والإشعارات والتدقيق والحسابات وصفوف الحد التي أنشأها، ويعيد صف الـ IP لقيمته، حتى عند الفشل. **يرسل إشعارَي "طلب سائق جديد" لأجهزة أدمن dev.** يستهلك من حد الـ IP مؤقتاً (يُعاد بعده).
+
+### المراقبة والتشغيل
+- السجل (Dashboard ← Edge Functions ← Logs، أو `function_logs`): `driver-register done {request_id, phone: 9647******67}`، `driver-register refused {code}`، `driver-register rate limited`، `driver-complete done {request_id, user_id}`، `driver-complete refused {code, request_id}`، `driver-complete phone taken`. لا سر ولا رمز ولا hash ولا رقم كامل بأي سطر (Deno يفحص ذلك).
+- **`driver-complete ORPHAN account: delete it by hand {user_id}`:** فشل `finish_driver_registration` ثم فشل حذف الحساب: احذف الحساب من Auth يدوياً (دوره `customer`، بلا طلبات)، ويبقى الطلب `approved` فيعيد السائق المحاولة.
+- كثرة `rate check failed` أو `submit failed` (500 `REGISTER_FAILED`/`INTERNAL`) = عطل بقاعدة البيانات أو المفتاح السري: افحص `keys {"secret":"new"}` بأول السجل و`pnpm sb migration list --remote`.
+- `PHONE_TAKEN` عند الإكمال والطلب `approved`: للرقم حساب (زبون مثلاً). الأدمن يقرر: يحذف الطلب، أو يرقّي الحساب الموجود.
+
+### الحالة على mukhdar-dev (2026-11-20)
+الدالتان منشورتان (`--no-verify-jwt`)، و`pnpm it:driver-register` نجح (34 فحصاً، 4 تشغيلات متتالية) وحُذفت بياناته المؤقتة. الإنتاج: لم يُنشر شيء.
+
 ## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسات E1 وE2 وF، 2026-11-17)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
@@ -556,6 +581,8 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
    MUKHDAR_TARGET=prod pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain> --project-ref <prod-ref>   # T23 H1: نطاق لوحة الإنتاج فقط، قبل الدالتين
    pnpm sb functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --no-verify-jwt   # بعد 20261125000001
    pnpm sb functions deploy admin-create-user --remote=<prod-ref> --use-api --no-verify-jwt   # بعد 20261124000001
+   pnpm sb functions deploy driver-register              --remote=<prod-ref> --use-api --no-verify-jwt   # T28، بعد 20261208000001 (§16b)
+   pnpm sb functions deploy driver-complete-registration --remote=<prod-ref> --use-api --no-verify-jwt   # T28، بعد 20261208000001
    ```
    ثم `push_dispatch_url` بـ Vault (§11).
 5. §6 الخطوة 3: **Allow new users to sign up: OFF**، وفحص يدوي: حساب تجريبي من التطبيق ثم احذفه (§14).

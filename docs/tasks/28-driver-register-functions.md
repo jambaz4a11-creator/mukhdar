@@ -1,4 +1,4 @@
-# 28: Edge Functions تسجيل السائق ⬜
+# 28: Edge Functions تسجيل السائق ✅
 
 **الهدف:** SPEC-driver §4.2 (`driver-register`) و§4.4 (`driver-complete-registration`).
 **يعتمد على:** 27.
