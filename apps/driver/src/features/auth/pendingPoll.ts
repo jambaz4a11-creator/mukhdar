@@ -55,14 +55,16 @@ export function startPendingPoll(
   check: () => void,
   { intervalMs = POLL_INTERVAL_MS, appState = AppState as unknown as AppStateLike } = {},
 ): () => void {
-  let active = (appState.currentState ?? 'active') === 'active';
+  // 'unknown' (أول تشغيل، بعض البيئات) = بالواجهة؛ يتوقف فقط بالخلفية
+  const isForeground = (state: string | null) => state !== 'background' && state !== 'inactive';
+  let active = isForeground(appState.currentState);
   if (active) check();
   const timer = setInterval(() => {
     if (active) check();
   }, intervalMs);
   const sub = appState.addEventListener('change', (next: string) => {
     const was = active;
-    active = next === 'active';
+    active = isForeground(next);
     if (active && !was) check();
   });
   return () => {

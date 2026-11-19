@@ -27,7 +27,7 @@ jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
     router: { replace: (...a: unknown[]) => mockReplace(...a) },
-    useFocusEffect: (cb: () => (() => void) | void) => useEffect(cb, [cb]),
+    useFocusEffect: (cb: () => (() => void) | undefined) => useEffect(cb, [cb]),
   };
 });
 
@@ -61,8 +61,6 @@ describe('fetchRequestStatus', () => {
     const status = await fetchRequestStatus(fake.client as unknown as MukhdarClient, {
       requestId: 'r1',
       secret: SECRET,
-      fullName: '',
-      phone: '',
     });
     expect(status).toBe('pending');
     expect(fake.calls[0]).toEqual({
