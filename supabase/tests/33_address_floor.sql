@@ -13,14 +13,14 @@ select tests.as_user_aal1(tests.id('cust'));
 select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '4') $$,
                         tests.id('cust'), current_setting('t.bld')), 'P0001', 'FLOOR_REQUIRED',
   'customer: a new address without a floor is refused (FLOOR_REQUIRED)');
-select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 21, '4') $$,
-                        tests.id('cust'), current_setting('t.bld')), '23514', null, 'floor above 20 is refused');
+select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 10, '4') $$,
+                        tests.id('cust'), current_setting('t.bld')), 'P0001', 'FLOOR_INVALID', 'floor above 9 is refused (was 20 before 2026-11-19)');
 select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, -1, '4') $$,
-                        tests.id('cust'), current_setting('t.bld')), '23514', null, 'negative floor is refused');
+                        tests.id('cust'), current_setting('t.bld')), 'P0001', 'FLOOR_INVALID', 'negative floor is refused');
 select lives_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 0, '4') $$,
                        tests.id('cust'), current_setting('t.bld')), 'customer: ground floor (0) is accepted');
 select tests.remember('new', (select id from public.addresses where customer_id = tests.id('cust') and apartment = '4'));
-select lives_ok(format($$ update public.addresses set apartment = '3A' where id = %L $$, tests.id('old')),
+select lives_ok(format($$ update public.addresses set apartment = '3', note = 'x' where id = %L $$, tests.id('old')),
   'customer: an old address without a floor can still be edited');
 select throws_ok(format($$ update public.addresses set floor = null where id = %L $$, tests.id('new')), 'P0001', 'FLOOR_REQUIRED',
   'customer: a saved floor cannot be cleared');

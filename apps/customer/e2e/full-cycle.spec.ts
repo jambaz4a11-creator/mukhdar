@@ -184,10 +184,12 @@ test('preview: customer → admin → staff → driver → rating → reports �
     await page.getByTestId('name-submit').click();
     await page.getByTestId('block-select').click();
     await page.getByTestId('block-list').getByRole('button', { name: 'A1', exact: true }).click();
-    await page.getByTestId('building-input').fill('1');
-    await expect(page.getByTestId('building-found')).toBeVisible();
-    await page.getByTestId('floor-input').fill('3');
-    await page.getByTestId('apartment-input').fill('12');
+    await page.getByTestId('building-select').click();
+    await page.getByTestId('building-1').click();
+    await page.getByTestId('floor-select').click();
+    await page.getByTestId('floor-3').click();
+    await page.getByTestId('apartment-select').click();
+    await page.getByTestId('apartment-12').click();
     await page.getByTestId('address-save').click();
     await expect(page.getByTestId('delivery-address')).toBeVisible({ timeout: 30_000 });
   });

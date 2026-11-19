@@ -805,8 +805,8 @@ async function setup() {
   );
   if (!b.rows.length) throw new Error('no active building found for addresses');
   const rows = await db.query(
-    `insert into public.addresses (customer_id, building_id, apartment, is_default)
-     select unnest($1::uuid[]), $2, 'LT', true returning id, customer_id`,
+    `insert into public.addresses (customer_id, building_id, apartment, is_default, floor)
+     select unnest($1::uuid[]), $2, '1', true, 0 returning id, customer_id`,
     [U.customers.map((c) => c.id), b.rows[0].id],
   );
   addressByCustomer = new Map(rows.rows.map((r) => [r.customer_id, r.id]));

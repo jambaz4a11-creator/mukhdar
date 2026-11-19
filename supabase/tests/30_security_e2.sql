@@ -312,7 +312,7 @@ update public.addresses set apartment = E'5‮', note = E'بجانب​ البا
 select is((select apartment || '|' || note || '|' || label from public.addresses where id = tests.id('addr')),
   '5|بجانب الباب|بيتي الجديد', 'address text is cleaned');
 select throws_ok(format($$ update public.addresses set apartment = E'​' where id = %L $$, tests.id('addr')),
-  '23514', null, 'an apartment empty after cleaning is refused by the table check');
+  'P0001', 'APARTMENT_INVALID', 'an apartment empty after cleaning is refused');
 
 select tests.as_user(tests.id('cust'));
 select is(tests.err_detail(format($$ select public.place_order(%L, %L::jsonb, %L, E'عاجل‮​') $$, tests.id('addr'),
@@ -325,13 +325,13 @@ select is((select note from public.orders where customer_id = tests.id('cust') o
 select tests.remember('cust20', tests.new_user('customer'));
 select set_config('t.bld', (select building_id::text from public.addresses where id = tests.id('addr')), true);
 insert into public.addresses (customer_id, building_id, apartment)
-select tests.id('cust20'), current_setting('t.bld')::int, n::text from generate_series(1, 20) n;
+select tests.id('cust20'), current_setting('t.bld')::int, ((n - 1) % 12 + 1)::text from generate_series(1, 20) n;
 select is((select count(*)::int from public.addresses where customer_id = tests.id('cust20')), 20, '20 addresses are allowed');
-select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '21') $$,
+select throws_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '5') $$,
   tests.id('cust20'), current_setting('t.bld')), 'P0001', 'ADDRESS_LIMIT', 'the 21st address is refused (ADDRESS_LIMIT)');
 select lives_ok(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '1') $$,
   tests.id('other'), current_setting('t.bld')), 'the limit is per customer');
-select is(tests.err_detail(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '22') $$,
+select is(tests.err_detail(format($$ insert into public.addresses (customer_id, building_id, apartment) values (%L, %s, '6') $$,
   tests.id('cust20'), current_setting('t.bld'))), 'ADDRESS_LIMIT:20', 'ADDRESS_LIMIT carries the limit as detail');
 
 select * from finish();

@@ -28,7 +28,7 @@ describe('detail panel: full address and phone', () => {
 
   it('shows the floor on the details and the receipt (2026-11-18), ignores bad values', () => {
     expect(fullAddress({ ...snapshot, floor: 4 })).toBe('بلوك A3 · بناية 45 · الطابق 4 · شقة 12');
-    expect(fullAddress({ ...snapshot, floor: 0 })).toContain('الطابق الأرضي');
+    expect(fullAddress({ ...snapshot, floor: 0 })).toContain('الطابق G');
     expect(asAddress({ ...snapshot, floor: '4' }).floor).toBeNull();
     expect(asAddress(snapshot).floor).toBeNull();
   });

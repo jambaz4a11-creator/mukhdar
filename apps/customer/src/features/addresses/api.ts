@@ -2,14 +2,28 @@
 // الشجرة بقاعدة البيانات كما هي: قطاع ← وحدة ← عمارة؛ "البلوك" = الوحدة مع قطاعها (A1..A9، B1..B8).
 // القوائم الهرمية مقروءة للجميع (النشطة فقط بـ RLS). العناوين CRUD مباشر على addresses، وRLS يحصرها بصاحبها.
 // عنوان افتراضي واحد لكل زبون (فهرس unique جزئي): التعيين عبر RPC set_default_address بمعاملة واحدة.
-import type { MukhdarClient } from '@mukhdar/shared';
+import {
+  APARTMENT_MAX,
+  APARTMENT_MIN,
+  FLOOR_MAX,
+  FLOOR_MIN,
+  isValidApartment,
+  isValidFloor,
+  type MukhdarClient,
+} from '@mukhdar/shared';
 
-export const APARTMENT_MAX = 20;
 export const NOTE_MAX = 200;
-export const BUILDING_MAX_DIGITS = 3;
-/** الطابق 0 (الأرضي) .. 20، مثل قيد addresses_floor_range. */
-export const FLOOR_MAX = 20;
 export const LABEL_MAX = 20;
+
+/** قوائم الاختيار (2026-11-19، بلا كتابة حرة): الطابق G (0) و1..9، الشقة 1..12. */
+export const FLOOR_OPTIONS: readonly number[] = Array.from(
+  { length: FLOOR_MAX - FLOOR_MIN + 1 },
+  (_, i) => FLOOR_MIN + i,
+);
+export const APARTMENT_OPTIONS: readonly number[] = Array.from(
+  { length: APARTMENT_MAX - APARTMENT_MIN + 1 },
+  (_, i) => APARTMENT_MIN + i,
+);
 
 /** التسميات المقترحة بالتصميم (اختيارية). تُخزَّن نصاً بـ addresses.label. */
 export const ADDRESS_LABELS = ['البيت', 'الشغل'] as const;
@@ -218,35 +232,17 @@ export async function deleteAddress(
 
 // ------------------------------------------------------------------ مساعدات العرض والتحقق
 
-/** ٤٥ ← 45 (لوحة المفاتيح العربية شائعة). */
-export function toLatinDigits(s: string): string {
-  return s
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+/** عمارات البلوك مرتبة بالرقم (القائمة 1..N النشطة فقط من قاعدة البيانات). */
+export function sortBuildings(buildings: BuildingRow[]): BuildingRow[] {
+  return [...buildings].sort((a, b) => Number(a.number) - Number(b.number) || a.id - b.id);
 }
 
-/** يحوّل كتابة المستخدم لرقم عمارة: أرقام لاتينية فقط، بلا أصفار بالبداية ("045" ← "45"). */
-export function normalizeBuildingInput(raw: string): string {
-  const digits = toLatinDigits(raw).replace(/\D/g, '').slice(0, BUILDING_MAX_DIGITS);
-  return digits.replace(/^0+(?=\d)/, '');
-}
-
-/** كتابة الطابق: أرقام لاتينية، رقمان على الأكثر، بلا أصفار بالبداية ("03" ← "3"، "0" يبقى). */
-export function normalizeFloorInput(raw: string): string {
-  const digits = toLatinDigits(raw).replace(/\D/g, '').slice(0, 2);
-  return digits.replace(/^0+(?=\d)/, '');
-}
-
-/** الطابق كرقم صالح 0..FLOOR_MAX، أو null (فارغ أو خارج المدى). */
-export function parseFloor(text: string): number | null {
-  if (text === '') return null;
-  const n = Number(text);
-  return Number.isInteger(n) && n >= 0 && n <= FLOOR_MAX ? n : null;
-}
-
-/** فهرس رقم العمارة ← العمارة (بحث فوري بلا شبكة بعد تحميل الوحدة). */
-export function indexBuildings(buildings: BuildingRow[]): Map<string, BuildingRow> {
-  return new Map(buildings.map((b) => [b.number.trim(), b]));
+/**
+ * عنوان محفوظ قبل نطاقات بسماية (2026-11-19) وما زال متاحاً لكن طابقه ناقص أو خارج G..9 أو شقته خارج 1..12:
+ * لا يُختار للتوصيل تلقائياً ويُطلب من الزبون تصحيحه بقوائم النموذج. (عمارة موقوفة = "غير متاح"، تعالجها addressParts.)
+ */
+export function addressNeedsFix(a: Pick<CustomerAddress, 'floor' | 'apartment'>): boolean {
+  return !isValidFloor(a.floor) || !isValidApartment(a.apartment);
 }
 
 /** الأجزاء المطلوبة لـ formatAddress/formatAddressShort من @mukhdar/shared. null إن تعذّر (عمارة موقوفة). */
@@ -270,7 +266,7 @@ export function pickDeliveryAddress(
   selectedId: string | null,
 ): CustomerAddress | null {
   if (!addresses || addresses.length === 0) return null;
-  const usable = addresses.filter((a) => addressParts(a) !== null);
+  const usable = addresses.filter((a) => addressParts(a) !== null && !addressNeedsFix(a));
   return (
     usable.find((a) => a.id === selectedId) ?? usable.find((a) => a.is_default) ?? usable[0] ?? null
   );

@@ -14,6 +14,22 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 
 ---
 
+## Changes for the driver app (2026-11-19, exact Bismayah address data and the "G" floor)
+
+Migration `20261207000001` (applied to the development project only) plus the address tree data
+(`scripts/address-tree`). **No function signature, column, stored value or push text changed. No driver call
+needs to change.** Display changes only:
+
+1. **Ground floor is shown as `G`** (stored value is still `0`). Full address:
+   `بلوك A3 · بناية 12 · الطابق G · شقة 4`. Replace the old wording `الطابق الأرضي` in your UI with
+   `الطابق G`. Floors `1..9` stay `الطابق 3`. The push body (`بلوك A3 - بناية 12`) has no floor and is unchanged.
+2. **New addresses only contain** floor `0..9` (`0` = G) and apartment `1..12` (digits as a string, e.g. `"4"`);
+   building numbers are `1..N` for the block (A1 12, A2 14, A3 14, A4 12, A5 12, A6 12, A7 13, A8 15, A9 15,
+   B1 12, B2 18, B3 18, B8 12). Blocks `B4..B7` do not exist. **Old orders keep their old snapshot** (a floor up
+   to 20, a free-text apartment, a building up to 100, or a block B4..B7 can still appear): render whatever the
+   snapshot holds, never validate it, and treat `floor` as optional (§4).
+3. The `address_snapshot` shape is unchanged (`sector`, `subsection`, `building`, `floor`, `apartment`, `note`).
+
 ## Changes for the driver app (2026-11-18, address wording: بلوك / بناية — **push text changed**)
 
 Migration `20261205000001` (applied to the development project only). **No function signature, column or
@@ -22,7 +38,7 @@ push body text:
 
 - The words are now **"بلوك"** (was "وحدة"; the value is still the unit `A3`), **"بناية"** (was "عمارة"),
   **"الطابق"** (was "طابق"), **"شقة"**. The sector word is no longer printed (it is part of the block name).
-- Full address: `بلوك A3 · بناية 12 · الطابق 3 · شقة 10` (ground floor: `الطابق الأرضي`).
+- Full address: `بلوك A3 · بناية 12 · الطابق 3 · شقة 10` (ground floor: `الطابق G`, since 2026-11-19; it was `الطابق الأرضي`).
 - **Push body changed** (new orders for drivers, assignment, cancellation fallback): `بلوك A3 - بناية 12`
   (was `وحدة A3 - عمارة 12`). Do not parse the body; use `data.order_id`.
 
@@ -34,7 +50,7 @@ driver call needs to change.**
 1. **New optional key `floor` in `orders.address_snapshot`** (integer, `0` = ground floor, up to `20`),
    copied from the customer's address when the order is placed. New addresses always have it; orders to
    addresses saved before 2026-11-18 have **no `floor` key**. Example in §4. Show it next to the building,
-   e.g. "بناية 12 · الطابق 3 · شقة 5" (`0` → "الطابق الأرضي"). Treat it as optional.
+   e.g. "بناية 12 · الطابق 3 · شقة 5" (`0` → "الطابق G"). Treat it as optional.
 2. **Not in `available_orders`:** like the apartment, the floor is only visible after you accept the order
    (in your own order rows). The list before accepting is unchanged.
 3. **Deleted customers:** the anonymized snapshot (`sector`, `subsection` only) has no `floor` either.

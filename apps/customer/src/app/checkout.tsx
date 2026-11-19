@@ -21,7 +21,7 @@ import { FormMessage } from '../components/AuthFields';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { StoreClosedBanner } from '../components/StoreClosedBanner';
 import { SummaryRow } from '../components/SummaryRow';
-import { addressParts, type CustomerAddress } from '../features/addresses/api';
+import { addressNeedsFix, addressParts, type CustomerAddress } from '../features/addresses/api';
 import { useDeliveryAddress } from '../features/addresses/hooks';
 import { useSelectedAddress } from '../features/addresses/selected';
 import { useRequireAuth } from '../features/auth/useRequireAuth';
@@ -119,7 +119,12 @@ export default function CheckoutScreen() {
                   key={a.id}
                   address={a}
                   selected={a.id === address?.id}
-                  onPress={() => select(a.id)}
+                  onPress={() =>
+                    // عنوان قديم غير صالح: يُفتح للتصحيح بدل اختياره (2026-11-19)
+                    addressNeedsFix(a)
+                      ? router.push({ pathname: '/address/[id]', params: { id: a.id } })
+                      : select(a.id)
+                  }
                 />
               ))
             )}
@@ -238,6 +243,11 @@ function AddressOption({
       <View style={styles.flex}>
         {address.label ? <AppText weight="semibold">{address.label}</AppText> : null}
         <AppText size="small">{formatAddress(parts)}</AppText>
+        {addressNeedsFix(address) ? (
+          <AppText size="caption" color={colors.warningText} testID={`checkout-fix-${address.id}`}>
+            {ar.address.needsFix}
+          </AppText>
+        ) : null}
         {address.note ? (
           <AppText size="caption" muted>
             {address.note}
