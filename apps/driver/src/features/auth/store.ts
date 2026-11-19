@@ -75,6 +75,18 @@ export async function refreshRegistration(): Promise<void> {
   }
 }
 
+/** تسجيل الخروج (يبطل رمز التحديث بالخادم)؛ فشل الشبكة ← خروج محلي على أي حال. */
+export async function signOut(client: MukhdarClient): Promise<void> {
+  try {
+    const { error } = await client.auth.signOut();
+    if (error) throw error;
+  } catch {
+    await localSignOut(client);
+    return;
+  }
+  useAuth.setState({ session: null, profile: null, profileError: false });
+}
+
 /** يمسح الطلب المحفوظ من الجهاز (السر معه) ويبلّغ الحارس. الطلب على الخادم يبقى للأدمن. */
 export async function forgetRegistration(): Promise<void> {
   try {
