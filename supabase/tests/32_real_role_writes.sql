@@ -4,7 +4,7 @@
 -- فلم تكشفه. (migration 20261203000001، قاعدة CLAUDE.md "اختبارات الكتابة بالدور الحقيقي".)
 -- التجهيز فقط (مستخدمون، منتج، عمارة) بدور postgres؛ كل كتابة يقوم بها التطبيق أو اللوحة أو السائق بدوره.
 -- بالنهاية فحوص آلية للكتالوج تمنع رجوع نفس الصنف من الأخطاء بأي جدول مستقبلاً.
-select plan(35);
+select plan(42);
 
 -- ================================================================ التجهيز (postgres)
 select tests.remember('cust',  tests.new_user('customer'));
@@ -81,7 +81,7 @@ select throws_ok(format($$ select public.admin_save_product(jsonb_build_object('
                         tests.id('prod')), '42501', null,
   'staff: product edits are admin-only (42501)');
 
--- ================================================================ السائق (aal1، تطبيق خارجي)
+-- ================================================================ السائق (aal1، apps/driver)
 select tests.as_user_aal1(tests.id('drv'));
 select lives_ok(format($$ select public.accept_order(%L) $$, tests.id('o1')), 'driver: accepts a ready order');
 select lives_ok(format($$ select public.set_order_status(%L, 'out_for_delivery') $$, tests.id('o1')),
@@ -116,6 +116,36 @@ select lives_ok(format($$ update public.subsections set is_active = false where 
   'admin: hides a unit (audit trigger)');
 select lives_ok(format($$ select public.add_buildings(%s, array['8', '9']) $$, current_setting('t.sub')),
   'admin: adds buildings');
+
+-- ================================================================ تسجيل سائق (T27): الجهاز anon، Edge Functions service_role، الأدمن aal2
+select tests.as_postgres();
+select set_config('t.dphone', nextval('tests.phone_seq')::text, true);
+select set_config('t.dsecret', repeat('k', 43), true);
+select tests.as_service();
+select lives_ok(format($$ select set_config('t.dreq', public.submit_driver_request(%L, 'سائق T32', %L, null)::text, true) $$,
+                       current_setting('t.dphone'), encode(sha256(convert_to(current_setting('t.dsecret'), 'UTF8')), 'hex')),
+  'service_role (driver-register): submits a driver request');
+select tests.as_anon();
+select is(public.driver_request_status(current_setting('t.dreq')::uuid, current_setting('t.dsecret')), 'pending',
+  'anon (device without an account): reads its request status');
+select tests.as_user(tests.id('admin'));
+select lives_ok(format($$ select public.decide_driver_request(%L, true) $$, current_setting('t.dreq')),
+  'admin: approves the driver request (audited)');
+select tests.as_service();
+select lives_ok(format($$ select * from public.begin_driver_completion(%L, %L) $$, current_setting('t.dreq'),
+                       encode(sha256(convert_to(current_setting('t.dsecret'), 'UTF8')), 'hex')),
+  'service_role (driver-complete-registration): begins completion');
+select tests.as_postgres();
+-- auth.admin.createUser بـ GoTrue (supabase_auth_admin)، ليس دوراً للمستخدم
+select tests.remember('drv2', gen_random_uuid());
+insert into auth.users (id, phone, aud, role) values (tests.id('drv2'), current_setting('t.dphone'), 'authenticated', 'authenticated');
+select tests.as_service();
+select lives_ok(format($$ select public.finish_driver_registration(%L, %L) $$, current_setting('t.dreq'), tests.id('drv2')),
+  'service_role: finishes the registration (profile becomes a driver)');
+select tests.as_user_aal1(tests.id('drv2'));
+select lives_ok($$ select * from public.available_orders(5) $$, 'new driver (aal1): lists available orders');
+select lives_ok($$ select public.register_push_token('ExponentPushToken[t32-drv2]', 'android') $$,
+  'new driver (aal1): registers a push token');
 
 -- ================================================================ حذف الحساب (delete-account: service_role ثم GoTrue)
 select tests.as_service();
