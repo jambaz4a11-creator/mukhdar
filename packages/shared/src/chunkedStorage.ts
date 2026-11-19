@@ -44,7 +44,8 @@ export function createChunkedStorage(store: KeyValueStore): ChunkedStorage {
       const key = safeStorageKey(rawKey);
       const old = await count(key);
       const chunks: string[] = [];
-      for (let i = 0; i < value.length; i += CHUNK_SIZE) chunks.push(value.slice(i, i + CHUNK_SIZE));
+      for (let i = 0; i < value.length; i += CHUNK_SIZE)
+        chunks.push(value.slice(i, i + CHUNK_SIZE));
       if (chunks.length === 0) chunks.push('');
       for (let i = 0; i < chunks.length; i++) {
         await store.setItemAsync(`${key}.${i}`, chunks[i] as string);

@@ -41,7 +41,8 @@ export async function changePin(
     return { ok: false, field: 'next', message: PIN_CHANGE_MESSAGES.mismatch };
   }
   const currentPin = normalizePin(current);
-  if (nextPin === currentPin) return { ok: false, field: 'next', message: PIN_CHANGE_MESSAGES.same };
+  if (nextPin === currentPin)
+    return { ok: false, field: 'next', message: PIN_CHANGE_MESSAGES.same };
   const e164 = normalizeIraqiPhone(phone);
   if (!e164) return { ok: false, field: 'current', message: PIN_CHANGE_MESSAGES.failed };
 
