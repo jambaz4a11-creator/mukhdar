@@ -64,7 +64,7 @@ export async function completeRegistration(
   }
 
   // الحساب أُنشئ: من هنا الطلب لم يعد يلزم الجهاز
-  let signedIn = false;
+  let signedIn: boolean;
   try {
     const { data, error } = await client.auth.signInWithPassword({
       phone: reg.phone,
