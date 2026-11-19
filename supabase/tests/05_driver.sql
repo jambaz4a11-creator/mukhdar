@@ -1,5 +1,5 @@
 -- 05: دوال السائق (available_orders, accept_order, assign_driver)، حركة السائق بالحالات، و RLS السائق
-select plan(55);
+select plan(56);
 
 -- طلبات موجودة مسبقاً (مثل seed:demo) لا تزاحم طلبات الاختبار ضمن حد available_orders.
 -- تُعيَّن لسائق مؤقت داخل المعاملة، وكل شيء يُلغى بنهايتها.
@@ -18,9 +18,16 @@ select tests.remember('o_preparing', tests.order_in('preparing', tests.id('cust'
 select tests.remember('o_mine', tests.order_in('ready', tests.id('cust'), tests.id('d1')));
 select tests.remember('o_cancelled', tests.order_in('cancelled', tests.id('cust')));
 select tests.remember('o_delivered', tests.order_in('delivered', tests.id('cust')));
+-- T27 D13: طلب جاهز ببندين مختلفين (3 + 1 وحدة بيع)
+select tests.remember('o_lines', tests.place(tests.id('cust'), jsonb_build_array(
+  tests.item(tests.new_product(1000, 10), 3), tests.item(tests.new_product(500, 10), 1))));
+select tests.set_uid(tests.new_user('admin'));
+select public.set_order_status(tests.id('o_lines'), 'preparing');
+select public.set_order_status(tests.id('o_lines'), 'ready');
+select set_config('request.jwt.claims', '{}', true);
 
-select ok(pg_get_function_result('public.available_orders(int)'::regprocedure) !~* '(phone|name)',
-  'available_orders exposes no customer phone or name columns');
+select ok(pg_get_function_result('public.available_orders(int)'::regprocedure) !~* '(phone|name|floor|apartment|note)',
+  'available_orders exposes no customer phone, name, floor, apartment or note (T27: still true with line_count)');
 
 -- ---------------------------------------------------------------- available_orders
 select tests.as_user(tests.id('d1'));
@@ -34,6 +41,8 @@ select is((select count(*)::int from public.available_orders(50)
             where id in (tests.id('o_mine'), tests.id('o_cancelled'), tests.id('o_delivered'))), 0,
   'assigned, cancelled and delivered orders are not available');
 select is((select count(*)::int from public.available_orders(1)), 1, 'p_limit is respected');
+select row_eq($$ select item_count, line_count from public.available_orders(50) where id = tests.id('o_lines') $$,
+  row(4::bigint, 2::bigint), 'item_count = sum of qty, line_count = distinct lines ("N منتجات", T27 D13)');
 select is_empty($$ select 1 from public.orders where id = tests.id('o_ready1') $$,
   'driver cannot read an unassigned order (phone hidden) via RLS');
 select is_empty($$ select 1 from public.order_items where order_id = tests.id('o_ready1') $$,

@@ -5,7 +5,7 @@ select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
   'categories', 'products', 'product_costs', 'stock', 'inventory_movements', 'orders', 'order_items',
   'order_item_costs', 'order_status_history', 'ratings', 'push_tokens', 'notification_outbox', 'daily_stats',
-  'pin_resets', 'user_creations', 'admin_audit', 'admin_function_hits'
+  'pin_resets', 'user_creations', 'admin_audit', 'admin_function_hits', 'driver_requests'
 ], 'public has exactly the expected tables');
 
 select is(
@@ -25,22 +25,24 @@ select is(
       and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) cfg where cfg like 'search_path=%')),
   0, 'every public/private function has a fixed search_path');
 
+-- المقصودة وحدها (تحذير Advisor متوقع وموثَّق): الجهاز بلا حساب يقرأ حالة طلب تسجيل السائق بسرّه (T27 D4)
 select is(
-  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')),
-  0, 'anon cannot execute any SECURITY DEFINER function in public');
+  array['driver_request_status'], 'anon executes exactly one SECURITY DEFINER function in public (T27 driver_request_status)');
 
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
   array['accept_order', 'add_buildings', 'address_usage', 'adjust_stock', 'adjust_stock_bulk', 'admin_cancel_customer_orders', 'admin_reset_mfa',
-        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'dashboard_today', 'delete_category', 'dismiss_failed_notifications', 'failed_notifications_count',
+        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'dashboard_today', 'decide_driver_request', 'delete_category', 'dismiss_failed_notifications',
+        'driver_request_status', 'failed_notifications_count', 'list_driver_requests',
         'list_drivers', 'place_order', 'rate_order', 'ratings_list', 'ratings_summary', 'recompute_daily_stats',
         'register_push_token',
         'reorder_categories', 'reorder_products', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
         'report_top_products', 'report_waste', 'set_order_status', 'set_product_price', 'set_user_role',
         'stuck_notifications_count', 'touch_panel_session', 'update_app_settings'],
-  'authenticated can execute exactly the 36 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session)');
+  'authenticated can execute exactly the 39 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session; T27: driver requests)');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');
@@ -95,9 +97,9 @@ select is(
       and p.prorettype <> 'trigger'::regtype and left(p.proname::text, 1) <> '_'
       and has_function_privilege('service_role', p.oid, 'execute')
       and not has_function_privilege('authenticated', p.oid, 'execute')),
-  array['abort_account_deletion', 'admin_rate_hit', 'begin_account_deletion', 'break_glass_reset_mfa',
-        'claim_push_notifications', 'finish_user_creation', 'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions',
-        'signup_rate_hit'],
+  array['abort_account_deletion', 'admin_rate_hit', 'begin_account_deletion', 'begin_driver_completion', 'break_glass_reset_mfa',
+        'claim_push_notifications', 'driver_request_rate_hit', 'finish_driver_registration', 'finish_user_creation',
+        'push_dispatch_authorized', 'record_pin_reset', 'revoke_user_sessions', 'signup_rate_hit', 'submit_driver_request'],
   'service_role-only SECURITY DEFINER functions (T07 push, T08 deletion, signup, T19/B PIN reset, account creation, rate limit; T23 F: claim_push_notifications definer)');
 
 -- الدوال الجديدة لا تُنفَّذ افتراضياً (default privileges عامة، لا بالمخطط فقط)

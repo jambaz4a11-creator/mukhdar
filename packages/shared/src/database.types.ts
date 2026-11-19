@@ -326,6 +326,70 @@ export type Database = {
         };
         Relationships: [];
       };
+      driver_requests: {
+        Row: {
+          approved_until: string | null;
+          completed_at: string | null;
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          decision_note: string | null;
+          device_secret_hash: string;
+          full_name: string;
+          id: string;
+          phone: string;
+          push_token: string | null;
+          status: string;
+          user_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          approved_until?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_note?: string | null;
+          device_secret_hash: string;
+          full_name: string;
+          id?: string;
+          phone: string;
+          push_token?: string | null;
+          status?: string;
+          user_id?: string | null;
+        };
+        Update: {
+          approved_until?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_note?: string | null;
+          device_secret_hash?: string;
+          full_name?: string;
+          id?: string;
+          phone?: string;
+          push_token?: string | null;
+          status?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'driver_requests_decided_by_fkey';
+            columns: ['decided_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'driver_requests_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       inventory_movements: {
         Row: {
           created_at: string;
@@ -387,6 +451,7 @@ export type Database = {
           created_at: string;
           data: NonNullable<Json>;
           dismissed_at: string | null;
+          driver_request_id: string | null;
           id: number;
           last_error: string | null;
           sent_at: string | null;
@@ -402,6 +467,7 @@ export type Database = {
           created_at?: string;
           data?: NonNullable<Json>;
           dismissed_at?: string | null;
+          driver_request_id?: string | null;
           id?: never;
           last_error?: string | null;
           sent_at?: string | null;
@@ -416,6 +482,7 @@ export type Database = {
           created_at?: string;
           data?: NonNullable<Json>;
           dismissed_at?: string | null;
+          driver_request_id?: string | null;
           id?: never;
           last_error?: string | null;
           sent_at?: string | null;
@@ -423,6 +490,13 @@ export type Database = {
           user_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'notification_outbox_driver_request_id_fkey';
+            columns: ['driver_request_id'];
+            isOneToOne: false;
+            referencedRelation: 'driver_requests';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'notification_outbox_user_id_fkey';
             columns: ['user_id'];
@@ -1192,6 +1266,7 @@ export type Database = {
       admin_cancel_customer_orders: { Args: { p_user_id: string }; Returns: Json };
       admin_rate_hit: { Args: { p_admin: string; p_kind: string }; Returns: number };
       admin_reset_mfa: { Args: { p_user_id: string }; Returns: number };
+      admin_save_category: { Args: { p: Json }; Returns: number };
       admin_save_product: { Args: { p: Json }; Returns: string };
       assign_driver: {
         Args: { p_driver_id: string; p_order_id: string };
@@ -1236,6 +1311,7 @@ export type Database = {
           created_at: string;
           id: string;
           item_count: number;
+          line_count: number;
           order_number: number;
           sector: string;
           status: Database['public']['Enums']['order_status'];
@@ -1245,6 +1321,13 @@ export type Database = {
       };
       baghdad_today: { Args: Record<PropertyKey, never>; Returns: string };
       begin_account_deletion: { Args: { p_user_id: string }; Returns: boolean };
+      begin_driver_completion: {
+        Args: { p_request_id: string; p_secret_hash: string };
+        Returns: {
+          full_name: string;
+          phone: string;
+        }[];
+      };
       break_glass_reset_mfa: { Args: { p_user_id: string }; Returns: number };
       claim_push_notifications: {
         Args: { p_limit?: number };
@@ -1262,8 +1345,22 @@ export type Database = {
         Returns: Database['public']['Enums']['user_role'];
       };
       dashboard_today: { Args: Record<PropertyKey, never>; Returns: Json };
+      decide_driver_request: {
+        Args: { p_approve: boolean; p_id: string; p_note?: string };
+        Returns: string;
+      };
+      delete_category: { Args: { p_id: number }; Returns: string };
       dismiss_failed_notifications: { Args: Record<PropertyKey, never>; Returns: number };
+      driver_request_rate_hit: { Args: { p_ip: string; p_phone: string }; Returns: boolean };
+      driver_request_status: {
+        Args: { p_device_secret: string; p_request_id: string };
+        Returns: string;
+      };
       failed_notifications_count: { Args: Record<PropertyKey, never>; Returns: number };
+      finish_driver_registration: {
+        Args: { p_request_id: string; p_user_id: string };
+        Returns: undefined;
+      };
       finish_push_notifications: {
         Args: { p_dead_tokens?: string[]; p_results: Json };
         Returns: undefined;
@@ -1279,6 +1376,19 @@ export type Database = {
       };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_staff_or_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      list_driver_requests: {
+        Args: { p_limit?: number; p_status?: string };
+        Returns: {
+          created_at: string;
+          decided_at: string;
+          decided_by_name: string;
+          decision_note: string;
+          full_name: string;
+          id: string;
+          phone: string;
+          status: string;
+        }[];
+      };
       list_drivers: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1342,10 +1452,8 @@ export type Database = {
         };
         Returns: undefined;
       };
-      reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
-      admin_save_category: { Args: { p: Json }; Returns: number };
-      delete_category: { Args: { p_id: number }; Returns: string };
       reorder_categories: { Args: { p_ids: number[] }; Returns: undefined };
+      reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
       report_daily: {
         Args: { p_from: string; p_to: string };
         Returns: {
@@ -1462,6 +1570,10 @@ export type Database = {
       };
       signup_rate_hit: { Args: { p_ip: string; p_phone: string }; Returns: boolean };
       stuck_notifications_count: { Args: Record<PropertyKey, never>; Returns: number };
+      submit_driver_request: {
+        Args: { p_full_name: string; p_phone: string; p_push_token: string; p_secret_hash: string };
+        Returns: string;
+      };
       touch_panel_session: { Args: Record<PropertyKey, never>; Returns: boolean };
       update_app_settings: {
         Args: { p: Json };

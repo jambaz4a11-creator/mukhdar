@@ -1,16 +1,37 @@
-# DRIVER-API: integration guide for the external driver app
+# DRIVER-API: the driver app's backend contract (internal)
 
-The driver app is **built by a separate developer** and connects to this project's Supabase backend.
-This document is the integration contract. It is self-contained: you should not need to read the rest
-of the repo. Expected screens and UX are described in [SPEC-driver.md](SPEC-driver.md) (Arabic).
+The driver app is **`apps/driver` in this repo** (React Native + Expo, tasks T27–T33). The external
+developer plan was cancelled by the owner on 2026-11-19. This document is the internal reference for
+the driver-facing functions, policies and push payloads. Screens and UX: [SPEC-driver.md](SPEC-driver.md)
+(Arabic). Self-registration (sign-up request → admin approval → PIN on the same device): section
+"Self-registration" below and SPEC-driver §3–§4.
 
 Source of truth for everything below: `supabase/migrations/` (functions `available_orders`,
 `accept_order`, `set_order_status`, `register_push_token`, and the RLS policies). The behaviour is
 covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `05_driver.sql`,
 `08_roles.sql`, `20_account_lifecycle.sql`). If the code and this document disagree, the code wins and this document is a bug.
 
-> Changes to this contract (function signatures, error codes, policies, push payloads) must be agreed
-> with the driver app developer first and land as a **new** migration.
+> Changes to this contract (function signatures, error codes, policies, push payloads) land as a
+> **new** migration, with `apps/driver` and this document updated in the same PR.
+
+## Self-registration (T27, migration `20261208000001`)
+
+A new driver registers from the app with name + phone; **no Auth account exists until an admin
+approves** (after a phone call) and the **same device** chooses its PIN. Full design: SPEC-driver §3
+(security) and §4 (functions). Summary for the app:
+
+1. The app generates a **device secret** (32 random bytes, base64url without padding = 43 characters),
+   stores it in SecureStore, then calls Edge Function `driver-register` (T28) → `201 {request_id}`.
+2. Status, with the publishable key and **no session** (role `anon`):
+   `supabase.rpc('driver_request_status', { p_request_id, p_device_secret })` → `'pending' | 'approved' |
+   'rejected' | 'expired' | 'completed' | 'not_found'` (`not_found` for any mismatch). Poll every 30 s
+   while visible; push `data.type = 'driver_request_approved'` (best effort) also triggers a refresh.
+3. On `approved`: Edge Function `driver-complete-registration` (T28) with `{request_id, device_secret,
+   pin}` creates an **active driver** account without `must_change_pin`; then `signInWithPassword`.
+4. Approval is valid **7 days** (`expired` after). Error codes (Arabic messages in
+   `packages/shared/src/errors.ts`): `PHONE_INVALID`, `NAME_INVALID`, `PHONE_TAKEN`, `REQUEST_EXISTS`,
+   `RATE_LIMITED`, `TOO_MANY_PENDING`, `REGISTER_FAILED`, `REQUEST_NOT_FOUND`, `REQUEST_NOT_APPROVED`,
+   `REQUEST_EXPIRED`, `PIN_INVALID`.
 
 ---
 
@@ -283,10 +304,11 @@ oldest first. `p_limit` is clamped to 1..50.
 | `status` | `'ready'` | always `ready` |
 | `sector`, `subsection`, `building` | text | address without apartment: sector (`قطاع A`), unit (`A3`), building number (`12`) |
 | `item_count` | bigint | sum of quantities, in sale units (a half kilo counts as 1) |
+| `line_count` | bigint | number of distinct lines (products) in the order, for "N منتجات" (T27 D13, migration `20261208000001`) |
 | `total_iqd` | bigint | amount to collect in cash |
 | `created_at` | timestamptz | |
 
-**No customer name, phone, apartment or note** before acceptance (by design).
+**No customer name, phone, floor, apartment or note** before acceptance (by design).
 
 | Error | SQL state | When |
 |---|---|---|

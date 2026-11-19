@@ -61,7 +61,9 @@ create function tests.gate_calls() returns table (grp text, sql text) language s
     ('admin', format($q$ select public.set_user_role(%L, 'customer', true) $q$, tests.id('cust'))),
     ('admin', $q$ select public.update_app_settings('{}'::jsonb) $q$),
     ('admin', format($q$ select public.admin_reset_mfa(%L) $q$, tests.id('staff2'))),
-    ('admin', format($q$ select public.admin_cancel_customer_orders(%L) $q$, gen_random_uuid()))
+    ('admin', format($q$ select public.admin_cancel_customer_orders(%L) $q$, gen_random_uuid())),
+    ('admin', $q$ select * from public.list_driver_requests() $q$),
+    ('admin', format($q$ select public.decide_driver_request(%L, false) $q$, gen_random_uuid()))
   ) t(grp, sql)
 $$;
 
@@ -207,7 +209,7 @@ select set_eq(
       where p.pronamespace = 'public'::regnamespace and p.prosecdef
         and has_function_privilege('authenticated', p.oid, 'execute')
         and p.proname not in ('place_order', 'rate_order', 'register_push_token', 'available_orders', 'accept_order',
-                            'touch_panel_session') $$,
+                            'touch_panel_session', 'driver_request_status') $$,
   $$ select distinct (regexp_match(sql, 'public\.(\w+)\('))[1] from tests.gate_calls() $$,
   'the aal matrix covers every admin/staff SECURITY DEFINER RPC (a new one must be added)');
 

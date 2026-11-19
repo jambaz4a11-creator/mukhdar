@@ -1,5 +1,5 @@
 -- 11: push-dispatch (T07): المزوّد لكل رمز، حجز الصندوق، إنهاء الإرسال، السر المشترك، والمُشغِّل
-select plan(58);
+select plan(60);
 
 -- الصندوق يبدأ فارغاً من منظور الاختبار (يُلغى مع المعاملة)
 update public.notification_outbox set sent_at = now() where sent_at is null;
@@ -154,6 +154,24 @@ select row_eq($$ select attempts, last_error from public.notification_outbox whe
   row(0, 'fcm: 1 token(s) skipped (provider not implemented)'::text), 'sent row is untouched');
 select tests.as_service();
 select lives_ok($$ select public.finish_push_notifications(null, null) $$, 'null arguments are harmless');
+
+-- ---------------------------------------------------------------- جمهور driver_request (T27 D9)
+-- جهاز بلا حساب: الرمز من driver_requests.push_token، فقط لطلب ما زال approved وغير منتهٍ
+select tests.as_postgres();
+insert into public.driver_requests (full_name, phone, device_secret_hash, status, decided_at, approved_until, push_token, completed_at)
+values ('ط موافق', '9647000000101', repeat('a', 64), 'approved',  now(), now() + interval '7 days', 'ExponentPushToken[t11-req-ok]', null),
+       ('ط مرفوض', '9647000000102', repeat('b', 64), 'rejected',  now(), null, null, null),
+       ('ط مكتمل', '9647000000103', repeat('c', 64), 'completed', now(), now() + interval '7 days', 'ExponentPushToken[t11-req-done]', now());
+insert into public.notification_outbox (audience, driver_request_id, title, body)
+select 'driver_request', r.id, 'T-req-' || right(r.phone, 3), 'b'
+  from public.driver_requests r where r.phone in ('9647000000101', '9647000000102', '9647000000103');
+select tests.as_service();
+insert into claimed select * from public.claim_push_notifications(50);
+select is((select recipients from claimed where title = 'T-req-101'),
+  jsonb_build_array(jsonb_build_object('token', 'ExponentPushToken[t11-req-ok]', 'provider', 'expo', 'platform', 'unknown')),
+  'driver_request audience: an approved request resolves to its own token');
+select is((select array_agg(recipients::text order by title) from claimed where title in ('T-req-102', 'T-req-103')),
+  array['[]', '[]'], 'driver_request audience: rejected or completed requests resolve to nothing');
 
 -- ---------------------------------------------------------------- السر المشترك
 select tests.as_postgres();
