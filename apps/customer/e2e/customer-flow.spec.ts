@@ -53,15 +53,37 @@ test('customer: sign up → name → address → order → cancel → delete acc
     await expectNoError(page);
   });
 
-  await test.step('first address: block → building → floor → apartment (+ label)', async () => {
+  await test.step('first address: block → building → floor → apartment, all dropdowns (+ label)', async () => {
     await page.getByTestId('block-select').click();
     await shot(page, 'address-blocks');
+    // البلوكات الفعلية فقط (قرار المالك 2026-11-19): A1..A9 وB1 وB2 وB3 وB8؛ B4..B7 غير موجودة
+    await expect(page.getByTestId('block-list').locator('[data-testid^="block-"]')).toHaveCount(13);
+    await expect(
+      page.getByTestId('block-list').getByRole('button', { name: 'B4', exact: true }),
+    ).toHaveCount(0);
     await page.getByTestId('block-list').getByRole('button', { name: 'A1', exact: true }).click();
     await expect(page.getByTestId('block-value')).toHaveText(/^A1$/);
-    await page.getByTestId('building-input').fill('1');
-    await expect(page.getByTestId('building-found')).toBeVisible();
-    await page.getByTestId('floor-input').fill('3');
-    await page.getByTestId('apartment-input').fill('12');
+    // لا كتابة حرة: بنايات A1 = 1..12 فقط
+    await expect(page.getByTestId('building-input')).toHaveCount(0);
+    await page.getByTestId('building-select').click();
+    await expect(
+      page.getByTestId('building-list').locator('[data-testid^="building-"]'),
+    ).toHaveCount(12);
+    await expect(page.getByTestId('building-13')).toHaveCount(0);
+    await page.getByTestId('building-1').click();
+    // الطابق: G و1..9
+    await page.getByTestId('floor-select').click();
+    await expect(page.getByTestId('floor-list').locator('[data-testid^="floor-"]')).toHaveCount(10);
+    await expect(page.getByTestId('floor-0')).toHaveText('G');
+    await expect(page.getByTestId('floor-10')).toHaveCount(0);
+    await page.getByTestId('floor-3').click();
+    // الشقة: 1..12
+    await page.getByTestId('apartment-select').click();
+    await expect(
+      page.getByTestId('apartment-list').locator('[data-testid^="apartment-"]'),
+    ).toHaveCount(12);
+    await expect(page.getByTestId('apartment-13')).toHaveCount(0);
+    await page.getByTestId('apartment-12').click();
     await page.getByTestId('label-input').fill('البيت');
     await expect(page.getByTestId('address-preview')).toContainText('بناية 1 · الطابق 3 · شقة 12');
     await shot(page, 'address-form');

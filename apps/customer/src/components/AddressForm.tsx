@@ -1,10 +1,18 @@
-// نموذج العنوان (T12؛ تصميم 2026-11-18 "مثل تطبيقات بسماية"): البلوك (قائمة منسدلة واحدة تجمع القطاع والوحدة:
-// A1..A9، B1..B8) ← البناية (تُكتب ويُتحقق منها مقابل بنايات البلوك النشطة) ← الطابق (0 = الأرضي .. 20) ← رقم الشقة،
-// ثم تسمية قصيرة اختيارية (مثلاً "البيت")، والملاحظة، والافتراضي. تغيير البلوك يمسح البناية.
-// الشجرة بقاعدة البيانات كما هي (قطاع ← وحدة ← عمارة)؛ الطابق إلزامي لعنوان جديد (FLOOR_REQUIRED).
+// نموذج العنوان (T12؛ نطاقات بسماية 2026-11-19): كلها قوائم اختيار بلا كتابة حرة:
+// البلوك (قطاع + وحدة: A1..A9، B1..B3، B8 النشطة فقط) ← البناية (1..N لذلك البلوك) ← الطابق (G، 1..9)
+// ← الشقة (1..12)، ثم تسمية قصيرة اختيارية، والملاحظة، والافتراضي. تغيير البلوك يمسح البناية.
+// الشجرة بقاعدة البيانات كما هي (قطاع ← وحدة ← عمارة)؛ قاعدة البيانات ترفض أي قيمة خارج النطاق (FLOOR_INVALID...).
+// عنوان قديم غير صالح (طابق ناقص/خارج G..9، شقة خارج 1..12): يُفتح بحقوله الناقصة فارغة ويُطلب تصحيحه.
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { errorMessage, formatAddress, formatSector } from '@mukhdar/shared';
-import { useMemo, useState } from 'react';
+import {
+  errorMessage,
+  floorOptionLabel,
+  formatAddress,
+  formatSector,
+  isValidApartment,
+  isValidFloor,
+} from '@mukhdar/shared';
+import { type ReactNode, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,17 +28,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ADDRESS_LABELS,
-  APARTMENT_MAX,
+  addressNeedsFix,
+  APARTMENT_OPTIONS,
   type BlockRow,
-  BUILDING_MAX_DIGITS,
   createAddress,
   type CustomerAddress,
-  indexBuildings,
+  FLOOR_OPTIONS,
   LABEL_MAX,
-  normalizeBuildingInput,
-  normalizeFloorInput,
   NOTE_MAX,
-  parseFloor,
+  sortBuildings,
   updateAddress,
 } from '../features/addresses/api';
 import { useBlocks, useBuildings, useInvalidateAddresses } from '../features/addresses/hooks';
@@ -71,12 +77,18 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
   const selectAddress = useSelectedAddress((s) => s.select);
 
   const [blockId, setBlockId] = useState<number | null>(initial?.building?.subsection?.id ?? null);
-  const [blockOpen, setBlockOpen] = useState(false);
-  const [buildingText, setBuildingText] = useState(initial?.building?.number ?? '');
-  const [floorText, setFloorText] = useState(
-    initial?.floor === null || initial?.floor === undefined ? '' : String(initial.floor),
+  // القائمة المفتوحة الآن (واحدة فقط)
+  const [openField, setOpenField] = useState<Field | null>(null);
+  const [buildingNumber, setBuildingNumber] = useState<string | null>(
+    initial?.building?.number ?? null,
   );
-  const [apartment, setApartment] = useState(initial?.apartment ?? '');
+  // عنوان قديم بطابق أو شقة غير صالحين: يبدأ الحقل فارغاً ليختار الزبون من القائمة
+  const [floor, setFloor] = useState<number | null>(
+    initial && isValidFloor(initial.floor) ? initial.floor : null,
+  );
+  const [apartment, setApartment] = useState<number | null>(
+    initial && isValidApartment(initial.apartment) ? Number(initial.apartment.trim()) : null,
+  );
   const [label, setLabel] = useState(initial?.label ?? '');
   const [note, setNote] = useState(initial?.note ?? '');
   const defaultLocked = isFirst || initial?.is_default === true;
@@ -86,31 +98,33 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
 
   const blocks = useBlocks();
   const buildings = useBuildings(blockId);
-  const buildingIndex = useMemo(() => indexBuildings(buildings.data ?? []), [buildings.data]);
+  const buildingList = useMemo(() => sortBuildings(buildings.data ?? []), [buildings.data]);
   const groups = useMemo(() => groupBySector(blocks.data ?? []), [blocks.data]);
 
   const block = blocks.data?.find((b) => b.id === blockId) ?? null;
-  const buildingNumber = normalizeBuildingInput(buildingText);
-  const building = buildingNumber ? (buildingIndex.get(buildingNumber) ?? null) : null;
-  const floor = parseFloor(floorText);
-  const floorInvalid = floorText !== '' && floor === null;
-  const apartmentTrimmed = apartment.trim();
+  // العمارة المختارة لازم تكون من قائمة البلوك الحالية (1..N)
+  const building = buildingNumber
+    ? (buildingList.find((b) => b.number === buildingNumber) ?? null)
+    : null;
   const labelTrimmed = label.trim();
   const canSave =
-    building !== null && floor !== null && apartmentTrimmed !== '' && session !== null && !busy;
+    building !== null && floor !== null && apartment !== null && session !== null && !busy;
+  const needsFixNotice = initial !== undefined && addressNeedsFix(initial);
 
   const loadError = blocks.error ?? buildings.error;
 
+  const toggle = (field: Field) => setOpenField((cur) => (cur === field ? null : field));
+
   function pickBlock(id: number) {
-    setBlockOpen(false);
+    setOpenField(null);
     if (id === blockId) return;
     setBlockId(id);
-    setBuildingText('');
+    setBuildingNumber(null);
   }
 
   async function save() {
     const client = getSupabase();
-    if (!client || !session || !building || floor === null || apartmentTrimmed === '' || busy) {
+    if (!client || !session || !building || floor === null || apartment === null || busy) {
       return;
     }
     setBusy(true);
@@ -118,7 +132,7 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
     const input = {
       building_id: building.id,
       floor,
-      apartment: apartmentTrimmed,
+      apartment: String(apartment),
       note: note.trim() === '' ? null : note.trim(),
       label: labelTrimmed === '' ? null : labelTrimmed,
       is_default: isDefault,
@@ -141,28 +155,13 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
     }
   }
 
-  const buildingStatus = (() => {
-    if (blockId === null) return { text: ar.address.buildingPickBlock, tone: 'muted' } as const;
-    if (buildingNumber === '' || buildings.isPending) {
-      return { text: ar.address.buildingHint, tone: 'muted' } as const;
-    }
-    if (building) return null; // "موجودة" داخل الحقل
-    return { text: ar.address.buildingNotFound, tone: 'danger' } as const;
-  })();
-
-  const floorStatus = floorInvalid
-    ? ar.address.floorInvalid
-    : initial && initial.floor === null && floorText === ''
-      ? ar.address.floorMissingOld
-      : null;
-
   const preview = block
     ? formatAddress({
         sector: block.sector.name,
         subsection: block.name,
         building: building ? building.number : '',
         floor,
-        apartment: apartmentTrimmed,
+        apartment: apartment === null ? '' : String(apartment),
       })
     : '';
 
@@ -213,144 +212,141 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
         >
           {loadError ? <FormMessage text={ar.address.loadError} /> : null}
 
-          {/* 1. البلوك: قائمة منسدلة واحدة (القطاع + الوحدة) */}
-          <View style={styles.section}>
-            <FieldTitle text={ar.address.block} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={ar.address.blockA11y(block?.name ?? null)}
-              accessibilityState={{ expanded: blockOpen }}
-              onPress={() => setBlockOpen((v) => !v)}
-              style={[styles.select, blockOpen && styles.selectOpen]}
-              testID="block-select"
-            >
-              <Ionicons name="grid-outline" size={20} color={colors.primary} />
-              <AppText
-                weight={block ? 'semibold' : 'regular'}
-                size={block ? 'title' : 'body'}
-                color={block ? colors.text : colors.textMuted}
-                style={styles.flex}
-                testID="block-value"
-              >
-                {block ? block.name : ar.address.blockPlaceholder}
-              </AppText>
-              {block ? (
-                <AppText size="small" muted>
-                  {formatSector(block.sector.name)}
-                </AppText>
-              ) : null}
-              <Ionicons
-                name={blockOpen ? 'chevron-up' : 'chevron-down'}
-                size={20}
-                color={colors.textMuted}
-              />
-            </Pressable>
-            {blockOpen ? (
-              <View style={styles.dropdown} testID="block-list">
-                {blocks.isPending ? <ActivityIndicator color={colors.primary} /> : null}
-                {groups.map((g) => (
-                  <View key={g.sector.id} style={styles.group}>
-                    <AppText size="caption" weight="semibold" muted>
-                      {formatSector(g.sector.name)}
-                    </AppText>
-                    <View style={styles.grid}>
-                      {g.blocks.map((b) => (
-                        <Choice
-                          key={b.id}
-                          label={b.name}
-                          selected={b.id === blockId}
-                          onPress={() => pickBlock(b.id)}
-                          style={styles.blockButton}
-                          testID={`block-${b.id}`}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-
-          {/* 2. البناية */}
-          <View style={styles.section}>
-            <FieldTitle text={ar.address.building} />
-            <View
-              style={[
-                styles.buildingBox,
-                blockId === null && styles.disabledBox,
-                buildingStatus?.tone === 'danger' && { borderColor: colors.danger },
-              ]}
-            >
-              <Ionicons name="business-outline" size={20} color={colors.primary} />
-              <TextInput
-                testID="building-input"
-                accessibilityLabel={ar.address.building}
-                value={buildingText}
-                onChangeText={(v) => setBuildingText(normalizeBuildingInput(v))}
-                editable={blockId !== null}
-                keyboardType="number-pad"
-                maxLength={BUILDING_MAX_DIGITS}
-                placeholder={ar.address.buildingPlaceholder}
-                placeholderTextColor={colors.textMuted}
-                style={styles.buildingInput}
-              />
-              {building ? (
-                <View style={styles.found} testID="building-found">
-                  <Ionicons name="checkmark" size={16} color={colors.primary} />
-                  <AppText size="small" weight="semibold" color={colors.primary}>
-                    {ar.address.buildingFound}
-                  </AppText>
-                </View>
-              ) : null}
-            </View>
-            {buildingStatus ? (
-              <AppText
-                size="small"
-                color={buildingStatus.tone === 'danger' ? colors.danger : colors.textMuted}
-                testID="building-status"
-              >
-                {buildingStatus.text}
-              </AppText>
-            ) : null}
-          </View>
-
-          {/* 3. الطابق، 4. رقم الشقة */}
-          <View style={styles.row}>
-            <View style={[styles.section, styles.flex]}>
-              <FieldTitle text={ar.address.floor} />
-              <TextInput
-                testID="floor-input"
-                accessibilityLabel={ar.address.floor}
-                value={floorText}
-                onChangeText={(v) => setFloorText(normalizeFloorInput(v))}
-                keyboardType="number-pad"
-                maxLength={2}
-                placeholder={ar.address.floorPlaceholder}
-                placeholderTextColor={colors.textMuted}
-                style={[styles.input, floorInvalid && styles.inputDanger]}
-              />
-            </View>
-            <View style={[styles.section, styles.flex]}>
-              <FieldTitle text={ar.address.apartment} />
-              <TextInput
-                testID="apartment-input"
-                accessibilityLabel={ar.address.apartment}
-                value={apartment}
-                onChangeText={setApartment}
-                maxLength={APARTMENT_MAX}
-                style={styles.input}
-              />
-            </View>
-          </View>
-          {floorStatus ? (
-            <AppText
-              size="small"
-              color={floorInvalid ? colors.danger : colors.warningText}
-              testID="floor-status"
-            >
-              {floorStatus}
+          {needsFixNotice ? (
+            <AppText size="small" color={colors.warningText} testID="address-fix-notice">
+              {ar.address.fixOld}
             </AppText>
           ) : null}
+
+          {/* 1. البلوك: قائمة منسدلة واحدة (القطاع + الوحدة)، النشطة فقط */}
+          <View style={styles.section}>
+            <FieldTitle text={ar.address.block} />
+            <SelectBox
+              id="block"
+              icon="grid-outline"
+              open={openField === 'block'}
+              onToggle={() => toggle('block')}
+              valueText={block ? block.name : null}
+              placeholder={ar.address.blockPlaceholder}
+              a11y={ar.address.blockA11y(block?.name ?? null)}
+              hint={block ? formatSector(block.sector.name) : undefined}
+            >
+              {blocks.isPending ? <ActivityIndicator color={colors.primary} /> : null}
+              {groups.map((g) => (
+                <View key={g.sector.id} style={styles.group}>
+                  <AppText size="caption" weight="semibold" muted>
+                    {formatSector(g.sector.name)}
+                  </AppText>
+                  <View style={styles.grid}>
+                    {g.blocks.map((b) => (
+                      <Choice
+                        key={b.id}
+                        label={b.name}
+                        selected={b.id === blockId}
+                        onPress={() => pickBlock(b.id)}
+                        style={styles.optionButton}
+                        testID={`block-${b.id}`}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </SelectBox>
+          </View>
+
+          {/* 2. البناية: 1..N لبلوكها */}
+          <View style={styles.section}>
+            <FieldTitle text={ar.address.building} />
+            <SelectBox
+              id="building"
+              icon="business-outline"
+              disabled={blockId === null}
+              open={openField === 'building'}
+              onToggle={() => toggle('building')}
+              valueText={building ? building.number : null}
+              placeholder={
+                blockId === null ? ar.address.buildingPickBlock : ar.address.buildingPlaceholder
+              }
+              a11y={ar.address.building}
+            >
+              {buildings.isPending ? <ActivityIndicator color={colors.primary} /> : null}
+              <View style={styles.grid}>
+                {buildingList.map((b) => (
+                  <Choice
+                    key={b.id}
+                    label={b.number}
+                    selected={b.number === buildingNumber}
+                    onPress={() => {
+                      setBuildingNumber(b.number);
+                      setOpenField(null);
+                    }}
+                    style={styles.optionButton}
+                    testID={`building-${b.number}`}
+                  />
+                ))}
+              </View>
+            </SelectBox>
+          </View>
+
+          {/* 3. الطابق: G و1..9 */}
+          <View style={styles.section}>
+            <FieldTitle text={ar.address.floor} />
+            <SelectBox
+              id="floor"
+              icon="layers-outline"
+              open={openField === 'floor'}
+              onToggle={() => toggle('floor')}
+              valueText={floor === null ? null : floorOptionLabel(floor)}
+              placeholder={ar.address.floorPlaceholder}
+              a11y={ar.address.floor}
+            >
+              <View style={styles.grid}>
+                {FLOOR_OPTIONS.map((f) => (
+                  <Choice
+                    key={f}
+                    label={floorOptionLabel(f)}
+                    selected={f === floor}
+                    onPress={() => {
+                      setFloor(f);
+                      setOpenField(null);
+                    }}
+                    style={styles.optionButton}
+                    testID={`floor-${f}`}
+                  />
+                ))}
+              </View>
+            </SelectBox>
+          </View>
+
+          {/* 4. رقم الشقة: 1..12 */}
+          <View style={styles.section}>
+            <FieldTitle text={ar.address.apartment} />
+            <SelectBox
+              id="apartment"
+              icon="home-outline"
+              open={openField === 'apartment'}
+              onToggle={() => toggle('apartment')}
+              valueText={apartment === null ? null : String(apartment)}
+              placeholder={ar.address.apartmentPlaceholder}
+              a11y={ar.address.apartment}
+            >
+              <View style={styles.grid}>
+                {APARTMENT_OPTIONS.map((n) => (
+                  <Choice
+                    key={n}
+                    label={String(n)}
+                    selected={n === apartment}
+                    onPress={() => {
+                      setApartment(n);
+                      setOpenField(null);
+                    }}
+                    style={styles.optionButton}
+                    testID={`apartment-${n}`}
+                  />
+                ))}
+              </View>
+            </SelectBox>
+          </View>
 
           {/* تسمية قصيرة اختيارية */}
           <View style={styles.section}>
@@ -430,6 +426,74 @@ export function AddressForm({ initial, isFirst, onboarding = false, onBack, onSa
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+type Field = 'block' | 'building' | 'floor' | 'apartment';
+
+/** حقل اختيار منسدل: الصف المضغوط (testID `${id}-select`، القيمة `${id}-value`) ثم القائمة `${id}-list` عند الفتح. */
+function SelectBox({
+  id,
+  icon,
+  open,
+  disabled = false,
+  onToggle,
+  valueText,
+  placeholder,
+  a11y,
+  hint,
+  children,
+}: {
+  id: Field;
+  icon: keyof typeof Ionicons.glyphMap;
+  open: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  valueText: string | null;
+  placeholder: string;
+  a11y: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  const isOpen = open && !disabled;
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={a11y}
+        accessibilityState={{ expanded: isOpen, disabled }}
+        disabled={disabled}
+        onPress={onToggle}
+        style={[styles.select, disabled && styles.disabledBox, isOpen && styles.selectOpen]}
+        testID={`${id}-select`}
+      >
+        <Ionicons name={icon} size={20} color={colors.primary} />
+        <AppText
+          weight={valueText ? 'semibold' : 'regular'}
+          size={valueText ? 'title' : 'body'}
+          color={valueText ? colors.text : colors.textMuted}
+          style={styles.flex}
+          testID={`${id}-value`}
+        >
+          {valueText ?? placeholder}
+        </AppText>
+        {hint ? (
+          <AppText size="small" muted>
+            {hint}
+          </AppText>
+        ) : null}
+        <Ionicons
+          name={isOpen ? 'chevron-up' : 'chevron-down'}
+          size={20}
+          color={colors.textMuted}
+        />
+      </Pressable>
+      {isOpen ? (
+        <View style={styles.dropdown} testID={`${id}-list`}>
+          {children}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -515,7 +579,6 @@ const styles = StyleSheet.create({
   },
   main: { padding: spacing.screen, paddingTop: spacing.xs, gap: 18 },
   section: { gap: spacing.xs },
-  row: { flexDirection: 'row', gap: spacing.sm },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   group: { gap: 6 },
   labels: { flexDirection: 'row', gap: 6 },
@@ -556,30 +619,9 @@ const styles = StyleSheet.create({
   choiceSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   choiceSoft: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   // 4 بالسطر حتى على 360px (عرض القائمة ≈ 284: 4 × 22% + 3 فراغات = 274)، وكل زر ≥ 44
-  blockButton: { minWidth: sizes.touchTarget, width: '22%', flexGrow: 0 },
+  optionButton: { minWidth: sizes.touchTarget, width: '22%', flexGrow: 0 },
   labelChip: { paddingHorizontal: spacing.md },
-  buildingBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    height: 52,
-    paddingHorizontal: 14,
-    borderRadius: radius.input,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
   disabledBox: { borderColor: colors.border, borderWidth: 1, opacity: 0.6 },
-  buildingInput: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.semibold,
-    fontSize: fontSizes.title,
-    color: colors.text,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  found: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   input: {
     height: 48,
     paddingHorizontal: 14,
@@ -593,7 +635,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  inputDanger: { borderColor: colors.danger },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,5 +1,5 @@
-// العناوين (T12؛ 2026-11-18: البلوك ← البناية ← الطابق ← الشقة): النموذج (لا حفظ بدون شقة أو طابق، تغيير البلوك
-// يمسح البناية، التحقق من رقم البناية والطابق)، القائمة
+// العناوين (T12؛ نطاقات بسماية 2026-11-19: البلوك ← البناية ← الطابق ← الشقة، كلها قوائم اختيار): النموذج
+// (لا حفظ بدون كل الحقول، تغيير البلوك يمسح البناية، قوائم G..9 و1..12، العناوين القديمة غير الصالحة)، القائمة
 // (افتراضي واحد، حذف، اختيار)، و"التوصيل إلى" بالرئيسية. Supabase مزيف، بلا شبكة.
 import { type Query, QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '../test-utils/queryClient';
@@ -12,10 +12,10 @@ import EditAddressScreen from '../app/address/[id]';
 import NewAddressScreen from '../app/address/new';
 import { DeliveryAddressHeader } from '../components/DeliveryAddressHeader';
 import {
+  addressNeedsFix,
   type CustomerAddress,
-  indexBuildings,
-  normalizeBuildingInput,
   pickDeliveryAddress,
+  sortBuildings,
 } from '../features/addresses/api';
 import { useSelectedAddress } from '../features/addresses/selected';
 import { useAuth } from '../features/auth/store';
@@ -48,24 +48,40 @@ jest.mock('expo-router', () => ({
 const SESSION = { user: { id: 'u1', phone: '9647701234567' }, access_token: 't' };
 
 // ------------------------------------------------------------------ بيانات مزيفة
-// القطاع A (id 1): A1..A9 (ids 11..19)؛ القطاع B (id 2): B1..B8 (ids 21..28).
-// العمارات 1..100 لكل وحدة (id = الوحدة*1000 + الرقم)، والعمارة 77 موقوفة (لا تُقرأ).
+// القطاع A (id 1): A1..A9 (ids 11..19)؛ القطاع B (id 2): B1, B2, B3, B8 (ids 21..24؛ B4..B7 مخفية فلا تُقرأ).
+// عمارات كل بلوك 1..N فقط (id = البلوك*1000 + الرقم)، N من بيانات المالك (scripts/address-tree/data.json).
 const SECTORS = [
   { id: 1, name: 'قطاع A' },
   { id: 2, name: 'قطاع B' },
 ];
-const unitsOf = (sectorId: number) => {
-  const letter = sectorId === 1 ? 'A' : 'B';
-  const count = sectorId === 1 ? 9 : 8;
-  return Array.from({ length: count }, (_, i) => ({
-    id: sectorId * 10 + i + 1,
-    name: `${letter}${i + 1}`,
-  }));
+const UNIT_NAMES: Record<number, string[]> = {
+  1: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9'],
+  2: ['B1', 'B2', 'B3', 'B8'],
 };
-const buildingsOf = (unitId: number) =>
-  Array.from({ length: 100 }, (_, i) => i + 1)
-    .filter((n) => n !== 77)
-    .map((n) => ({ id: unitId * 1000 + n, number: String(n) }));
+const BUILDING_COUNT: Record<string, number> = {
+  A1: 12,
+  A2: 14,
+  A3: 14,
+  A4: 12,
+  A5: 12,
+  A6: 12,
+  A7: 13,
+  A8: 15,
+  A9: 15,
+  B1: 12,
+  B2: 18,
+  B3: 18,
+  B8: 12,
+};
+const unitsOf = (sectorId: number) =>
+  (UNIT_NAMES[sectorId] ?? []).map((name, i) => ({ id: sectorId * 10 + i + 1, name }));
+const buildingsOf = (unitId: number) => {
+  const name = unitsOf(Math.floor(unitId / 10)).find((u) => u.id === unitId)?.name ?? '';
+  return Array.from({ length: BUILDING_COUNT[name] ?? 0 }, (_, i) => ({
+    id: unitId * 1000 + i + 1,
+    number: String(i + 1),
+  })).reverse(); // مقلوبة عمداً: الترتيب من التطبيق
+};
 
 function makeAddress(
   id: string,
@@ -85,7 +101,7 @@ function makeAddress(
   return {
     id,
     apartment: opts.apartment ?? '5',
-    floor: opts.floor ?? null,
+    floor: opts.floor === undefined ? 2 : opts.floor,
     note: null,
     label: null,
     is_default: opts.isDefault ?? false,
@@ -174,12 +190,17 @@ async function pickBlock(id: number) {
   await fireEvent.press(await screen.findByTestId(`block-${id}`));
 }
 
-/** يختار البلوك A3 ← البناية 45 ← الطابق 2. */
-async function pickA3Building45() {
+/** يختار من قائمة منسدلة: يفتحها ثم يضغط الخيار. */
+async function pickFrom(field: 'building' | 'floor' | 'apartment', value: number | string) {
+  await fireEvent.press(await screen.findByTestId(`${field}-select`));
+  await fireEvent.press(await screen.findByTestId(`${field}-${value}`));
+}
+
+/** يختار البلوك A3 ← البناية 12 ← الطابق 2 (الشقة منفصلة). */
+async function pickA3Building12() {
   await pickBlock(13);
-  await fireEvent.changeText(screen.getByTestId('building-input'), '45');
-  expect(await screen.findByTestId('building-found')).toBeTruthy();
-  await fireEvent.changeText(screen.getByTestId('floor-input'), '2');
+  await pickFrom('building', 12);
+  await pickFrom('floor', 2);
 }
 
 beforeEach(() => {
@@ -192,22 +213,22 @@ beforeEach(() => {
 
 // ------------------------------------------------------------------ مساعدات
 describe('address helpers', () => {
-  it('building input: Latin digits only, no leading zeros, at most 3 digits', () => {
-    expect(normalizeBuildingInput('٤٥')).toBe('45');
-    expect(normalizeBuildingInput('045')).toBe('45');
-    expect(normalizeBuildingInput('a1b2')).toBe('12');
-    expect(normalizeBuildingInput('1234')).toBe('123');
-    expect(normalizeBuildingInput('0')).toBe('0');
-    expect(normalizeBuildingInput('')).toBe('');
+  it('building list is sorted numerically (1..N), whatever the order from the server', () => {
+    const sorted = sortBuildings(buildingsOf(13));
+    expect(sorted.map((b) => b.number)).toEqual(
+      Array.from({ length: 14 }, (_, i) => String(i + 1)),
+    );
+    expect(sorted[11]?.id).toBe(13012);
   });
 
-  it('finds any of 100 buildings by number instantly', () => {
-    const index = indexBuildings(buildingsOf(13));
-    const started = Date.now();
-    for (let n = 1; n <= 100; n++) index.get(String(n));
-    expect(Date.now() - started).toBeLessThan(1000);
-    expect(index.get('45')?.id).toBe(13045);
-    expect(index.get('77')).toBeUndefined();
+  it('old address needs a fix: floor missing or outside G..9, apartment outside 1..12 or not a number', () => {
+    expect(addressNeedsFix({ floor: 0, apartment: '12' })).toBe(false);
+    expect(addressNeedsFix({ floor: 9, apartment: '1' })).toBe(false);
+    expect(addressNeedsFix({ floor: null, apartment: '5' })).toBe(true);
+    expect(addressNeedsFix({ floor: 10, apartment: '5' })).toBe(true);
+    expect(addressNeedsFix({ floor: 3, apartment: '13' })).toBe(true);
+    expect(addressNeedsFix({ floor: 3, apartment: '٥' })).toBe(true);
+    expect(addressNeedsFix({ floor: 3, apartment: 'ا' })).toBe(true);
   });
 
   it('delivery address: selected, else default, else newest; skips unavailable ones', () => {
@@ -219,102 +240,138 @@ describe('address helpers', () => {
     expect(pickDeliveryAddress([a], null)?.id).toBe('a');
     expect(pickDeliveryAddress([broken], 'x')).toBeNull();
     expect(pickDeliveryAddress([], null)).toBeNull();
+    // عنوان قديم غير صالح (بلا طابق) لا يُختار للتوصيل ولو كان المختار أو الافتراضي (2026-11-19)
+    const oldInvalid = makeAddress('o', { isDefault: true, floor: null });
+    expect(pickDeliveryAddress([oldInvalid], 'o')).toBeNull();
+    expect(pickDeliveryAddress([oldInvalid, a], 'o')?.id).toBe('a');
   });
 });
 
 // ------------------------------------------------------------------ النموذج
 describe('address form', () => {
-  it('does not save without an apartment', async () => {
+  it('saves only when block, building, floor and apartment are all chosen', async () => {
     const { calls } = setup();
     await renderUi(<NewAddressScreen />);
     await screen.findByTestId('address-save');
     expect(isDisabled('address-save')).toBe(true);
-    await pickA3Building45();
-    expect(isDisabled('address-save')).toBe(true);
+    await pickA3Building12();
+    expect(isDisabled('address-save')).toBe(true); // بلا شقة
     await fireEvent.press(screen.getByTestId('address-save'));
-    await fireEvent.changeText(screen.getByTestId('apartment-input'), '   ');
-    expect(isDisabled('address-save')).toBe(true);
     expect(writes(calls)).toHaveLength(0);
+    await pickFrom('apartment', 1);
+    expect(isDisabled('address-save')).toBe(false);
   });
 
-  it('one block dropdown: A1..A9 then B1..B8 under their sector, closes on pick', async () => {
+  it('building is disabled until a block is chosen', async () => {
+    setup();
+    await renderUi(<NewAddressScreen />);
+    expect(await screen.findByTestId('building-value')).toHaveTextContent(
+      ar.address.buildingPickBlock,
+    );
+    expect(isDisabled('building-select')).toBe(true);
+    await fireEvent.press(screen.getByTestId('building-select'));
+    expect(screen.queryByTestId('building-list')).toBeNull();
+  });
+
+  it('block dropdown: A1..A9 then B1, B2, B3, B8 only (B4..B7 do not exist), closes on pick', async () => {
     setup();
     await renderUi(<NewAddressScreen />);
     expect(await screen.findByTestId('block-value')).toHaveTextContent(ar.address.blockPlaceholder);
-    expect(screen.getByTestId('building-status')).toHaveTextContent(ar.address.buildingPickBlock);
     expect(screen.queryByTestId('block-list')).toBeNull();
     await fireEvent.press(screen.getByTestId('block-select'));
     const list = await screen.findByTestId('block-list');
     const ids = (await screen.findAllByTestId(/^block-\d+$/)).map((n) => n.props.testID);
     expect(ids).toEqual([...unitsOf(1), ...unitsOf(2)].map((u) => `block-${u.id}`));
+    expect(ids).toHaveLength(13);
     expect(list).toHaveTextContent(/قطاع A.*قطاع B/);
+    expect(list).not.toHaveTextContent('B4');
     await fireEvent.press(screen.getByTestId('block-24'));
     expect(screen.queryByTestId('block-list')).toBeNull();
-    expect(screen.getByTestId('block-value')).toHaveTextContent('B4');
+    expect(screen.getByTestId('block-value')).toHaveTextContent('B8');
     await fireEvent.press(screen.getByTestId('block-select'));
     expect(isSelected('block-24')).toBe(true);
     expect(isSelected('block-13')).toBe(false);
   });
 
+  it('building list is exactly 1..N of the chosen block, no free typing', async () => {
+    setup();
+    await renderUi(<NewAddressScreen />);
+    await pickBlock(13); // A3: 14 بناية
+    await fireEvent.press(screen.getByTestId('building-select'));
+    let numbers = (await screen.findAllByTestId(/^building-\d+$/)).map((n) => n.props.testID);
+    expect(numbers).toEqual(Array.from({ length: 14 }, (_, i) => `building-${i + 1}`));
+    await pickBlock(22); // B2: 18 بناية
+    await fireEvent.press(screen.getByTestId('building-select'));
+    numbers = (await screen.findAllByTestId(/^building-\d+$/)).map((n) => n.props.testID);
+    expect(numbers).toHaveLength(18);
+    expect(screen.queryByTestId('building-19')).toBeNull();
+    // لا حقل نصي للبناية ولا للطابق ولا للشقة
+    expect(screen.queryByTestId('building-input')).toBeNull();
+    expect(screen.queryByTestId('floor-input')).toBeNull();
+    expect(screen.queryByTestId('apartment-input')).toBeNull();
+  });
+
+  it('floor list is G then 1..9; apartment list is 1..12', async () => {
+    setup();
+    await renderUi(<NewAddressScreen />);
+    await fireEvent.press(await screen.findByTestId('floor-select'));
+    const floors = await screen.findAllByTestId(/^floor-\d+$/);
+    expect(floors.map((n) => n.props.testID)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `floor-${i}`),
+    );
+    expect(screen.getByTestId('floor-list')).toHaveTextContent('G123456789');
+    expect(screen.getByLabelText('G')).toBeTruthy();
+    expect(screen.queryByTestId('floor-10')).toBeNull();
+    await fireEvent.press(screen.getByTestId('floor-0'));
+    expect(screen.getByTestId('floor-value')).toHaveTextContent('G');
+    expect(screen.queryByTestId('floor-list')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('apartment-select'));
+    const apartments = await screen.findAllByTestId(/^apartment-\d+$/);
+    expect(apartments.map((n) => n.props.testID)).toEqual(
+      Array.from({ length: 12 }, (_, i) => `apartment-${i + 1}`),
+    );
+    expect(screen.queryByTestId('apartment-13')).toBeNull();
+    expect(screen.queryByTestId('apartment-0')).toBeNull();
+  });
+
+  it('only one dropdown is open at a time', async () => {
+    setup();
+    await renderUi(<NewAddressScreen />);
+    await fireEvent.press(await screen.findByTestId('floor-select'));
+    expect(screen.getByTestId('floor-list')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('apartment-select'));
+    expect(screen.queryByTestId('floor-list')).toBeNull();
+    expect(screen.getByTestId('apartment-list')).toBeTruthy();
+  });
+
   it('changing the block clears the building', async () => {
     setup();
     await renderUi(<NewAddressScreen />);
-    await pickA3Building45();
+    await pickA3Building12();
+    expect(screen.getByTestId('building-value')).toHaveTextContent('12');
     await pickBlock(21);
-    expect(screen.getByTestId('building-input').props.value).toBe('');
-    expect(screen.queryByTestId('building-found')).toBeNull();
-    await fireEvent.changeText(screen.getByTestId('building-input'), '9');
-    expect(await screen.findByTestId('building-found')).toBeTruthy();
+    expect(screen.getByTestId('building-value')).toHaveTextContent(ar.address.buildingPlaceholder);
+    expect(isDisabled('address-save')).toBe(true);
+    await pickFrom('building', 9);
+    expect(screen.getByTestId('building-value')).toHaveTextContent('9');
     // نفس البلوك مرة ثانية: لا يمسح
     await pickBlock(21);
-    expect(screen.getByTestId('building-input').props.value).toBe('9');
+    expect(screen.getByTestId('building-value')).toHaveTextContent('9');
   });
 
-  it('floor: required, 0..20 with Latin digits; ground floor shown by name', async () => {
-    setup();
-    await renderUi(<NewAddressScreen />);
-    await pickA3Building45();
-    await fireEvent.changeText(screen.getByTestId('apartment-input'), '12');
-    expect(isDisabled('address-save')).toBe(false);
-    const floor = screen.getByTestId('floor-input');
-    await fireEvent.changeText(floor, '');
-    expect(isDisabled('address-save')).toBe(true);
-    await fireEvent.changeText(floor, '٢١');
-    expect(screen.getByTestId('floor-input').props.value).toBe('21');
-    expect(screen.getByTestId('floor-status')).toHaveTextContent(ar.address.floorInvalid);
-    expect(isDisabled('address-save')).toBe(true);
-    await fireEvent.changeText(floor, '00');
-    expect(screen.getByTestId('floor-input').props.value).toBe('0');
-    expect(screen.queryByTestId('floor-status')).toBeNull();
-    expect(screen.getByTestId('address-preview')).toHaveTextContent(/الطابق الأرضي/);
-    expect(isDisabled('address-save')).toBe(false);
-  });
-
-  it('validates the typed building number against the active buildings of the block', async () => {
-    setup();
-    await renderUi(<NewAddressScreen />);
-    await pickBlock(13);
-    const input = screen.getByTestId('building-input');
-
-    await fireEvent.changeText(input, '٧٧'); // موقوفة
-    expect(await screen.findByText(ar.address.buildingNotFound)).toBeTruthy();
-    await fireEvent.changeText(input, '101');
-    expect(screen.getByText(ar.address.buildingNotFound)).toBeTruthy();
-    await fireEvent.changeText(input, '١٠٠');
-    expect(await screen.findByTestId('building-found')).toBeTruthy();
-    expect(input.props.value).toBe('100');
-  });
-
-  it('first address: added, made default by the RPC, selected, then back', async () => {
+  it('first address: added, made default by the RPC, selected, then back; ground floor shown as G', async () => {
     const { calls } = setup([]);
     await renderUi(<NewAddressScreen />);
-    await pickA3Building45();
-    await fireEvent.changeText(screen.getByTestId('apartment-input'), ' 12 ');
+    await pickBlock(13);
+    await pickFrom('building', 12);
+    await pickFrom('floor', 0);
+    await pickFrom('apartment', 4);
     await fireEvent.press(screen.getByTestId('label-البيت'));
     expect(screen.getByTestId('label-input').props.value).toBe('البيت');
     await fireEvent.changeText(screen.getByTestId('note-input'), 'الباب الأخضر');
     expect(screen.getByTestId('address-preview')).toHaveTextContent(
-      'بلوك A3 · بناية 45 · الطابق 2 · شقة 12',
+      'بلوك A3 · بناية 12 · الطابق G · شقة 4',
     );
     // أول عنوان: افتراضي إجباري
     const toggle = screen.getByTestId('default-toggle');
@@ -329,9 +386,9 @@ describe('address form', () => {
     const [insert, rpc] = w as [Call, Call];
     expect(opArgs(insert, 'insert')).toEqual([
       {
-        building_id: 13045,
-        floor: 2,
-        apartment: '12',
+        building_id: 13012,
+        floor: 0,
+        apartment: '4',
         note: 'الباب الأخضر',
         label: 'البيت',
         customer_id: 'u1',
@@ -345,19 +402,25 @@ describe('address form', () => {
   it('another address, not default: no default change', async () => {
     const { calls } = setup([makeAddress('a1', { isDefault: true })]);
     await renderUi(<NewAddressScreen />);
-    await pickA3Building45();
+    await pickA3Building12();
     expect(screen.getByTestId('default-toggle').props.accessibilityState).toEqual({
       checked: false,
       disabled: false,
     });
-    await fireEvent.changeText(screen.getByTestId('apartment-input'), '3');
+    await pickFrom('apartment', 3);
     await fireEvent.changeText(screen.getByTestId('label-input'), ' بيت أهلي ');
     await fireEvent.press(screen.getByTestId('address-save'));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
     const w = writes(calls);
     expect(w).toHaveLength(1);
     expect(opArgs(w[0] as Call, 'insert')).toEqual([
-      expect.objectContaining({ is_default: false, label: 'بيت أهلي', note: null, floor: 2 }),
+      expect.objectContaining({
+        is_default: false,
+        label: 'بيت أهلي',
+        note: null,
+        floor: 2,
+        apartment: '3',
+      }),
     ]);
   });
 
@@ -370,8 +433,8 @@ describe('address form', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/orders');
 
     mockRouter.replace.mockClear();
-    await pickA3Building45();
-    await fireEvent.changeText(screen.getByTestId('apartment-input'), '1');
+    await pickA3Building12();
+    await pickFrom('apartment', 1);
     await fireEvent.press(screen.getByTestId('address-save'));
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/orders'));
     expect(mockRouter.back).not.toHaveBeenCalled();
@@ -381,41 +444,71 @@ describe('address form', () => {
     mockParams = { id: 'a2' };
     const { calls } = setup([
       makeAddress('a1', { isDefault: true }),
-      makeAddress('a2', { unit: 24, building: 60, apartment: '7', floor: 3 }),
+      makeAddress('a2', { unit: 24, building: 10, apartment: '7', floor: 3 }),
     ]);
     await renderUi(<EditAddressScreen />);
     expect(await screen.findByText(ar.address.editTitle)).toBeTruthy();
-    expect(await screen.findByTestId('building-found')).toBeTruthy();
-    expect(await screen.findByTestId('block-value')).toHaveTextContent('B4');
-    expect(screen.getByTestId('floor-input').props.value).toBe('3');
-    expect(screen.getByTestId('apartment-input').props.value).toBe('7');
+    expect(await screen.findByTestId('block-value')).toHaveTextContent('B8');
+    expect(screen.getByTestId('building-value')).toHaveTextContent('10');
+    expect(screen.getByTestId('floor-value')).toHaveTextContent('3');
+    expect(screen.getByTestId('apartment-value')).toHaveTextContent('7');
+    expect(screen.queryByTestId('address-fix-notice')).toBeNull();
 
-    await fireEvent.changeText(screen.getByTestId('apartment-input'), '8');
+    await pickFrom('apartment', 8);
     await fireEvent.press(screen.getByTestId('default-toggle'));
     await fireEvent.press(screen.getByTestId('address-save'));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
 
     const [update, rpc] = writes(calls) as [Call, Call];
     expect(opArgs(update, 'update')).toEqual([
-      { building_id: 24060, floor: 3, apartment: '8', note: null, label: null },
+      { building_id: 24010, floor: 3, apartment: '8', note: null, label: null },
     ]);
     expect(eqArg(update, 'id')).toBe('a2');
     expect(rpcAddress(rpc)).toBe('a2');
   });
 
-  it('edit an old address without a floor: asks for it before saving', async () => {
+  it('edit an old address with no floor and an apartment above 12: asks to fix both before saving', async () => {
     mockParams = { id: 'a1' };
-    const { calls } = setup([makeAddress('a1', { isDefault: true })]);
+    const { calls } = setup([makeAddress('a1', { isDefault: true, floor: null, apartment: '26' })]);
     await renderUi(<EditAddressScreen />);
-    expect(await screen.findByTestId('building-found')).toBeTruthy();
-    expect(screen.getByTestId('floor-status')).toHaveTextContent(ar.address.floorMissingOld);
+    expect(await screen.findByTestId('address-fix-notice')).toHaveTextContent(ar.address.fixOld);
+    expect(await screen.findByTestId('block-value')).toHaveTextContent('A3');
+    expect(await screen.findByTestId('building-value')).toHaveTextContent('12');
+    // الحقلان غير الصالحين يبدآن فارغين
+    expect(screen.getByTestId('floor-value')).toHaveTextContent(ar.address.floorPlaceholder);
+    expect(screen.getByTestId('apartment-value')).toHaveTextContent(
+      ar.address.apartmentPlaceholder,
+    );
     expect(isDisabled('address-save')).toBe(true);
-    await fireEvent.changeText(screen.getByTestId('floor-input'), '4');
+    await pickFrom('floor', 4);
+    expect(isDisabled('address-save')).toBe(true);
+    await pickFrom('apartment', 12);
+    expect(isDisabled('address-save')).toBe(false);
     await fireEvent.press(screen.getByTestId('address-save'));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
     expect(opArgs(writes(calls)[0] as Call, 'update')).toEqual([
-      expect.objectContaining({ floor: 4 }),
+      expect.objectContaining({ floor: 4, apartment: '12' }),
     ]);
+  });
+
+  it('edit an old floor above 9 or an Arabic-digit apartment: both cleared, must be re-picked', async () => {
+    mockParams = { id: 'a1' };
+    setup([makeAddress('a1', { isDefault: true, floor: 15, apartment: '٥' })]);
+    await renderUi(<EditAddressScreen />);
+    expect(await screen.findByTestId('address-fix-notice')).toBeTruthy();
+    expect(screen.getByTestId('floor-value')).toHaveTextContent(ar.address.floorPlaceholder);
+    expect(screen.getByTestId('apartment-value')).toHaveTextContent(
+      ar.address.apartmentPlaceholder,
+    );
+  });
+
+  it('edit an old address whose building is now hidden: starts from an empty block', async () => {
+    mockParams = { id: 'a1' };
+    setup([{ ...makeAddress('a1', { isDefault: true }), building: null }]);
+    await renderUi(<EditAddressScreen />);
+    expect(await screen.findByTestId('block-value')).toHaveTextContent(ar.address.blockPlaceholder);
+    expect(isDisabled('building-select')).toBe(true);
+    expect(isDisabled('address-save')).toBe(true);
   });
 });
 
@@ -423,15 +516,15 @@ describe('address form', () => {
 describe('my addresses', () => {
   const list = () => [
     makeAddress('a1', { isDefault: true, at: '2026-11-10T00:00:00Z' }),
-    makeAddress('a2', { unit: 24, building: 60, apartment: '7', at: '2026-11-12T00:00:00Z' }),
+    makeAddress('a2', { unit: 24, building: 10, apartment: '7', at: '2026-11-12T00:00:00Z' }),
     makeAddress('a3', { unit: 11, building: 1, apartment: '2', at: '2026-11-11T00:00:00Z' }),
   ];
 
   it('lists addresses with formatAddress and one default badge', async () => {
     setup(list());
     await renderUi(<AddressesScreen />);
-    expect(await screen.findByText('بلوك A3 · بناية 12 · شقة 5')).toBeTruthy();
-    expect(screen.getByText('بلوك B4 · بناية 60 · شقة 7')).toBeTruthy();
+    expect(await screen.findByText('بلوك A3 · بناية 12 · الطابق 2 · شقة 5')).toBeTruthy();
+    expect(screen.getByText('بلوك B8 · بناية 10 · الطابق 2 · شقة 7')).toBeTruthy();
     expect(screen.getAllByText(ar.address.defaultBadge)).toHaveLength(1);
     // "اجعله افتراضياً" للعناوين غير الافتراضية فقط
     expect(screen.getAllByLabelText(ar.address.setDefault)).toHaveLength(2);
@@ -440,13 +533,30 @@ describe('my addresses', () => {
   it('shows the floor in the list when the address has one', async () => {
     setup([makeAddress('a1', { isDefault: true, floor: 0 })]);
     await renderUi(<AddressesScreen />);
-    expect(await screen.findByText('بلوك A3 · بناية 12 · الطابق الأرضي · شقة 5')).toBeTruthy();
+    expect(await screen.findByText('بلوك A3 · بناية 12 · الطابق G · شقة 5')).toBeTruthy();
+  });
+
+  it('old invalid addresses show a fix hint and open the form instead of being picked', async () => {
+    mockParams = { select: '1' };
+    setup([
+      makeAddress('ok', { isDefault: true }),
+      makeAddress('old', { unit: 24, building: 10, floor: null, apartment: '26' }),
+    ]);
+    await renderUi(<AddressesScreen />);
+    expect(await screen.findByTestId('address-fix-old')).toHaveTextContent(ar.address.needsFix);
+    expect(screen.queryByTestId('address-fix-ok')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('بلوك B8 · بناية 10 · شقة 26'));
+    expect(useSelectedAddress.getState().selectedId).toBeNull();
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/address/[id]',
+      params: { id: 'old' },
+    });
   });
 
   it('set default: one atomic RPC call (set_default_address)', async () => {
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
-    await screen.findByText('بلوك B4 · بناية 60 · شقة 7');
+    await screen.findByText('بلوك B8 · بناية 10 · الطابق 2 · شقة 7');
     await fireEvent.press(screen.getAllByLabelText(ar.address.setDefault)[0] as never);
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(rpcAddress(writes(calls)[0] as Call)).toBe('a2');
@@ -461,7 +571,7 @@ describe('my addresses', () => {
     useSelectedAddress.setState({ selectedId: 'a1' });
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
-    await screen.findByText('بلوك A3 · بناية 12 · شقة 5');
+    await screen.findByText('بلوك A3 · بناية 12 · الطابق 2 · شقة 5');
     await act(async () => {
       fireEvent.press(screen.getAllByLabelText(ar.address.delete)[0] as never);
     });
@@ -478,7 +588,7 @@ describe('my addresses', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { calls } = setup(list());
     await renderUi(<AddressesScreen />);
-    await screen.findByText('بلوك A3 · بناية 12 · شقة 5');
+    await screen.findByText('بلوك A3 · بناية 12 · الطابق 2 · شقة 5');
     await fireEvent.press(screen.getAllByLabelText(ar.address.delete)[1] as never);
     expect(alert).toHaveBeenCalled();
     expect(writes(calls)).toHaveLength(0);
@@ -490,7 +600,7 @@ describe('my addresses', () => {
     setup(list());
     await renderUi(<AddressesScreen />);
     expect(await screen.findByText(ar.address.selectTitle)).toBeTruthy();
-    await fireEvent.press(await screen.findByLabelText('بلوك B4 · بناية 60 · شقة 7'));
+    await fireEvent.press(await screen.findByLabelText('بلوك B8 · بناية 10 · الطابق 2 · شقة 7'));
     expect(useSelectedAddress.getState().selectedId).toBe('a2');
     expect(mockRouter.back).toHaveBeenCalled();
   });
@@ -507,7 +617,7 @@ describe('my addresses', () => {
 // ------------------------------------------------------------------ "التوصيل إلى" بالرئيسية
 describe('delivery address header', () => {
   it('shows the default address (formatAddressShort); tap opens address selection', async () => {
-    setup([makeAddress('a2', { unit: 24, building: 60 }), makeAddress('a1', { isDefault: true })]);
+    setup([makeAddress('a2', { unit: 24, building: 10 }), makeAddress('a1', { isDefault: true })]);
     await renderUi(<DeliveryAddressHeader />);
     expect(await screen.findByText('بلوك A3 - بناية 12')).toBeTruthy();
     // مراجعة S6: مساحة لمس ≥ 44
@@ -521,9 +631,9 @@ describe('delivery address header', () => {
 
   it('shows the address chosen on this device over the default', async () => {
     useSelectedAddress.setState({ selectedId: 'a2' });
-    setup([makeAddress('a1', { isDefault: true }), makeAddress('a2', { unit: 24, building: 60 })]);
+    setup([makeAddress('a1', { isDefault: true }), makeAddress('a2', { unit: 24, building: 10 })]);
     await renderUi(<DeliveryAddressHeader />);
-    expect(await screen.findByText('بلوك B4 - بناية 60')).toBeTruthy();
+    expect(await screen.findByText('بلوك B8 - بناية 10')).toBeTruthy();
   });
 
   it('signed in without addresses: tap goes to adding the first address', async () => {

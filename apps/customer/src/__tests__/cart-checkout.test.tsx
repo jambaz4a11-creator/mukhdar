@@ -632,4 +632,18 @@ describe('checkout', () => {
     await waitFor(() => expect(placeOrderCalls).toHaveLength(1));
     expect(rpcArgs(placeOrderCalls[0] as Call).p_address_id).toBe('a2');
   });
+
+  it('only an old invalid address (no floor, apartment 26): not orderable, tap opens the form to fix it', async () => {
+    const old = { ...address('old', true), floor: null, apartment: '26' };
+    const { placeOrderCalls } = setup({ addresses: [old] });
+    await renderUi(<CheckoutScreen />);
+    expect(await screen.findByTestId('checkout-fix-old')).toBeTruthy();
+    expect(isDisabled('checkout-confirm')).toBe(true);
+    await fireEvent.press(screen.getByTestId('checkout-address-old'));
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/address/[id]',
+      params: { id: 'old' },
+    });
+    expect(placeOrderCalls).toHaveLength(0);
+  });
 });

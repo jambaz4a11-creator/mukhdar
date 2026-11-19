@@ -40,7 +40,7 @@ export interface AddressSnapshot {
   subsection: string;
   building: string;
   apartment: string;
-  /** الطابق (0 = الأرضي) وقت الطلب؛ غائب لعنوان قديم بلا طابق أو لطلب حساب محذوف (2026-11-18). */
+  /** الطابق (0 = الأرضي، يُعرض "G"؛ 0..9 للجديد) وقت الطلب؛ غائب لعنوان قديم بلا طابق أو لطلب حساب محذوف (2026-11-18). */
   floor?: number | null;
   note: string | null;
 }

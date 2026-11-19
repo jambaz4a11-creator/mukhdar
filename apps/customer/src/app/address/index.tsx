@@ -10,6 +10,7 @@ import { AppText } from '../../components/AppText';
 import { FormMessage } from '../../components/AuthFields';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import {
+  addressNeedsFix,
   addressParts,
   type CustomerAddress,
   deleteAddress,
@@ -79,7 +80,8 @@ export default function AddressesScreen() {
   }
 
   function onCardPress(a: CustomerAddress) {
-    if (selecting && addressParts(a)) {
+    // عنوان قديم غير صالح يُفتح للتصحيح بدل اختياره (2026-11-19)
+    if (selecting && addressParts(a) && !addressNeedsFix(a)) {
       select(a.id);
       if (router.canGoBack()) router.back();
       else router.replace('/');
@@ -203,6 +205,11 @@ function AddressCard({
           <AppText size="small" muted={parts !== null} color={parts ? undefined : colors.danger}>
             {parts ? formatAddress(parts) : ar.address.unavailable}
           </AppText>
+          {parts && addressNeedsFix(address) ? (
+            <AppText size="caption" color={colors.warningText} testID={`address-fix-${address.id}`}>
+              {ar.address.needsFix}
+            </AppText>
+          ) : null}
           {address.note ? (
             <AppText size="caption" muted>
               {address.note}
