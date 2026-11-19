@@ -1,0 +1,85 @@
+// كل نصوص تطبيق السائق (SPEC-driver §6: لا نص عربي داخل الشاشات). صياغة التصميم المعتمد (عراقية خفيفة).
+// رسائل أخطاء الخادم ليست هنا: ERROR_MESSAGES / authError / PIN_MESSAGES من @mukhdar/shared.
+import { PIN_CHANGE_MESSAGES } from '@mukhdar/shared';
+
+export const ar = {
+  appName: 'المخضر',
+  appSubtitle: 'تطبيق السائق',
+  common: {
+    notConfigured: 'التطبيق غير مضبوط: أضف عنوان الخادم ومفتاحه بملف .env',
+    signOut: 'تسجيل الخروج',
+    loading: 'جارٍ التحميل…',
+    buildConfigErrorTitle: 'خطأ بإعداد التطبيق',
+    buildConfigErrorBody: 'هذه النسخة موجّهة لخادم تجريبي. لا تستعملها، وأبلغ المطوّر.',
+  },
+  fields: {
+    phone: 'رقم الهاتف',
+    phonePlaceholder: '07XX XXX XXXX',
+    name: 'الاسم',
+    showPin: 'إظهار الرمز',
+    hidePin: 'إخفاء الرمز',
+  },
+  login: {
+    title: 'سجّل دخولك',
+    pin: 'الرمز السري',
+    submit: 'دخول',
+    newDriver: 'سائق جديد؟',
+    registerHere: 'سجّل هنا',
+    forgot: 'نسيت الرمز؟ اتصل بمدير المحل.',
+    callShop: 'اتصل بالمحل',
+    whatsappShop: 'واتساب المحل',
+    accountReady: 'حسابك جاهز، سجّل دخولك',
+  },
+  register: {
+    title: 'سجّل كسائق',
+    hint: 'اكتب اسمك ورقمك، والمحل يراجع طلبك ويوافق عليه.',
+    pushHint: 'راح نطلب إذن الإشعارات حتى نبلغك أول ما يوافقون (اختياري).',
+    submit: 'إرسال الطلب',
+    back: 'رجوع للدخول',
+    /** PHONE_TAKEN بسياق التسجيل (SPEC-driver §2.3) بدل "سجّل الدخول" العامة */
+    phoneTaken: 'الرقم مسجّل عدنا. تواصل مع المحل حتى يفعّلك كسائق',
+  },
+  pending: {
+    title: 'طلبك وصل للمحل',
+    body: 'راح يتصلون بيك حتى يتأكدون، وبعد الموافقة تكمل من هنا وتختار رمزك.',
+    badge: 'بانتظار الموافقة',
+    check: 'تحقق من الموافقة',
+    auto: 'يتحدّث وحده أول ما يوافقون، وتوصلك إشعار',
+    cancel: 'إلغاء وتسجيل برقم ثاني',
+    rejectedTitle: 'ما انقبل طلبك',
+    rejectedBody: 'للاستفسار اتصل بالمحل.',
+    expiredTitle: 'انتهت مدة الموافقة',
+    expiredBody: 'سجّل من جديد.',
+    newRequest: 'طلب جديد',
+  },
+  setPin: {
+    approved: 'وافق المحل على طلبك',
+    title: 'اختار رمزك',
+    hint: 'رمز من 6 أرقام تدخل بيه كل مرة. لا تنطيه لأحد.',
+    pin: 'الرمز',
+    confirm: 'أعد إدخال الرمز',
+    avoid: 'تجنب 123456 أو 000000.',
+    submit: 'تأكيد والدخول',
+    mismatch: PIN_CHANGE_MESSAGES.mismatch,
+  },
+  changePin: {
+    title: 'غيّر رمزك المؤقت',
+    hint: 'المحل عطاك رمز مؤقت. اختار رمزك الخاص قبل ما تكمل.',
+    current: 'الرمز المؤقت',
+    next: 'الرمز الجديد',
+    confirm: 'أعد إدخال الرمز الجديد',
+    submit: 'حفظ الرمز',
+  },
+  notDriver: {
+    title: 'حسابك غير مفعّل كسائق',
+    body: 'تواصل مع إدارة المحل حتى يفعّلون حسابك كسائق.',
+    refresh: 'تحديث',
+  },
+  tabs: {
+    ready: 'الجاهزة',
+    mine: 'طلباتي',
+    today: 'اليوم',
+    account: 'حسابي',
+    soon: 'هذي الشاشة تنبني بالمرحلة الجاية.',
+  },
+} as const;
