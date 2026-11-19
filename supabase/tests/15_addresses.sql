@@ -37,10 +37,10 @@ select throws_ok(format($$ update public.addresses set customer_id = %L where id
   '42501', null, 'cannot move an address to another customer (customer_id not updatable)');
 select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 1, '') $$,
                         tests.id('c1'), current_setting('t.bld')),
-  '23514', null, 'an empty apartment is rejected');
+  'P0001', 'APARTMENT_INVALID', 'an empty apartment is rejected');
 select throws_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment) values (%L, %s, 1, %L) $$,
                         tests.id('c1'), current_setting('t.bld'), repeat('9', 21)),
-  '23514', null, 'an apartment longer than 20 characters is rejected');
+  'P0001', 'APARTMENT_INVALID', 'an apartment longer than 20 characters is rejected');
 
 -- عنوان جديد افتراضي: التطبيق يلغي الافتراضي القديم أولاً ثم يضيف
 select lives_ok(format($$ insert into public.addresses (customer_id, building_id, floor, apartment, is_default)

@@ -1,0 +1,20 @@
+{
+  "city": "بسماية",
+  "floors": { "min": 0, "max": 9, "groundLabel": "G" },
+  "apartments": { "min": 1, "max": 12 },
+  "blocks": [
+    { "sector": "قطاع A", "name": "A1", "buildings": 12 },
+    { "sector": "قطاع A", "name": "A2", "buildings": 14 },
+    { "sector": "قطاع A", "name": "A3", "buildings": 14 },
+    { "sector": "قطاع A", "name": "A4", "buildings": 12 },
+    { "sector": "قطاع A", "name": "A5", "buildings": 12 },
+    { "sector": "قطاع A", "name": "A6", "buildings": 12 },
+    { "sector": "قطاع A", "name": "A7", "buildings": 13 },
+    { "sector": "قطاع A", "name": "A8", "buildings": 15 },
+    { "sector": "قطاع A", "name": "A9", "buildings": 15 },
+    { "sector": "قطاع B", "name": "B1", "buildings": 12 },
+    { "sector": "قطاع B", "name": "B2", "buildings": 18 },
+    { "sector": "قطاع B", "name": "B3", "buildings": 18 },
+    { "sector": "قطاع B", "name": "B8", "buildings": 12 }
+  ]
+}

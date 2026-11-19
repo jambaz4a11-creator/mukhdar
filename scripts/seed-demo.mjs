@@ -311,7 +311,7 @@ async function seedDemo() {
       [
         c.id,
         Array.from({ length: count }, () => pick(buildings).id),
-        Array.from({ length: count }, () => String(randInt(1, 40))),
+        Array.from({ length: count }, () => String(randInt(1, 12))),
         ['البيت', 'بيت أهلي'].slice(0, count),
         [true, false].slice(0, count),
         Array.from({ length: count }, () => randInt(0, 9)), // الطابق (2026-11-18): 0 = الأرضي
@@ -574,7 +574,7 @@ async function seedLoadCustomers() {
   await q(
     `with b as (select array_agg(id) as ids from public.buildings where is_active)
      insert into public.addresses (customer_id, building_id, apartment, is_default, floor)
-     select u, b.ids[1 + floor(random() * array_length(b.ids, 1))::int], (1 + floor(random() * 40))::text, true,
+     select u, b.ids[1 + floor(random() * array_length(b.ids, 1))::int], (1 + floor(random() * 12))::text, true,
             floor(random() * 10)::smallint
        from unnest($1::uuid[]) as u, b`,
     [users.map((u) => u.id)],
