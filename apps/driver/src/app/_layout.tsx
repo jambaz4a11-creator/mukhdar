@@ -1,4 +1,4 @@
-// الجذر: الخط، RTL، ثم التنقل. حماية بناء production الموجّه لمشروع التطوير (T23 L8).
+// الجذر: الخط، RTL، الجلسة والحارس (SPEC-driver §2.1)، ثم التنقل. حماية بناء production الموجّه لمشروع التطوير (T23 L8).
 import { useFonts } from '@expo-google-fonts/ibm-plex-sans-arabic/useFonts';
 import { IBMPlexSansArabic_400Regular } from '@expo-google-fonts/ibm-plex-sans-arabic/400Regular';
 import { IBMPlexSansArabic_500Medium } from '@expo-google-fonts/ibm-plex-sans-arabic/500Medium';
@@ -14,8 +14,11 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppText } from '../components/AppText';
 import { config } from '../config';
+import { AuthGuard } from '../features/auth/AuthGuard';
+import { initAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
 import { ensureRTL } from '../lib/rtl';
+import { getSupabase } from '../lib/supabase';
 import { colors, spacing } from '../theme';
 
 void SplashScreen.preventAutoHideAsync();
@@ -28,6 +31,9 @@ function RootLayout() {
     IBMPlexSansArabic_700Bold,
   });
   const [rtlReady, setRtlReady] = useState(false);
+
+  // الجلسة المحفوظة + الطلب المحفوظ + onAuthStateChange + التجديد والتحديث عند الرجوع للتطبيق
+  useEffect(() => initAuth(getSupabase()), []);
 
   useEffect(() => {
     ensureRTL()
@@ -49,7 +55,14 @@ function RootLayout() {
       <StatusBar style="dark" />
       <Stack
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}
-      />
+      >
+        {/* الشاشات الإجبارية: بلا سحب للرجوع */}
+        <Stack.Screen name="auth/change-pin" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="auth/not-driver" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="auth/pending" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="auth/set-pin" options={{ gestureEnabled: false }} />
+      </Stack>
+      <AuthGuard />
     </SafeAreaProvider>
   );
 }
