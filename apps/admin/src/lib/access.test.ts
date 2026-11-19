@@ -23,6 +23,7 @@ const TABLE: [string, string, boolean, boolean][] = [
   ['التقارير والأرباح', '/reports', true, false],
   ['الموظفون والسائقون', '/staff', true, false],
   ['الإعدادات', '/settings', true, false],
+  ['طلبات السواق (T29)', '/driver-requests', true, false],
   // ليست صفحة بجدول §1: إيصال طباعة الطلب (T17) لمن يرى الطلبات
   ['طباعة الطلب', '/print', true, true],
   ['تغيير الرمز', '/change-pin', true, true],
@@ -103,12 +104,19 @@ describe('navItems (sidebar per role, design order)', () => {
     expect(navItems('staff').find((i) => i.href === '/orders')?.badge).toBe('pendingOrders');
   });
 
+  it('the driver-requests badge sits on the admin settings item only (not staff)', () => {
+    expect(navItems('admin').find((i) => i.href === '/settings')?.badge).toBe('driverRequests');
+    expect(navItems('staff').some((i) => i.badge === 'driverRequests')).toBe(false);
+    expect(navItems('staff').some((i) => i.match.includes('/driver-requests'))).toBe(false);
+  });
+
   it('marks the right item active', () => {
     const admin = navItems('admin');
     const active = (p: string) => admin.filter((i) => isNavActive(i, p)).map((i) => i.href);
     expect(active('/')).toEqual(['/']);
     expect(active('/stock')).toEqual(['/products']);
     expect(active('/staff')).toEqual(['/settings']);
+    expect(active('/driver-requests')).toEqual(['/settings']);
     expect(active('/orders/5')).toEqual(['/orders']);
   });
 });

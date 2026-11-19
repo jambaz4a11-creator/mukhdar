@@ -25,6 +25,7 @@ export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
   '/addresses': ['admin'],
   '/reports': ['admin'],
   '/staff': ['admin'], // الموظفون والسائقون
+  '/driver-requests': ['admin'], // طلبات تسجيل السواق (T29، SPEC-admin §2.10)
   '/settings': ['admin'],
   '/print': ['admin', 'staff'], // إيصال 80mm للطلب (T17)، بلا قائمة
   '/change-pin': ['admin', 'staff'], // تغيير الرمز (مراجعة T16-T19)، بلا قائمة
@@ -67,7 +68,7 @@ export interface NavItem {
   /** مسارات أخرى تجعل العنصر نشطاً (مثلاً المخزون تحت "المنتجات والمخزون"). */
   match: readonly string[];
   /** شارة عدد الطلبات الجديدة */
-  badge?: 'pendingOrders';
+  badge?: 'pendingOrders' | 'driverRequests';
 }
 
 /** القائمة الجانبية حسب الدور، بترتيب التصميم المعتمد (يمين ← يسار = أعلى ← أسفل). */
@@ -110,7 +111,8 @@ export function navItems(role: PanelRole): NavItem[] {
       href: '/settings',
       label: 'الإعدادات والموظفون',
       icon: 'settings',
-      match: ['/settings', '/staff', '/addresses'],
+      match: ['/settings', '/staff', '/addresses', '/driver-requests'],
+      badge: 'driverRequests',
     },
   ];
 }

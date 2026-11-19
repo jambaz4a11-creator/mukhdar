@@ -5,6 +5,7 @@
 // وتصفير الرمز (admin-reset-pin؛ لا لحساب أدمن)، وإعادة ضبط المصادقة الثنائية للموظف (T23 C1، admin_reset_mfa).
 import { errorMessage, parseBackendError } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
 import { inputClass } from '@/features/catalog/ui';
@@ -44,6 +45,12 @@ export function StaffScreen() {
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link
+            href="/driver-requests"
+            className="flex h-11 items-center rounded-control border border-border bg-surface px-3 text-sm text-text no-underline"
+          >
+            طلبات السواق
+          </Link>
           <button
             type="button"
             onClick={() => searchRef.current?.focus()}

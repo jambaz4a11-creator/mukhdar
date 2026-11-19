@@ -121,3 +121,36 @@ export async function deliverOrder(admin: SupabaseClient, orderId: string): Prom
     if (error) throw new Error(`${step}: ${error.message}`);
   }
 }
+
+export interface SeededDriverRequest {
+  id: string;
+  /** 07XXXXXXXXX كما يُعرض باللوحة */
+  phone: string;
+  name: string;
+}
+
+/**
+ * يزرع طلب تسجيل سائق **بالمسار الحقيقي**: Edge Function driver-register (بلا حساب، anon كتطبيق السائق).
+ * لا مفتاح خادم باللوحة ولا باختباراتها (noServiceRole.test.ts)، فلا تجهيز بدور خدمة. أرقام 07009xxxxxx
+ * عشوائية (غير أرقام العرض)، والكتابة فقط مع E2E_ALLOW_WRITES (Supabase محلي).
+ */
+export async function seedDriverRequest(label: string): Promise<SeededDriverRequest> {
+  if (!ALLOW_WRITES) throw new Error('seedDriverRequest needs E2E_ALLOW_WRITES=1');
+  const { url, key } = env();
+  const phone = `07009${String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0')}`;
+  const name = `سائق اختبار ${label}`;
+  const res = await fetch(`${url}/functions/v1/driver-register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: key },
+    body: JSON.stringify({
+      full_name: name,
+      phone,
+      device_secret: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url'),
+    }),
+  });
+  const body = (await res.json()) as { request_id?: string; error?: string };
+  if (res.status !== 201 || !body.request_id) {
+    throw new Error(`driver-register ${res.status}: ${body.error ?? 'no request_id'}`);
+  }
+  return { id: body.request_id, phone, name };
+}

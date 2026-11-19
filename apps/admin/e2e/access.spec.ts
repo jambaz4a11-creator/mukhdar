@@ -5,7 +5,15 @@ import { completeMfa, expectNotAuthorized, pageAs, sidebarLinks, signIn } from '
 // قبول T16: أدمن وموظف يصلان لـ /، الزبون والسائق "غير مصرح"، الموظف لا يصل لصفحات الأدمن حتى بالرابط،
 // والصفحات العامة بلا دخول.
 
-const ADMIN_ONLY = ['/products', '/waste', '/addresses', '/reports', '/staff', '/settings'];
+const ADMIN_ONLY = [
+  '/products',
+  '/waste',
+  '/addresses',
+  '/reports',
+  '/staff',
+  '/settings',
+  '/driver-requests',
+];
 const SHARED = ['/orders', '/stock', '/ratings'];
 
 test.describe('public pages (no sign-in)', () => {
