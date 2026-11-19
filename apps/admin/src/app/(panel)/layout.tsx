@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { CHANGE_PIN_PATH, LOGIN_PATH, MFA_PATH, NOT_AUTHORIZED_PATH, navItems } from '@/lib/access';
 import { getPanelUser } from '@/lib/panelUser';
 import { createClient } from '@/lib/supabase/server';
+import { fetchPendingDriverRequestCount } from '@/features/driverRequests/api';
 import { Sidebar } from '@/components/Sidebar';
 import { PanelProviders } from '@/components/PanelProviders';
 import { ServiceUnavailable } from '@/components/ServiceUnavailable';
@@ -22,6 +23,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     .select('id', { count: 'exact', head: true })
     .eq('status', 'pending');
 
+  // شارة طلبات السواق: للأدمن فقط (الدالة ترفض الموظف). فشلها لا يمنع الصفحة: 0 ثم يصححها العميل.
+  const pendingDriverRequests =
+    user.role === 'admin' ? await fetchPendingDriverRequestCount(supabase).catch(() => 0) : 0;
+
   return (
     <PanelProviders role={user.role}>
       <div className="flex min-h-dvh flex-col md:flex-row">
@@ -30,6 +35,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           role={user.role}
           name={user.name}
           pendingOrders={count ?? 0}
+          pendingDriverRequests={pendingDriverRequests}
         />
         <main className="min-w-0 flex-1 p-4 md:p-6">
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">{children}</div>

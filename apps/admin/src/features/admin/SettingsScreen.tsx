@@ -333,6 +333,9 @@ function StaffSummary() {
           إدارة
         </Link>
       </div>
+      <Link href="/driver-requests" className="text-sm font-semibold text-primary">
+        طلبات السواق (تسجيل سائق جديد)
+      </Link>
       {rows.map((r) => (
         <div key={r.id} className="flex items-center gap-2.5 border-t border-divider pt-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft font-bold text-primary">

@@ -137,7 +137,7 @@ jobs:
       - name: Playwright browser
         working-directory: apps/admin
         run: pnpm exec playwright install --with-deps chromium
-      - name: Playwright (access, orders, catalog, settings/staff/addresses incl. Edge Functions)
+      - name: Playwright (access, orders, catalog, settings/staff/addresses/driver-requests incl. Edge Functions)
         env:
           # الطلبات التجريبية تُنشأ وتُعدَّل هنا فقط (Supabase محلي)، لا على mukhdar-dev
           E2E_ALLOW_WRITES: '1'

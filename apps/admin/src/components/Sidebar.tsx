@@ -6,19 +6,23 @@ import { isNavActive, type NavItem, type PanelRole } from '@/lib/access';
 import { signOut } from '@/app/actions';
 import { NavIconSvg } from './icons';
 import { usePendingCount } from './usePendingCount';
+import { usePendingDriverRequests } from './usePendingDriverRequests';
 
 interface Props {
   items: NavItem[];
   role: PanelRole;
   name: string | null;
   pendingOrders: number;
+  /** طلبات السواق المعلّقة (أدمن فقط؛ 0 للموظف) */
+  pendingDriverRequests: number;
 }
 
 // القائمة الجانبية يمين الشاشة (RTL) كالتصميم المعتمد. على الموبايل: شريط علوي وزر يفتح القائمة.
-export function Sidebar({ items, role, name, pendingOrders }: Props) {
+export function Sidebar({ items, role, name, pendingOrders, pendingDriverRequests }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const pending = usePendingCount(pendingOrders);
+  const driverRequests = usePendingDriverRequests(pendingDriverRequests, role === 'admin');
   useEffect(() => setOpen(false), [pathname]);
 
   return (
@@ -83,6 +87,15 @@ export function Sidebar({ items, role, name, pendingOrders }: Props) {
                   data-testid="orders-badge"
                 >
                   {pending}
+                </span>
+              )}
+              {item.badge === 'driverRequests' && driverRequests > 0 && (
+                <span
+                  className="num flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-white"
+                  aria-label={`${driverRequests} طلب سائق بانتظار الموافقة`}
+                  data-testid="driver-requests-badge"
+                >
+                  {driverRequests}
                 </span>
               )}
             </Link>
