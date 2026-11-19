@@ -15,6 +15,7 @@ text to `بلوك A3 - بناية 12`. Stored values are unchanged. The driver d
 
 ## 2. Floor range — ✅ resolved (2026-11-18)
 **Decision:** 0..20, with 0 = "الطابق الأرضي" (approved as assumed). Floors display as "الطابق 3".
+**Superseded 2026-11-19 (owner, exact Bismayah data):** floors are **G (stored 0) and 1..9**, apartments **1..12**, and the ground floor is displayed **"الطابق G"** everywhere (never "الأرضي"). See SPEC-backend §12.10.
 
 ## 3. Admin panel hosting: Cloudflare Workers plan — ✅ code follow-up done; billing is the owner's
 The deployed admin panel (`mukhdar-admin.jambaz4a11.workers.dev`) intermittently answered
