@@ -90,6 +90,14 @@ describe('error codes', () => {
 });
 
 describe('parseBackendError', () => {
+  it('reads "detail" from an Edge Function body (driver-complete-registration PIN_INVALID)', () => {
+    expect(parseBackendError({ error: 'PIN_INVALID', detail: 'PIN_TRIVIAL' })).toEqual({
+      code: 'PIN_INVALID',
+      message: ERROR_MESSAGES.PIN_INVALID,
+      detail: 'PIN_TRIVIAL',
+    });
+  });
+
   it('maps a PostgREST error (code in message, product id in details)', () => {
     expect(
       parseBackendError({ message: 'INSUFFICIENT_STOCK', code: 'P0001', details: 'abc-123' }),
