@@ -32,6 +32,17 @@ approves** (after a phone call) and the **same device** chooses its PIN. Full de
    `packages/shared/src/errors.ts`): `PHONE_INVALID`, `NAME_INVALID`, `PHONE_TAKEN`, `REQUEST_EXISTS`,
    `RATE_LIMITED`, `TOO_MANY_PENDING`, `REGISTER_FAILED`, `REQUEST_NOT_FOUND`, `REQUEST_NOT_APPROVED`,
    `REQUEST_EXPIRED`, `PIN_INVALID`.
+5. HTTP details (T28, deployed on the development project 2026-11-20; full table: SPEC-backend §8). Call
+   both with `supabase.functions.invoke` (publishable key, no session). The native app sends **no
+   `Origin`** (allowed); a web build must run on an origin listed in `ALLOWED_ORIGINS`, any other origin
+   gets `403 NOT_ALLOWED`. Statuses: `driver-register` → 201 / 400 (`INVALID_REQUEST`, `PHONE_INVALID`,
+   `NAME_INVALID`) / 409 (`PHONE_TAKEN`, `REQUEST_EXISTS`) / 429 (`RATE_LIMITED`, `TOO_MANY_PENDING`) /
+   500 `REGISTER_FAILED`. `driver-complete-registration` → 201 / 400 (`INVALID_REQUEST`, `PIN_INVALID`
+   with `detail` = `PIN_LENGTH` | `PIN_TRIVIAL` | `PIN_MATCHES_PHONE`) / 404 `REQUEST_NOT_FOUND` / 409
+   (`REQUEST_NOT_APPROVED`, `PHONE_TAKEN`) / 410 `REQUEST_EXPIRED` / 429 `RATE_LIMITED` / 500 `INTERNAL`.
+   Limits: 10 attempts per hour per IP (both functions share it), 3 registrations per day per phone.
+   Validate the PIN in the app first with `validatePin(pin, phone)` from `packages/shared` (same rules).
+   Re-sending `driver-register` with the **same** secret returns the same `request_id` (safe retry).
 
 ---
 
