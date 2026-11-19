@@ -75,6 +75,9 @@ export const ar = {
     body: 'تواصل مع إدارة المحل حتى يفعّلون حسابك كسائق.',
     refresh: 'تحديث',
   },
+  notifications: {
+    channel: 'الطلبات',
+  },
   tabs: {
     ready: 'الجاهزة',
     mine: 'طلباتي',

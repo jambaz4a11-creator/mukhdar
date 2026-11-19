@@ -4,7 +4,7 @@
 import type { MukhdarClient, Session } from '@mukhdar/shared';
 import { AppState } from 'react-native';
 import { create } from 'zustand';
-import { loadRegistration } from '../../lib/secureStore';
+import { clearRegistration, loadRegistration } from '../../lib/secureStore';
 import type { DriverProfile, GuardState } from './guard';
 
 export interface AuthState extends GuardState {
@@ -71,6 +71,15 @@ export async function refreshRegistration(): Promise<void> {
   try {
     useAuth.setState({ hasRegistration: (await loadRegistration()) !== null });
   } catch {
+    useAuth.setState({ hasRegistration: false });
+  }
+}
+
+/** يمسح الطلب المحفوظ من الجهاز (السر معه) ويبلّغ الحارس. الطلب على الخادم يبقى للأدمن. */
+export async function forgetRegistration(): Promise<void> {
+  try {
+    await clearRegistration();
+  } finally {
     useAuth.setState({ hasRegistration: false });
   }
 }

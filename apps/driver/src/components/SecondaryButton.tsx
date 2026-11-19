@@ -47,7 +47,6 @@ export function SecondaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    flex: 1,
     minHeight: sizes.primaryButton,
     borderRadius: radius.card,
     borderWidth: 1,

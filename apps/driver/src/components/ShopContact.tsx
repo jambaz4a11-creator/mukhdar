@@ -14,23 +14,30 @@ export function ShopContact({ phoneInput = '' }: { phoneInput?: string }) {
   return (
     <View style={styles.row}>
       {tel ? (
-        <SecondaryButton
-          title={ar.login.callShop}
-          icon="call-outline"
-          onPress={() => void Linking.openURL(tel)}
-          testID="forgot-call"
-        />
+        <View style={styles.cell}>
+          <SecondaryButton
+            title={ar.login.callShop}
+            icon="call-outline"
+            onPress={() => void Linking.openURL(tel)}
+            testID="forgot-call"
+          />
+        </View>
       ) : null}
       {whatsapp ? (
-        <SecondaryButton
-          title={ar.login.whatsappShop}
-          icon="logo-whatsapp"
-          onPress={() => void Linking.openURL(whatsapp)}
-          testID="forgot-whatsapp"
-        />
+        <View style={styles.cell}>
+          <SecondaryButton
+            title={ar.login.whatsappShop}
+            icon="logo-whatsapp"
+            onPress={() => void Linking.openURL(whatsapp)}
+            testID="forgot-whatsapp"
+          />
+        </View>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({ row: { flexDirection: 'row', gap: spacing.sm } });
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', gap: spacing.sm },
+  cell: { flex: 1 },
+});
