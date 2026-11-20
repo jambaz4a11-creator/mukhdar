@@ -153,9 +153,10 @@ export function parseBackendError(error: unknown): BackendError {
         : typeof error === 'object' && error !== null && 'message' in error
           ? String((error as { message: unknown }).message)
           : '';
+  // PostgREST: details؛ جسم Edge Function: detail (مثل PIN_INVALID من driver-complete-registration)
   const detailValue =
-    typeof error === 'object' && error !== null && 'details' in error
-      ? (error as { details: unknown }).details
+    typeof error === 'object' && error !== null
+      ? ((error as { details?: unknown }).details ?? (error as { detail?: unknown }).detail ?? null)
       : null;
   const detail = typeof detailValue === 'string' && detailValue !== '' ? detailValue : null;
   const code = raw.trim();

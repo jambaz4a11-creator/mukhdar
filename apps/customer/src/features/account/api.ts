@@ -2,17 +2,13 @@
 // عبر Edge Function delete-account ثم الخروج وتفريغ البيانات المحلية.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  authError,
-  normalizeIraqiPhone,
-  normalizePin,
+  changePin as sharedChangePin,
   parseFunctionError,
-  PIN_MESSAGES,
-  validatePin,
+  type ChangePinResult,
   type ErrorCode,
   type MukhdarClient,
 } from '@mukhdar/shared';
 import type { QueryClient } from '@tanstack/react-query';
-import { ar } from '../../i18n/ar';
 import { captureError } from '../../lib/sentry';
 import { useSelectedAddress } from '../addresses/selected';
 import { useCart } from '../cart/store';
@@ -46,20 +42,8 @@ export async function updateFullName(
 
 // ------------------------------------------------------------------ الروابط
 
-/** واتساب المتجر (wa.me). null إن لم يُضبط الرقم أو كان غير صالح. */
-export function whatsappUrl(shopNumber: string): string | null {
-  const shop = shopNumber.replace(/[\s+\-()]/g, '');
-  return /^\d{8,15}$/.test(shop) ? `https://wa.me/${shop}` : null;
-}
-
-/** tel: لرقم المتجر. رقم عراقي (07… / 9647… / +9647…) يصير +9647…؛ أرضي أو غيره يُقبل كأرقام 7..15. */
-export function telUrl(phone: string): string | null {
-  const raw = phone.replace(/[\s\-()]/g, '');
-  if (raw === '') return null;
-  const iraqi = normalizeIraqiPhone(raw);
-  if (iraqi) return `tel:${iraqi}`;
-  return /^\+?\d{7,15}$/.test(raw) ? `tel:${raw}` : null;
-}
+// whatsappUrl وtelUrl من @mukhdar/shared (T30: مشتركة مع تطبيق السائق)
+export { telUrl, whatsappUrl } from '@mukhdar/shared';
 
 /** رابط صفحة عامة: https فقط. */
 export function httpsUrl(url: string): string | null {
@@ -72,62 +56,17 @@ export function httpsUrl(url: string): string | null {
 
 // ------------------------------------------------------------------ تغيير الرمز
 
-export type ChangePinResult =
-  { ok: true } | { ok: false; field: 'current' | 'next'; message: string };
+export type { ChangePinResult } from '@mukhdar/shared';
 
-/**
- * ADR 0001: الرمز الحالي يُتحقق منه بـ signInWithPassword بنفس الرقم، ثم الجديد (مرتين) ← validatePin ←
- * updateUser بأرقام لاتينية ← إبطال الجلسات الأخرى. يرجع الخطأ مع الحقل المعني لعرضه.
- * الدخول أولاً شرط: جلسة جديدة فلا يطلب Supabase إعادة تحقق (عبر SMS المرفوض) لتغيير كلمة السر.
- * تغيير كلمة السر لا يبطل الجلسات الأخرى بنفسه (فُحص على mukhdar-dev)، فيُطلب signOut({ scope: 'others' }).
- */
-export async function changePin(
+/** ADR 0001: changePin من @mukhdar/shared (T30)؛ فشل إبطال الجلسات الأخرى يُرسل لـ Sentry فقط. */
+export function changePin(
   client: MukhdarClient,
   phone: string,
   current: string,
   next: string,
   confirm: string,
 ): Promise<ChangePinResult> {
-  const nextPin = normalizePin(next);
-  const invalid = validatePin(nextPin, phone);
-  if (invalid) return { ok: false, field: 'next', message: PIN_MESSAGES[invalid] };
-  if (nextPin !== normalizePin(confirm)) {
-    return { ok: false, field: 'next', message: ar.auth.pinMismatch };
-  }
-  const currentPin = normalizePin(current);
-  if (nextPin === currentPin) return { ok: false, field: 'next', message: ar.account.pinSame };
-  const e164 = normalizeIraqiPhone(phone);
-  if (!e164) return { ok: false, field: 'current', message: ar.account.pinFailed };
-
-  try {
-    const { error: signInError } = await client.auth.signInWithPassword({
-      phone: e164,
-      password: currentPin,
-    });
-    if (signInError) {
-      const e = authError(signInError);
-      return {
-        ok: false,
-        field: 'current',
-        message: e.kind === 'invalid_credentials' ? ar.account.pinWrongCurrent : e.message,
-      };
-    }
-    const { error } = await client.auth.updateUser({ password: nextPin });
-    if (error) {
-      const code = (error as { code?: string }).code;
-      if (code === 'same_password') {
-        return { ok: false, field: 'next', message: ar.account.pinSame };
-      }
-      return { ok: false, field: 'next', message: authError(error).message };
-    }
-    // من يغيّر رمزه لأنه يشك بجلسة مسروقة: تُبطل كل الجلسات الأخرى (تبقى جلسة هذا الجهاز).
-    // فشلها لا يُلغي تغيير الرمز (تمّ فعلاً)، فيُسجَّل فقط.
-    const { error: revokeError } = await client.auth.signOut({ scope: 'others' });
-    if (revokeError) captureError(revokeError);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, field: 'next', message: authError(e).message };
-  }
+  return sharedChangePin(client, phone, current, next, confirm, { onRevokeError: captureError });
 }
 
 // ------------------------------------------------------------------ حذف الحساب

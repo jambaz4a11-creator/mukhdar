@@ -26,9 +26,15 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
+      # كل حزم الـ workspace (shared، customer، driver، admin): lint بالجذر، وtypecheck/test بـ pnpm -r
+      - name: Lint (eslint + prettier, whole repo incl. apps/driver)
+        run: pnpm lint
+      - name: Typecheck (shared, customer, driver, admin)
+        run: pnpm typecheck
+      - name: Unit tests (shared, customer, driver, admin + scripts)
+        run: pnpm test
+      - name: Driver app is part of the recursive run (T30)
+        run: pnpm -r ls --depth -1 | grep -q '@mukhdar/driver'
       - name: Edge Functions (deno check + deno test, fetch mocked)
         run: pnpm test:functions
 

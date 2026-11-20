@@ -1,7 +1,7 @@
 // كل نصوص الواجهة بملف واحد (جاهز لإضافة لغة لاحقاً). الأرقام لاتينية (SPEC-customer افتراض 1).
 // مراجعة NH6: المسرد أدناه = صياغة واحدة لكل مفهوم، بلهجة بسيطة وواضحة (عراقية خفيفة كالتصميم). الأقسام
 // تستخدم المسرد بدل تكرار نص مشابه بصياغة ثانية. أسماء حالات الطلب من STATUS_LABELS (@mukhdar/shared).
-import { STATUS_LABELS } from '@mukhdar/shared';
+import { PIN_CHANGE_MESSAGES, STATUS_LABELS } from '@mukhdar/shared';
 
 const glossary = {
   status: STATUS_LABELS,
@@ -91,7 +91,7 @@ export const ar = {
     haveAccount: 'عندك حساب؟',
     goSignIn: 'سجّل دخول',
     browse: 'تصفح بدون تسجيل',
-    pinMismatch: 'الرمزان غير متطابقين',
+    pinMismatch: PIN_CHANGE_MESSAGES.mismatch,
     accountCreated: 'تم إنشاء الحساب، سجّل الدخول بنفس الرقم والرمز',
     nameTitle: 'أهلاً بيك بالمخضر',
     nameHint: 'شنو نسمّيك؟ الاسم يظهر للسائق حتى يعرف منو يسلّم.',
@@ -321,9 +321,9 @@ export const ar = {
     pinConfirm: 'أعد كتابة الرمز الجديد',
     pinSave: 'تغيير الرمز',
     pinChanged: 'تم تغيير الرمز',
-    pinWrongCurrent: 'الرمز الحالي غير صحيح',
-    pinSame: 'الرمز الجديد نفس الحالي، اختر رمزاً مختلفاً',
-    pinFailed: `تعذّر تغيير الرمز، ${glossary.tryAgain}`,
+    pinWrongCurrent: PIN_CHANGE_MESSAGES.wrongCurrent,
+    pinSame: PIN_CHANGE_MESSAGES.same,
+    pinFailed: PIN_CHANGE_MESSAGES.failed,
   },
   offline: {
     banner: `${glossary.noInternet}. نعرض آخر معلومات محفوظة`,

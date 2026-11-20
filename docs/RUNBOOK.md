@@ -508,6 +508,16 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 - **نسيان الرمز لاحقاً** ← `admin-reset-pin` (§7)، مكالمة للسائق.
 - شارة القائمة = عدد المعلّق. الدمج بـ `main` ينشر اللوحة تلقائياً على Cloudflare (نسخة المعاينة).
 
+## 16d) تطبيق السائق: التشغيل المحلي (T30)
+
+**مرة واحدة:** أنشئ `apps/driver/.env` (انسخ `.env.example`؛ مُتجاهل بـ git): نفس `EXPO_PUBLIC_SUPABASE_URL` و`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` لـ mukhdar-dev كتطبيق الزبون، و`EXPO_PUBLIC_SHOP_PHONE` / `EXPO_PUBLIC_SHOP_WHATSAPP` (فارغ أو وهمي = زرّا "نسيت الرمز؟" مخفيان). `EAS_PROJECT_ID` لتطبيق السائق (مشروع EAS منفصل) بـ T32 فقط.
+**التشغيل:** `pnpm --filter @mukhdar/driver start` ← Expo Go (SDK 58) أو محاكي Android (`-- --android`). الإشعارات لا تعمل بـ Expo Go (الاستطلاع كل 30 ثانية هو الضمان).
+**الاختبارات:** `pnpm --filter @mukhdar/driver test` و`typecheck` (ضمن `pnpm test` / `pnpm typecheck` و CI).
+
+**الفحص اليدوي للمسار (dev):** تسجيل برقم تجريبي (مثل `0700900xxxx`) ← "طلبك وصل للمحل" ← الموافقة من `/driver-requests` (أو `decide_driver_request` كأدمن aal2) ← الشاشة تتحول لـ "اختار رمزك" خلال 30 ثانية ← الرمز ← التبويبات. **التنظيف بعده:** احذف حساب السائق التجريبي (`/staff` أو `auth.admin.deleteUser`) وصف `driver_requests` إن بقي (ينحذف تلقائياً بعد 30 يوماً).
+- سر الجهاز وطلب التسجيل بـ SecureStore (هذا الجهاز فقط، `allowBackup: false`). حذف التطبيق أو بياناته قبل اختيار الرمز = طلب جديد (ارفض القديم).
+- الحارس (SPEC-driver §2.1): سائق رمزه مؤقت ← "غيّر رمزك المؤقت" بلا تخطٍ؛ زبون أو حساب معطّل ← "حسابك غير مفعّل كسائق".
+
 ## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسات E1 وE2 وF، 2026-11-17)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.

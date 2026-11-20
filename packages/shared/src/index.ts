@@ -1,4 +1,4 @@
-// الحزمة المشتركة لتطبيق الزبون ولوحة الأدمن (T06). بلا اعتماد على React Native أو Next.
+// الحزمة المشتركة لتطبيقي الزبون والسائق ولوحة الأدمن (T06، T30). بلا اعتماد على React Native أو Next.
 export const PACKAGE_NAME = '@mukhdar/shared';
 
 export * from './types';
@@ -13,3 +13,6 @@ export * from './errors';
 export * from './auth-errors';
 export * from './supabase';
 export * from './projects';
+export * from './contact';
+export * from './chunkedStorage';
+export * from './pinChange';
