@@ -156,6 +156,10 @@ export function createDriverCompleteHandler(
           error: scrub(e2, ...hidden),
         });
       }
+      // الطلب تغيّرت حالته بين begin وfinish (انتهت الموافقة، سُحبت): رد واضح لا 500 (الحساب حُذف أعلاه)
+      const code = e instanceof Error ? e.message : '';
+      const status = BEGIN_STATUS[code];
+      if (status) return fail(status, code);
       return fail(500, 'INTERNAL');
     }
 
