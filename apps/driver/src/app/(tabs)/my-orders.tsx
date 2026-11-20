@@ -9,6 +9,7 @@ import { MyOrderCard } from '../../components/MyOrderCard';
 import { useAuth } from '../../features/auth/store';
 import { fetchMyOrders, removedOrders, subscribeMyOrders } from '../../features/orders/mine';
 import type { MyOrder } from '../../features/orders/types';
+import { useNotificationRefresh } from '../../features/notifications/events';
 import { useFocusedPoll } from '../../features/orders/useFocusedPoll';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
@@ -55,6 +56,8 @@ export default function MyOrdersScreen() {
   }, [userId]);
 
   useFocusedPoll(load);
+  // إشعار نقل/إلغاء/تعيين والتطبيق مفتوح: النقل لا يصل بـ Realtime فالإشعار هو السريع
+  useNotificationRefresh(null, () => void load());
 
   useEffect(() => {
     const client = getSupabase();

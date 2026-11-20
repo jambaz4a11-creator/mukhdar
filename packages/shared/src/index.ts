@@ -14,5 +14,6 @@ export * from './auth-errors';
 export * from './supabase';
 export * from './projects';
 export * from './contact';
+export * from './baghdadDay';
 export * from './chunkedStorage';
 export * from './pinChange';

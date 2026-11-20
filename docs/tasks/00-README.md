@@ -45,7 +45,7 @@
 | 30 | [`apps/driver`: الهيكل والحارس والدخول والتسجيل](30-driver-app-auth.md) | 28 | Opus | - | ✅ 2026-11-20 (PR #17، CI أخضر؛ `it:driver-register` على dev 28/28؛ فحص الشاشات على Expo Go يدوي، RUNBOOK §16d) |
 | R1 | **مراجعة** (`/review`) لـ T27–T30: الأمان (سر الجهاز، صلاحيات `anon`)، الاختبارات بالدور الحقيقي، الحارس. البنود تُصلَح قبل T31 | 27–30 | Opus | - | ✅ 2026-11-20 ([التقرير](../reviews/review-R1-driver.md): 0 Critical، 1 High، 4 Medium، 8 Low). **الإصلاحات منجزة (PR #19، 2026-11-20):** H1 وM1–M4 وبنود Low (migration `20261209000001` على mukhdar-dev، L6 بقائمة T31) |
 | 31 | [الطلبات الجاهزة وطلباتي والتفاصيل](31-driver-app-delivery.md) | 30، R1 | Sonnet | إعادة نشر `driver-complete-registration` فقط | ✅ 2026-11-20 (فحص الشاشات على جهاز يدوي ← T33) |
-| 32 | [سجل اليوم وحسابي والإشعارات](32-driver-app-today-account-push.md) | 31 | Sonnet | EAS + Firebase (development build) | ⬜ |
+| 32 | [سجل اليوم وحسابي والإشعارات](32-driver-app-today-account-push.md) | 31 | Sonnet | EAS + Firebase (development build) | 🟡 الكود منجز 2026-11-21 (مشروع EAS وFirebase وdevelopment build جاهزة؛ فحص الإشعارات على جهاز ← T33) |
 | R2 | **مراجعة نهائية** (`/review`) لـ T27–T32 قبل بناء الـ APK: كل مسار SPEC-driver §9 مغطى، لا سر أو رمز بالسجلات، `migration list` مطابق | 27–32 | Opus | - | ⬜ |
 | 33 | [APK السائق والفحص على أجهزة حقيقية](33-driver-app-apk.md) | 32، R2 | Sonnet | EAS APK build | ⬜ |
 

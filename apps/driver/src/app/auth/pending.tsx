@@ -19,12 +19,14 @@ import {
   startPendingPoll,
 } from '../../features/auth/pendingPoll';
 import { forgetRegistration } from '../../features/auth/store';
+import { useNotificationRefresh } from '../../features/notifications/events';
 import { ar } from '../../i18n/ar';
 import { loadRegistration, type Registration } from '../../lib/secureStore';
 import { getSupabase } from '../../lib/supabase';
 import { colors, radius, sizes, spacing } from '../../theme';
 
 type Final = 'rejected' | 'expired';
+const APPROVED_TYPES = ['driver_request_approved'] as const;
 
 export default function PendingScreen() {
   const [reg, setReg] = useState<Registration | null>(null);
@@ -83,6 +85,8 @@ export default function PendingScreen() {
 
   // الاستطلاع ما دامت الشاشة ظاهرة (يتوقف عند الاختفاء وبالخلفية)
   useFocusEffect(useCallback(() => startPendingPoll(() => void check()), [check]));
+  // إشعار الموافقة والتطبيق مفتوح: تحقق فوري (SPEC-driver §2.4؛ الاستطلاع هو الضمان)
+  useNotificationRefresh(APPROVED_TYPES, () => void check());
 
   async function startOver() {
     done.current = true;

@@ -522,6 +522,13 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 - سر الجهاز وطلب التسجيل بـ SecureStore (هذا الجهاز فقط، `allowBackup: false`). حذف التطبيق أو بياناته قبل اختيار الرمز = طلب جديد (ارفض القديم).
 - الحارس (SPEC-driver §2.1): سائق رمزه مؤقت ← "غيّر رمزك المؤقت" بلا تخطٍ؛ زبون أو حساب معطّل ← "حسابك غير مفعّل كسائق".
 
+## 16e) تطبيق السائق: الإشعارات وEAS وFirebase (T32)
+
+- الإشعارات البعيدة تحتاج **development build** (لا Expo Go) + `EAS_PROJECT_ID` + `google-services.json` (Android). رمز الجهاز Expo Push Token؛ الخادم يرسل عبر Expo (المزوّد `expo`).
+- **لا يُرفع لـ git أبداً:** `google-services.json`، مفتاح حساب خدمة FCM V1 (`*.json`)، `.env`. (مُدرجة بـ `.gitignore`.) **آمن للرفع:** `eas.json`، `app.config.ts`، `.env.example`.
+- الخطوات (مرة واحدة): `eas login` ← `eas init` داخل `apps/driver` (يكتب projectId؛ ضعه بـ `EAS_PROJECT_ID`) ← Firebase: تطبيق Android بحزمة `com.mukhdar.driver` وتنزيل `google-services.json` ← `eas env:create` كمتغير **ملف** باسم `GOOGLE_SERVICES_JSON` ← مفتاح حساب خدمة FCM V1 يُرفع بـ `eas credentials` (Android ← Google Service Account ← FCM V1) ← `eas build --profile development --platform android`.
+- القناة `orders` (أهمية عالية). الإذن يُسأل مرة بعد أول دخول؛ الرفض ← شريط "الإشعارات مطفية" بالجاهزة. الخروج يحذف صف `push_tokens` للجهاز قبل `signOut`.
+
 ## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسات E1 وE2 وF، 2026-11-17)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
