@@ -28,6 +28,8 @@ export default function ReadyScreen() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // R2 L1: ref لا state، فنقرتان قبل إعادة الرسم لا تستدعيان accept_order مرتين
+  const acceptingRef = useRef(false);
   const name = useAuth((s) => s.profile?.full_name ?? '');
 
   const load = useCallback(async () => {
@@ -79,7 +81,8 @@ export default function ReadyScreen() {
 
   async function onAccept(id: string) {
     const client = getSupabase();
-    if (!client || accepting) return;
+    if (!client || acceptingRef.current) return;
+    acceptingRef.current = true;
     setAccepting(id);
     try {
       const result = await acceptOrder(client, id);
@@ -93,6 +96,7 @@ export default function ReadyScreen() {
         setError(result.message);
       }
     } finally {
+      acceptingRef.current = false;
       setAccepting(null);
     }
   }

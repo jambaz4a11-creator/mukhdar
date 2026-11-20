@@ -3,7 +3,12 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import MyOrdersScreen from '../app/(tabs)/my-orders';
 import { useAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
-import { createFakeSupabase, type Call, type Result } from '../test-utils/fakeSupabase';
+import {
+  createFakeSupabase,
+  withRealtime,
+  type Call,
+  type Result,
+} from '../test-utils/fakeSupabase';
 import { renderScreen } from '../test-utils/render';
 
 let mockClient: unknown = null;
@@ -36,26 +41,6 @@ const order = (id: string, n: number, status: string, extra: object = {}) => ({
   assigned_at: '2026-11-20T09:10:00Z',
   ...extra,
 });
-
-/** channel().on(...).subscribe() مزيف يحتفظ بدالة الاستدعاء ليُطلق منها التغيير */
-function withRealtime(fake: { client: object }) {
-  const handlers: { filter: object; cb: () => void }[] = [];
-  const removed: unknown[] = [];
-  Object.assign(fake.client, {
-    channel: () => {
-      const ch = {
-        on: (_t: string, filter: object, cb: () => void) => {
-          handlers.push({ filter, cb });
-          return ch;
-        },
-        subscribe: () => ch,
-      };
-      return ch;
-    },
-    removeChannel: (ch: unknown) => removed.push(ch),
-  });
-  return { handlers, removed };
-}
 
 function setup(resolve: (call: Call) => Result) {
   const fake = createFakeSupabase(resolve);
@@ -136,13 +121,13 @@ describe('MyOrdersScreen', () => {
     const t = setup(() => ({ data: [order('a', 1, 'ready')], error: null }));
     const view = await renderScreen(<MyOrdersScreen />);
     await screen.findByTestId('mine-card-a');
-    expect(t.rt.handlers[0]?.filter).toMatchObject({
+    expect(t.rt.channels[0]?.handlers[0]?.filter).toMatchObject({
       event: '*',
       table: 'orders',
       filter: 'driver_id=eq.me',
     });
     await view.unmount();
-    expect(t.rt.removed.length).toBeGreaterThan(0);
+    expect(t.rt.live()).toHaveLength(0);
   });
 
   it('a Realtime change refetches; a cancelled order is removed with a message', async () => {
@@ -151,7 +136,7 @@ describe('MyOrdersScreen', () => {
     await renderScreen(<MyOrdersScreen />);
     await screen.findByTestId('mine-card-b');
     list = [order('a', 1045, 'ready'), order('b', 1044, 'cancelled')];
-    await act(async () => t.rt.handlers[0]?.cb());
+    await act(async () => t.rt.fire());
     await waitFor(() => expect(screen.queryByTestId('mine-card-b')).toBeNull());
     expect(screen.getByTestId('mine-notice')).toHaveTextContent(ar.orders.removedCancelled(1044));
   });
@@ -162,7 +147,7 @@ describe('MyOrdersScreen', () => {
     await renderScreen(<MyOrdersScreen />);
     await screen.findByTestId('mine-card-b');
     list = [order('a', 1045, 'ready')];
-    await act(async () => t.rt.handlers[0]?.cb());
+    await act(async () => t.rt.fire());
     await waitFor(() => expect(screen.queryByTestId('mine-card-b')).toBeNull());
     expect(screen.getByTestId('mine-notice')).toHaveTextContent(ar.orders.removedGone(1044));
   });

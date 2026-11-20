@@ -2,27 +2,7 @@
 import { parseFunctionError, type MukhdarClient } from '@mukhdar/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ar } from '../../i18n/ar';
-import { PUSH_TOKEN_KEY, unregisterPushToken } from '../../lib/push';
-import { signOut } from '../auth/store';
-
-export type SignOutResult = { ok: true } | { ok: false; message: string };
-
-/**
- * الخروج بالترتيب (DRIVER-API §3.4): حذف صف push_tokens لهذا الجهاز ← إلغاء اشتراكات Realtime ← signOut.
- * فشل حذف الرمز (شبكة) ← لا نخرج بصمت: تبقى الجلسة ويُعرض خطأ، فلا تصل إشعارات الحساب لجهاز خرج منه.
- */
-export async function signOutDriver(client: MukhdarClient): Promise<SignOutResult> {
-  if (!(await unregisterPushToken(client))) {
-    return { ok: false, message: ar.account.signOutFailed };
-  }
-  try {
-    await client.removeAllChannels();
-  } catch {
-    // الاشتراكات تسقط مع الجلسة على أي حال
-  }
-  await signOut(client);
-  return { ok: true };
-}
+import { PUSH_TOKEN_KEY } from '../../lib/push';
 
 export type DeleteResult = { ok: true } | { ok: false; message: string };
 

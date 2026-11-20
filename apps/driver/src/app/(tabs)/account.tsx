@@ -9,8 +9,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../components/AppText';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { config } from '../../config';
-import { deleteDriverAccount, signOutDriver } from '../../features/account/account';
-import { useAuth } from '../../features/auth/store';
+import { deleteDriverAccount } from '../../features/account/account';
+import { signOut, useAuth } from '../../features/auth/store';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
 import { colors, radius, sizes, spacing } from '../../theme';
@@ -53,8 +53,7 @@ export default function AccountScreen() {
     if (!client || busy) return;
     setBusy(true);
     setError(null);
-    const result = await signOutDriver(client);
-    if (!result.ok) setError(result.message);
+    await signOut(client);
     setBusy(false);
   }
 

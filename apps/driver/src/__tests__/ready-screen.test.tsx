@@ -1,5 +1,5 @@
 // الطلبات الجاهزة (SPEC-driver §2.6، التصميم Main): البطاقة بلا بيانات الزبون، "قبله سائق ثاني"، القبول، الفارغة.
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import ReadyScreen from '../app/(tabs)/index';
 import { useAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
@@ -99,6 +99,23 @@ describe('ReadyScreen', () => {
     await renderScreen(<ReadyScreen />);
     await fireEvent.press(await screen.findByTestId('accept-o1'));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/order/o1'));
+  });
+
+  it('R2 L1: a fast double tap calls accept_order once (no false "taken" on my own accept)', async () => {
+    const t = setup((call) =>
+      call.table === 'rpc:accept_order'
+        ? { data: { id: 'o1' }, error: null }
+        : { data: [row('o1', 1048)], error: null },
+    );
+    await renderScreen(<ReadyScreen />);
+    const btn = await screen.findByTestId('accept-o1');
+    // نقرتان بنفس الـ tick قبل إعادة الرسم
+    await act(async () => {
+      void fireEvent.press(btn);
+      void fireEvent.press(btn);
+    });
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/order/o1'));
+    expect(t.calls.filter((c) => c.table === 'rpc:accept_order')).toHaveLength(1);
   });
 
   it('lost the race: card dims with "قبله سائق ثاني", no accept button; the next refresh removes it', async () => {

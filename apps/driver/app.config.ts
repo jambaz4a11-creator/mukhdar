@@ -21,6 +21,10 @@ if (
   );
 }
 
+// R2 M1: معرّف مشروع EAS لتطبيق السائق عام (ليس سراً)، فنثبّته هنا بدل متغير بيئة لا يصل لعامل البناء السحابي.
+// EAS_PROJECT_ID يتجاوزه إن وُجد (مثلاً لمشروع آخر).
+const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '45b317c2-1949-4ebb-b3eb-4b4d3d797ee6';
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'سائق المخضر',
@@ -66,6 +70,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     appEnv: process.env.APP_ENV ?? 'development',
-    ...(process.env.EAS_PROJECT_ID ? { eas: { projectId: process.env.EAS_PROJECT_ID } } : {}),
+    eas: { projectId: EAS_PROJECT_ID },
   },
 });

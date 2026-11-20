@@ -47,3 +47,13 @@ google-services.json
 GoogleService-Info.plist
 *-firebase-adminsdk-*.json
 fcm-service-account*.json
+
+# EAS/Android/iOS signing and prebuild output (R2 L4): never commit
+credentials.json
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+apps/driver/android/
+apps/driver/ios/

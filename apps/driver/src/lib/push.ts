@@ -14,6 +14,8 @@ import { ar } from '../i18n/ar';
 
 export const ANDROID_CHANNEL_ID = 'orders';
 export const PUSH_TOKEN_KEY = 'mukhdar.driver.pushToken';
+/** رمز خرج صاحبه بلا اتصال فلم يُحذف صفه بالخادم بعد (R2 M2): يُعاد حذفه عند أول جلسة. */
+export const PENDING_UNREGISTER_KEY = 'mukhdar.driver.pushTokenPendingDelete';
 
 /** إشعار يصل والتطبيق مفتوح: يظهر كبانر أيضاً. يُستدعى مرة عند تحميل الجذر. */
 export function configureNotificationHandler(): void {
@@ -110,6 +112,10 @@ export async function registerPushToken(
       return /PIN_CHANGE_REQUIRED/.test(String(error.message)) ? 'pin-required' : 'failed';
     }
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+    // الرمز سُجّل من جديد: حذفه المؤجَّل القديم صار خطأً (يحذف صفاً حياً)
+    if ((await AsyncStorage.getItem(PENDING_UNREGISTER_KEY)) === token) {
+      await AsyncStorage.removeItem(PENDING_UNREGISTER_KEY);
+    }
     return 'registered';
   } catch {
     return 'failed';
@@ -130,5 +136,40 @@ export async function unregisterPushToken(client: MukhdarClient): Promise<boolea
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * خروج بلا استثناء (R2 M2): يحذف صف رمز هذا الجهاز؛ إن تعذّر (بلا شبكة) يؤجّل الحذف (`PENDING_UNREGISTER_KEY`) ويُبطل رمز
+ * الجهاز عند Expo/FCM (`unregisterForNotificationsAsync`) فتنتهي الإشعارات فوراً، وExpo يجيب `DeviceNotRegistered` فيحذف
+ * `push-dispatch` الصف. لا يرمي أبداً: الخروج لا يتعطل بسبب الإشعارات.
+ */
+export async function removePushForSignOut(client: MukhdarClient): Promise<void> {
+  if (await unregisterPushToken(client)) return;
+  try {
+    const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+    if (token) {
+      await AsyncStorage.setItem(PENDING_UNREGISTER_KEY, token);
+      await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+    }
+  } catch {
+    // لا شيء: الإبطال أدناه هو الضمان
+  }
+  try {
+    await Notifications.unregisterForNotificationsAsync();
+  } catch {
+    // الجهاز بلا رمز أصلاً أو بلا شبكة: الحذف المؤجّل يغطي
+  }
+}
+
+/** بجلسة جديدة: يعيد حذف صف رمز خرج بلا اتصال. RLS تحذف صف المالك فقط، فإن كان الرمز لغيره لا يحذف شيئاً. */
+export async function retryPendingPushUnregister(client: MukhdarClient): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(PENDING_UNREGISTER_KEY);
+    if (!token) return;
+    const { error } = await client.from('push_tokens').delete().eq('token', token);
+    if (!error) await AsyncStorage.removeItem(PENDING_UNREGISTER_KEY);
+  } catch {
+    // تُعاد المحاولة عند الرجوع التالي للتطبيق
   }
 }

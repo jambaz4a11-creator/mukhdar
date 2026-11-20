@@ -1,11 +1,12 @@
 // سجل اليوم (SPEC-driver §2.9، التصميم Today): "الكاش اللي بيدك" و"توصيلات اليوم" وقائمة التوصيلات. اليوم بتوقيت بغداد.
 // يُحدَّث عند الفتح والرجوع للتطبيق (startPendingPoll يشمل ذلك).
 import { formatAddressShort } from '@mukhdar/shared';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../components/AppText';
 import { useAuth } from '../../features/auth/store';
+import { guardDriverError } from '../../features/orders/driverErrors';
 import { formatBaghdadClock } from '../../features/orders/time';
 import { useFocusedPoll } from '../../features/orders/useFocusedPoll';
 import { formatBaghdadDateLabel, groupDigits } from '../../features/today/date';
@@ -21,18 +22,28 @@ export default function TodayScreen() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // R2 L3: لا جلبان متداخلان (30 ثانية + رجوع للتطبيق + إشعار)
+  const inFlight = useRef(false);
+
   const load = useCallback(async () => {
     const client = getSupabase();
-    if (!client || !userId) return;
-    const result = await fetchToday(client, userId);
-    if (result.ok) {
-      setOrders(result.orders);
-      setCash(result.cash);
-      setError(null);
-    } else {
-      setError(result.message);
+    if (!client || !userId || inFlight.current) return;
+    inFlight.current = true;
+    try {
+      const result = await fetchToday(client, userId);
+      if (result.ok) {
+        setOrders(result.orders);
+        setCash(result.cash);
+        setError(null);
+        // سائق عُطّل للتو يقرأ صفراً بـ RLS بدل خطأ: نعيد فحص الحارس عند القائمة الفارغة فيحوّله لـ "غير مفعّل"
+        if (result.orders.length === 0) await guardDriverError(client);
+      } else {
+        setError(result.message);
+      }
+    } finally {
+      inFlight.current = false;
+      setLoaded(true);
     }
-    setLoaded(true);
   }, [userId]);
 
   useFocusedPoll(load);

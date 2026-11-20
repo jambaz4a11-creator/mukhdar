@@ -1,5 +1,5 @@
 // شاشة اليوم (التصميم Today): بطاقتا الكاش والعدد، القائمة، ملاحظة التصفير.
-import { screen } from '@testing-library/react-native';
+import { screen, waitFor } from '@testing-library/react-native';
 import TodayScreen from '../app/(tabs)/today';
 import { useAuth } from '../features/auth/store';
 import { createFakeSupabase } from '../test-utils/fakeSupabase';
@@ -48,4 +48,12 @@ it('empty day: zeros and an empty message', async () => {
   await renderScreen(<TodayScreen />);
   expect(await screen.findByTestId('today-empty')).toBeTruthy();
   expect(screen.getByTestId('today-cash')).toHaveTextContent('0', { exact: false });
+});
+
+it('R2 L3: an empty day re-checks the profile (a just-deactivated driver reads zero rows under RLS)', async () => {
+  const fake = createFakeSupabase(() => ({ data: [], error: null }));
+  mockClient = fake.client;
+  await renderScreen(<TodayScreen />);
+  await screen.findByTestId('today-empty');
+  await waitFor(() => expect(fake.calls.some((c) => c.table === 'profiles')).toBe(true));
 });
