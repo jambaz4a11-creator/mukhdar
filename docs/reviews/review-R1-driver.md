@@ -240,3 +240,22 @@ None.
 
 Items 1–3 fit into **one** new migration. Run `pnpm it:driver-register` again after items 1–4, and
 `pnpm sb migration list --remote` must show no difference.
+
+## Fix status (2026-11-20, PR #19, branch `fix/r1-driver-review`)
+
+All items of the ordered list are implemented. Migration `20261209000001_r1_driver_fixes.sql` is applied on
+mukhdar-dev only (dry-run first; `pnpm sb migration list --remote` matches, RUNBOOK §17 row 39), `driver-register` is
+redeployed on dev (`driver-complete-registration` did not need to change), `pnpm it:driver-register` passes (39 checks)
+and cleans up. Nothing was applied to prod.
+
+| # | Item | Status | Where |
+|---|---|---|---|
+| 1 | H1 customer → driver needs `must_change_pin` | ✅ done (owner decision: DB rule, replaces "RUNBOOK only") | `set_user_role`; pgTAP `36` (H1 block), `08`, `20`, `31`; copy `PIN_RESET_REQUIRED`; SPEC-driver decision 2, SPEC-backend, SPEC-admin, RUNBOOK §16c |
+| 2 | M1 withdraw an approved request (+ L1) | ✅ done | `decide_driver_request` (reject from `approved`), `finish_driver_registration` expiry; panel "سحب الموافقة"; pgTAP `36`; Playwright; IT |
+| 3 | M4 generic admin push (name rule not added) | ✅ done | `submit_driver_request`; pgTAP `36`; IT |
+| 4 | M3 phone bucket after validation | ✅ done (no DB split needed: `rate_hit(ip, null)` then `rate_hit(null, phone)`) | `driver-register/handler.ts`; Deno; IT |
+| 5 | M2 keep the session on a network error | ✅ done | `features/auth/store.ts` (`loadSession`, `isDefiniteSessionRejection`), `auth/offline` screen, guard; Jest |
+| 6 | L7 driver bundle in CI | ✅ done | `ci.yml` (`export:android`, bundle check only) |
+| 7 | L2, L3, L4 docs | ✅ done | RUNBOOK §16b, SPEC-driver §3 |
+| 8 | L5, L8 (optional) | ✅ done (both folded into the migration) | `submit_driver_request` keeps expired approvals as `rejected`; `pending_driver_requests_count()` for the badge |
+| – | L6 guard with an unreadable profile | carried to T31 (checklist item 7 in `31-driver-app-delivery.md`) | needs the T31 screens |

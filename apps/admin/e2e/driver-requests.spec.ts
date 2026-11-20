@@ -178,7 +178,7 @@ test.describe.serial('driver requests (admin, decisions)', () => {
     expect(adminName).toBeTruthy();
     await expect(rejected.getByTestId('request-decider')).toContainText(adminName ?? '');
     // لا أزرار قرار بتبويب القرارات: قرار واحد لكل طلب
-    await expect(approved.getByRole('button', { name: 'موافقة' })).toHaveCount(0);
+    await expect(approved.getByRole('button', { name: 'موافقة', exact: true })).toHaveCount(0);
   });
 
   test('R1 M1: an approved request can be withdrawn from "last decisions" (audited), and only once', async () => {

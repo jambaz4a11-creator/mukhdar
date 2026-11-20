@@ -114,4 +114,8 @@ describe('roleErrorText', () => {
     );
     expect(roleErrorText({ message: 'CANNOT_DEMOTE_SELF' })).toContain('بنفسك');
   });
+
+  it('R1 H1: customer -> driver without a PIN reset says to reset the PIN first', () => {
+    expect(roleErrorText({ message: 'PIN_RESET_REQUIRED' })).toContain('أعد ضبط رمزه أولاً');
+  });
 });

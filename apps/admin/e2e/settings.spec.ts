@@ -170,6 +170,19 @@ test.describe.serial('settings, staff, addresses (writes)', () => {
     await page.getByRole('textbox', { name: /بحث برقم الهاتف/ }).fill(PROMOTE_CUSTOMER);
     await page.getByRole('button', { name: 'بحث', exact: true }).click();
     const result = page.getByTestId('search-result');
+    // R1 H1: زبون ← سائق بلا إعادة ضبط رمزه يُرفض (التسجيل بلا تحقق من الهاتف)
+    await result.getByLabel(/^الدور لـ/).selectOption('driver');
+    await expect(result.getByTestId('role-error')).toContainText('أعد ضبط رمزه أولاً');
+    await expect(userLine(page, PROMOTE_CUSTOMER).first().getByTestId('role-badge')).toHaveText(
+      'زبون',
+    );
+    // بعد التصفير (رمز مؤقت يُسلَّم بالمكالمة) تنجح الترقية
+    await result.getByRole('button', { name: 'تصفير الرمز' }).click();
+    const reset = page.getByTestId('reset-pin-dialog');
+    await reset.getByRole('button', { name: 'رمز عشوائي' }).click();
+    await reset.getByRole('button', { name: 'ضبط الرمز الجديد' }).click();
+    await expect(reset.getByTestId('pin-value')).toBeVisible();
+    await reset.getByRole('button', { name: 'تم، أغلق' }).click();
     await result.getByLabel(/^الدور لـ/).selectOption('driver');
     await expect(userLine(page, PROMOTE_CUSTOMER).first().getByTestId('role-badge')).toHaveText(
       'سائق',
