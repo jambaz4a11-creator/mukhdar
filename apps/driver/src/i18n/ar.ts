@@ -83,6 +83,69 @@ export const ar = {
   notifications: {
     channel: 'الطلبات',
   },
+  // T31: الطلبات الجاهزة وطلباتي والتفاصيل (صياغة التصميم المعتمد)
+  orders: {
+    block: 'البلوك',
+    building: 'البناية',
+    floor: 'الطابق',
+    apartment: 'الشقة',
+    statusOnTheWay: 'بالطريق',
+    statusAccepted: 'مقبول، بعده بالمحل',
+    statusPreparing: 'بانتظار التحضير',
+    hello: (name: string) => (name.trim() ? `هلا ${name.trim()}` : 'هلا'),
+    readyTitle: 'الطلبات الجاهزة',
+    countBadge: (n: number) =>
+      n === 1 ? 'طلب واحد' : n === 2 ? 'طلبين' : n <= 10 ? `${n} طلبات` : `${n} طلب`,
+    readyAgo: (minutes: number) =>
+      minutes < 1
+        ? 'جاهز هسه'
+        : minutes === 1
+          ? 'جاهز من دقيقة'
+          : minutes === 2
+            ? 'جاهز من دقيقتين'
+            : minutes <= 10
+              ? `جاهز من ${minutes} دقائق`
+              : `جاهز من ${minutes} دقيقة`,
+    productsCount: (n: number) =>
+      n === 1 ? 'منتج واحد' : n === 2 ? 'منتجين' : n <= 10 ? `${n} منتجات` : `${n} منتج`,
+    cashToCollect: 'تستلم كاش:',
+    accept: 'قبول الطلب',
+    takenByOther: 'قبله سائق ثاني',
+    readyEmpty: 'ماكو طلبات جاهزة هسه. نبلغك أول ما يجهز طلب.',
+    loadFailed: 'تعذّر تحديث القائمة',
+    retry: 'إعادة المحاولة',
+    mineTitle: 'طلباتي',
+    mineSubtitle: 'الطلبات اللي قبلتها وبعدها ما توصّلت',
+    mineHint: 'اضغط على الطلب حتى تشوف التفاصيل وتغيّر حالته.',
+    mineEmpty: 'ما عندك طلبات حالياً. اقبل طلب من الجاهزة.',
+    cashShort: 'كاش:',
+    removedCancelled: (n: number) => `انلغى الطلب #${n}`,
+    removedGone: (n: number) => `الطلب #${n} ما بقى بطلباتك`,
+    detailTitle: (n: number) => `الطلب #${n}`,
+    acceptedAt: (time: string) => `قبلته الساعة ${time}`,
+    backToMine: 'رجوع لطلباتي',
+    addressTitle: 'العنوان',
+    addressNote: 'ملاحظة العنوان',
+    deletedCustomer: 'حساب محذوف',
+    callCustomer: 'اتصال بالزبون',
+    whatsappCustomer: 'واتساب الزبون',
+    productsTitle: 'المنتجات',
+    customerNote: 'ملاحظة الزبون:',
+    cashLabel: 'تستلم كاش',
+    waitPreparing: 'بانتظار التحضير',
+    pickedUp: 'استلمت الطلب، بالطريق',
+    delivered: 'تم التوصيل واستلمت المبلغ',
+    footerReadyHint: 'اضغط الزر أول ما تطلع من المحل',
+    footerOnTheWayHint: 'اضغط الزر بعد ما تسلّم وتستلم المبلغ',
+    problem: 'مشكلة بالطلب؟ اتصل بالمحل',
+    confirmTitle: 'تأكيد التسليم',
+    confirmBody: (amount: string) => `سلّمت الطلب واستلمت ${amount} كاش من الزبون؟`,
+    confirmYes: 'نعم، تم التسليم',
+    confirmNo: 'رجوع',
+    notYours: 'الطلب ما بقى إلك',
+    gone: 'هذا الطلب ما بقى بطلباتك',
+    detailLoadFailed: 'تعذّر تحميل الطلب',
+  },
   tabs: {
     ready: 'الجاهزة',
     mine: 'طلباتي',

@@ -1,5 +1,5 @@
 -- 12: حذف الحساب (T08): begin/abort_account_deletion، وما يبقى بعد حذف المستخدم من auth.users
-select plan(43);
+select plan(46);
 
 select tests.remember('cust', tests.new_user('customer'));
 select tests.remember('busy', tests.new_user('customer'));
@@ -94,7 +94,12 @@ select tests.as_postgres();
 select set_config('t.stats_before', (select coalesce(sum(delivered_count), 0) || '/' ||
   coalesce(sum(cancelled_count), 0) || '/' || coalesce(sum(revenue_iqd), 0) from public.daily_stats), true);
 select is(public.begin_account_deletion(tests.id('cust')), true, 'begin for the customer');
-delete from auth.users where id in (tests.id('cust'), tests.id('drv'));
+-- مستخدم واحد بكل جملة، كما تفعل delete-account (auth.admin.deleteUser لواحد). لا تجمعهما بـ `in (...)`: الطلب
+-- هنا أُنشئ بنفس المعاملة، فـ Postgres يعيد فحص FK للصف عند أي UPDATE له، وإن حُذف ملف السائق قبل ملف الزبون
+-- ضمن الجملة نفسها (ترتيب الـ cascade يتبع ترتيب الصفوف بالـ heap) فشل trigger إخفاء هوية الزبون بـ
+-- orders_driver_id_fkey (اختبار متقطع، ليس خطأ بالقاعدة: لا يحدث بالإنتاج لأن الطلبات أقدم من معاملة الحذف).
+delete from auth.users where id = tests.id('cust');
+delete from auth.users where id = tests.id('drv');
 
 select is_empty(format($$ select 1 from public.profiles where id = %L $$, tests.id('cust')), 'profile is deleted');
 select is_empty(format($$ select 1 from private.account_deletions where user_id = %L $$, tests.id('cust')),
@@ -134,5 +139,19 @@ select is((select coalesce(sum(delivered_count), 0) || '/' || coalesce(sum(cance
   current_setting('t.stats_before'), 'daily reports are unchanged by the deletion');
 select is((select is_active from public.profiles where id = tests.id('busy')), true,
   'other accounts are untouched');
+
+-- ترتيب الحذف لا يهم: السائق أولاً ثم الزبون (الحالة التي كسرت الاختبار متقطعاً حين كانت بجملة واحدة)
+select tests.remember('drv2', tests.new_user('driver'));
+select tests.remember('cust2', tests.new_user('customer'));
+select tests.remember('o_del2', tests.order_in('delivered', tests.id('cust2'), tests.id('drv2')));
+delete from auth.users where id = tests.id('drv2');
+delete from auth.users where id = tests.id('cust2');
+select is((select driver_id from public.orders where id = tests.id('o_del2')), null,
+  'driver deleted first, then the customer: driver_id = null');
+select is((select customer_id is null and customer_name is null and customer_phone is null
+             from public.orders where id = tests.id('o_del2')), true,
+  'driver deleted first, then the customer: the order is anonymised');
+select is((select count(*)::int from public.orders where id = tests.id('o_del2')), 1,
+  'driver deleted first, then the customer: the order is kept');
 
 select * from finish();

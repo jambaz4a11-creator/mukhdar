@@ -209,10 +209,10 @@ Deno.test('createUser failure → 500 INTERNAL, no finish', async () => {
 });
 
 Deno.test(
-  'finish failure deletes the created account (no orphan customer) → 500 INTERNAL',
+  'finish failure with an unknown error deletes the created account (no orphan customer) → 500 INTERNAL',
   async () => {
     const { handler, calls } = setup({
-      finish: () => Promise.reject(new Error('REQUEST_NOT_APPROVED')),
+      finish: () => Promise.reject(new Error('connection reset')),
     });
     const r = await call(handler, post(body()));
     assert.equal(r.status, 500);
@@ -220,6 +220,21 @@ Deno.test(
     assert.equal(calls.at(-1), `delete:${USER}`);
   },
 );
+
+// الموافقة انتهت بين begin وfinish (R1 L1: finish يتحقق من approved_until): 4xx واضح لا 500، والحساب المُنشأ يُحذف.
+for (const [code, status] of [
+  ['REQUEST_EXPIRED', 410],
+  ['REQUEST_NOT_APPROVED', 409],
+  ['REQUEST_NOT_FOUND', 404],
+] as const) {
+  Deno.test(`finish refuses with ${code} → ${status} ${code}, account rolled back`, async () => {
+    const { handler, calls } = setup({ finish: () => Promise.reject(new Error(code)) });
+    const r = await call(handler, post(body()));
+    assert.equal(r.status, status);
+    assert.deepEqual(r.body, { error: code });
+    assert.equal(calls.at(-1), `delete:${USER}`, 'no orphan customer account is left behind');
+  });
+}
 
 Deno.test(
   'finish and delete both fail: still 500, the orphan account id is logged for the admin',

@@ -500,7 +500,7 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 - **`PHONE_TAKEN` و`REQUEST_EXISTS` (R1 L3):** يكشفان أن للرقم حساباً أو طلباً مفتوحاً؛ مقبول (محدود بحدود المعدل أعلاه).
 
 ### الحالة على mukhdar-dev (2026-11-20)
-الدالتان منشورتان (`--no-verify-jwt`)، و`pnpm it:driver-register` نجح (34 فحصاً، 4 تشغيلات متتالية) وحُذفت بياناته المؤقتة. **بعد إصلاحات R1 (2026-11-20):** أُعيد نشر `driver-register` فقط (حد الرقم بعد الفحص؛ `driver-complete-registration` لم يتغير: فشل `finish` بانتهاء الموافقة يحذف الحساب المُنشأ كأي فشل آخر ويرجع 500)، و`pnpm it:driver-register` نجح بكل فحوصه (39) مع فحوص M1 وM3 وM4 الجديدة وحُذفت بياناته. الإنتاج: لم يُنشر شيء.
+الدالتان منشورتان (`--no-verify-jwt`)، و`pnpm it:driver-register` نجح (34 فحصاً، 4 تشغيلات متتالية) وحُذفت بياناته المؤقتة. **بعد إصلاحات R1 (2026-11-20):** أُعيد نشر `driver-register` فقط (حد الرقم بعد الفحص؛ `driver-complete-registration` لم يتغير بتلك الجلسة)، و`pnpm it:driver-register` نجح بكل فحوصه (39) مع فحوص M1 وM3 وM4 الجديدة وحُذفت بياناته. **T31 (2026-11-20):** أُعيد نشر `driver-complete-registration` على mukhdar-dev فقط (بموافقة المالك): انتهاء الموافقة بين `begin` و`finish` يرجع الآن 410 `REQUEST_EXPIRED` (و409/404 للحالتين الأخريين) بدل 500، والحساب المُنشأ يُحذف كما قبل؛ تطبيق السائق يعرض شاشة "انتهت مدة الموافقة". بلا migration. الإنتاج: لم يُنشر شيء.
 
 ## 16c) طلبات السواق: اللوحة (T29)
 الصفحة `/driver-requests` (أدمن فقط، SPEC-admin §2.10). تستعمل `list_driver_requests` و`decide_driver_request` و`pending_driver_requests_count` (T27 وR1).
