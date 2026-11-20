@@ -43,6 +43,7 @@ app/
   auth/set-pin.tsx            ChangePin "اختار رمزك" (بعد الموافقة)
   auth/change-pin.tsx         تغيير إجباري لرمز مؤقت من الأدمن (must_change_pin)
   auth/not-driver.tsx         "حسابك غير مفعّل كسائق" (تحديث + خروج)
+  auth/offline.tsx            "ماكو اتصال" (إعادة المحاولة + خروج)، R1 M2
   (tabs)/index.tsx            Main "الطلبات الجاهزة"
   (tabs)/my-orders.tsx        MyOrders "طلباتي"
   (tabs)/today.tsx            Today "سجل اليوم"
@@ -57,7 +58,8 @@ app/
    - `must_change_pin` ← `auth/change-pin` (لا تخطي، فقط خروج).
    - `role ≠ 'driver'` أو `!is_active` ← `auth/not-driver`.
    - غير ذلك ← `(tabs)`.
-   - فشل تحديث الجلسة (HTTP 400، جلسة أُبطلت) ← خروج محلي ← `auth/login`.
+   - فشل تحديث الجلسة برفض قاطع من الخادم (HTTP 400/401، أو `refresh_token_not_found`/`refresh_token_already_used`/`session_not_found`) ← خروج محلي ← `auth/login`.
+   - فشل تحديث الجلسة **بسبب الشبكة** عند التشغيل (`AuthRetryableFetchError`، 5xx، انقطاع): **لا خروج**، الجلسة تبقى محفوظة بالجهاز ← `auth/offline` "ماكو اتصال" مع "إعادة المحاولة" (وتُعاد المحاولة تلقائياً عند كل رجوع للتطبيق) وزر خروج (قرار المالك 2026-11-20، R1 M2).
 2. **لا جلسة، ويوجد طلب تسجيل محفوظ بالجهاز** (`request_id` + سر الجهاز بـ SecureStore) ← `auth/pending` (التي تتحول لـ `set-pin` عند `approved`).
 3. غير ذلك ← `auth/login`.
 
@@ -157,7 +159,10 @@ app/
 | موافقة قديمة تُستغل بعد شهور | الموافقة صالحة **7 أيام**، بعدها `expired` |
 | تسجيل مكرر بالسباق (ضغطتان) | قفل صف الطلب؛ الانتقال `approved → completed` شرطي؛ رقم واحد = حساب واحد (GoTrue + `profiles_phone_key`) |
 | بيانات شخصية لطلبات قديمة | حذف الطلبات `rejected`/`expired`/`completed` بعد 30 يوماً (`pg_cron` اليومي الموجود)؛ رمز الإشعار يُمسح عند أي قرار |
-| الرقم مسجّل أصلاً (زبون) | `PHONE_TAKEN` كدالة `signup` الحالية (نفس مستوى كشف الأرقام)؛ الأدمن يرقّيه بالمسار الموجود (`set_user_role`) |
+| الرقم مسجّل أصلاً (زبون) | `PHONE_TAKEN` كدالة `signup` الحالية (نفس مستوى كشف الأرقام)؛ الأدمن يرقّيه بالمسار الموجود (`set_user_role`) **بعد إعادة ضبط رمزه** (قاعدة بقاعدة البيانات: `PIN_RESET_REQUIRED`، R1 H1) |
+| قفل رقم سائق بطلبات فاسدة | حد الرقم (3/24 ساعة) لا يُستهلك إلا بطلب **اجتاز الفحص** (جسم واسم ورقم وسر صالحة)؛ الطلب الفاسد يُحدّه حد الـ IP وحده (R1 M3) |
+| نص من مجهول على أجهزة الأدمن | إشعار الأدمن عام ("طلب سائق جديد، افتح طلبات السواق") بلا الاسم ولا الرقم؛ الاسم داخل اللوحة فقط (R1 M4) |
+| كشف أرقام بالتسجيل | `PHONE_TAKEN` و`REQUEST_EXISTS` يكشفان أن للرقم حساباً أو طلباً مفتوحاً (الأول كـ `signup`، والثاني جديد). مقبول ومحدود بـ 10/ساعة لكل IP و3/يوم لكل رقم (R1 L3) |
 
 **الرمز:** يختاره السائق بنفسه، فلا `must_change_pin`. `validatePin` بالتطبيق **وبالخادم**. لا يُخزَّن ولا يُسجَّل.
 
@@ -171,11 +176,11 @@ app/
 |---|---|---|
 | D1 | جدول `public.driver_requests` | `id uuid pk default gen_random_uuid()`، `full_name text not null` (2..80 بعد التنظيف)، `phone text not null` (قيد `^9647[0-9]{9}$`)، `device_secret_hash text not null` (hex SHA-256، 64 حرفاً)، `status text not null default 'pending'` (`pending`/`approved`/`rejected`/`completed`)، `push_token text null` (Expo فقط، نفس فحص الصيغة)، `created_at`، `decided_at`، `decided_by uuid → profiles on delete set null`، `decision_note text null` (≤ 300، داخلي للأدمن)، `approved_until timestamptz null` (= `decided_at + 7 days`)، `user_id uuid → profiles on delete set null`، `completed_at`. فهرس فريد جزئي `(phone) where status in ('pending','approved')` (طلب مفتوح واحد لكل رقم). RLS مفعّل **بلا أي سياسة**؛ `revoke all` من `anon`/`authenticated`؛ الوصول عبر الدوال فقط. `expired` **محسوبة** (`approved` و`approved_until < now()`)، لا تُخزَّن |
 | D2 | حد المعدل `private.driver_request_rate_limits` + `public.driver_request_rate_hit(p_ip text, p_phone text) → boolean` | نفس تصميم `signup_rate_hit` (تجزئة، كل محاولة تُحسب): 10/ساعة لكل IP، 3/24 ساعة لكل رقم. **service_role فقط** |
-| D3 | `public.submit_driver_request(p_phone, p_full_name, p_secret_hash, p_push_token) → uuid` | service_role فقط. ينظّف الاسم (نفس منظّف الأسماء الحالي)؛ قفل استشاري لكل رقم؛ رقم له حساب ← `PHONE_TAKEN`؛ طلب مفتوح لنفس الرقم: **بنفس الـ hash** ← يرجع نفس `id` (إعادة إرسال آمنة)، بغيره ← `REQUEST_EXISTS`؛ عدد `pending` ≥ 50 ← `TOO_MANY_PENDING`؛ يُدرج ويكتب إشعار `admins_only` "طلب سائق جديد: <الاسم>" (`data.type = 'driver_request'`) |
+| D3 | `public.submit_driver_request(p_phone, p_full_name, p_secret_hash, p_push_token) → uuid` | service_role فقط. ينظّف الاسم (نفس منظّف الأسماء الحالي)؛ قفل استشاري لكل رقم؛ رقم له حساب ← `PHONE_TAKEN`؛ طلب مفتوح لنفس الرقم: **بنفس الـ hash** ← يرجع نفس `id` (إعادة إرسال آمنة)، بغيره ← `REQUEST_EXISTS`؛ عدد `pending` ≥ 50 ← `TOO_MANY_PENDING`؛ يُدرج ويكتب إشعار `admins_only` **عام** "طلب سائق جديد، افتح طلبات السواق" بلا اسم ولا رقم (R1 M4؛ `data.type = 'driver_request'`) |
 | D4 | `public.driver_request_status(p_request_id uuid, p_device_secret text) → text` | **`anon` و`authenticated`** (الجهاز بلا حساب). SECURITY DEFINER، `search_path = ''`. يحسب SHA-256 للسر ويقارن؛ يرجع `pending`/`approved`/`rejected`/`expired`/`completed`، أو `not_found` لأي عدم تطابق أو سر بطول خاطئ. لا يرجع أي بيانات أخرى |
 | D5 | `public.list_driver_requests(p_status text default 'pending', p_limit int default 50) → setof` | أدمن aal2 فقط (`NOT_ALLOWED`). الأعمدة: `id, full_name, phone, status (مع expired محسوبة), created_at, decided_at, decided_by_name, decision_note`. `p_status`: `pending` (الأقدم أولاً) أو `decided` (آخر 30 يوماً، الأحدث أولاً) |
-| D6 | `public.decide_driver_request(p_id uuid, p_approve boolean, p_note text default null) → text` | أدمن aal2 فقط. قفل الصف؛ فقط من `pending` (وإلا `REQUEST_ALREADY_DECIDED`، `detail` = الحالة)؛ غير موجود ← `REQUEST_NOT_FOUND`؛ الرقم صار له حساب ← `PHONE_TAKEN` (يبقى `pending`). الموافقة: `approved`، `approved_until = now() + 7 days`، وإشعار للجهاز إن كان له رمز (D9). الرفض: `rejected` ومسح `push_token`. سطر `admin_audit` (`action = 'driver_request'`، `before = {status}`، `after = {status, note, phone}`). يرجع الحالة الجديدة. **إعادة فتح** طلب منتهٍ: لا؛ السائق يسجّل من جديد |
-| D7 | `public.begin_driver_completion(p_request_id, p_secret_hash) → table(phone, full_name)` و`public.finish_driver_registration(p_request_id, p_user_id) → void` | service_role فقط. الأولى: قفل الصف، تطابق الـ hash (وإلا `REQUEST_NOT_FOUND`)، الحالة `approved` وغير منتهية (وإلا `REQUEST_NOT_APPROVED` / `REQUEST_EXPIRED`). الثانية بمعاملة: `profiles` ← `role = 'driver'`، `full_name`، `is_active = true`، `must_change_pin = false`؛ الطلب ← `completed`، `user_id`، `completed_at`، مسح `push_token`؛ شرطية على `status = 'approved'` (وإلا `REQUEST_NOT_APPROVED`) |
+| D6 | `public.decide_driver_request(p_id uuid, p_approve boolean, p_note text default null) → text` | أدمن aal2 فقط. قفل الصف؛ الموافقة من `pending` فقط؛ **الرفض من `pending` أو من `approved`** (سحب الموافقة، سارية أو منتهية؛ R1 M1: يصير `rejected` ويُمسح رمز الإشعار ويُدقَّق `before.status = 'approved'`)؛ المكتمل والمرفوض ← `REQUEST_ALREADY_DECIDED` (`detail` = الحالة)؛ غير موجود ← `REQUEST_NOT_FOUND`؛ الرقم صار له حساب ← `PHONE_TAKEN` (يبقى `pending`). الموافقة: `approved`، `approved_until = now() + 7 days`، وإشعار للجهاز إن كان له رمز (D9). الرفض: `rejected` ومسح `push_token`. سطر `admin_audit` (`action = 'driver_request'`، `before = {status}`، `after = {status, note, phone}`). يرجع الحالة الجديدة. **إعادة فتح** طلب منتهٍ: لا؛ السائق يسجّل من جديد |
+| D7 | `public.begin_driver_completion(p_request_id, p_secret_hash) → table(phone, full_name)` و`public.finish_driver_registration(p_request_id, p_user_id) → void` | service_role فقط. الأولى: قفل الصف، تطابق الـ hash (وإلا `REQUEST_NOT_FOUND`)، الحالة `approved` وغير منتهية (وإلا `REQUEST_NOT_APPROVED` / `REQUEST_EXPIRED`). الثانية بمعاملة (وتتحقق بنفسها أن الموافقة لم تنتهِ: `REQUEST_EXPIRED`، R1 L1): `profiles` ← `role = 'driver'`، `full_name`، `is_active = true`، `must_change_pin = false`؛ الطلب ← `completed`، `user_id`، `completed_at`، مسح `push_token`؛ شرطية على `status = 'approved'` (وإلا `REQUEST_NOT_APPROVED`) |
 | D8 | قيد `admin_audit_action_check` | يضاف `'driver_request'` (drop + add بنفس نمط `20261206000001`) |
 | D9 | إشعار جهاز بلا حساب | قيد `notification_outbox_audience_check` يضاف `'driver_request'`؛ عمود جديد `driver_request_id uuid null → driver_requests on delete cascade` وقيد `(audience = 'driver_request') = (driver_request_id is not null)`. `claim_push_notifications` (استبدال الدالة) يحلّ هذا الجمهور إلى `driver_requests.push_token` (مزوّد `expo`) **فقط إن كان الطلب ما زال `approved`**. العنوان "وافق المحل على طلبك"، `data = {type: 'driver_request_approved', request_id}`. لا تغيير بـ `push-dispatch` نفسها إن رجعت الدالة الرموز بنفس الشكل (يُتحقق بالتخطيط) |
 | D10 | التنظيف | إضافة لمهمة `pg_cron` اليومية الموجودة: حذف `driver_requests` بحالة `rejected`/`completed` أو منتهية، أقدم من 30 يوماً من آخر تغيير؛ وتنظيف `private.driver_request_rate_limits` الأقدم من يوم |
@@ -183,11 +188,13 @@ app/
 | D12 | الأنواع | `pnpm` توليد `database.types.ts` من جديد |
 | D13 | عمود `line_count` بـ `available_orders` | عدد البنود المختلفة بالطلب (لعبارة "N منتجات"، قرار المالك 2026-11-19). إضافة عمود للمخرجات تتطلب `drop function` + `create` بنفس الصلاحيات والسلوك؛ `item_count` يبقى. لا اسم ولا هاتف ولا طابق ولا شقة. اختبار `05_driver.sql` يُحدَّث |
 
+| D14 | إصلاحات R1 (migration `20261209000001`) | `set_user_role`: زبون ← سائق يتطلب `must_change_pin` (`PIN_RESET_REQUIRED`، H1)؛ `decide_driver_request` يسحب الموافقة (M1)؛ `finish_driver_registration` يفحص الانتهاء (L1)؛ `submit_driver_request`: إشعار الأدمن عام (M4) والموافقة المنتهية تبقى `rejected` بملاحظة "انتهت مدة الموافقة وسُجّل طلب جديد" بدل الحذف (L5)؛ `pending_driver_requests_count()` للأدمن aal2 لشارة اللوحة (L8) |
+
 **لا تغيير** بدوال السائق الحالية غير إضافة عمود D13 لـ `available_orders` (`accept_order`، `set_order_status`، `register_push_token`) ولا بسياسات `orders`. التطبيق يستخدمها كما بـ DRIVER-API.
 
 ### 4.2 Edge Function جديدة: `driver-register`
 - `POST {full_name, phone, device_secret, push_token?}`، `verify_jwt = false`، بلا JWT (المفتاح المنشور فقط)، CORS بنفس `_shared/cors.ts` (لا متصفح متوقع).
-- بالترتيب: جسم صالح (وإلا `INVALID_REQUEST` 400) ← `driver_request_rate_hit(cf-connecting-ip, phone)` (فشل ← `RATE_LIMITED` 429؛ فشل الدالة نفسها ← `REGISTER_FAILED` 500، تفشل مغلقة) ← `normalizeIraqiPhone` (`PHONE_INVALID` 400) ← الاسم 2..80 (`NAME_INVALID` 400) ← `device_secret` base64url يفكّ لـ 32 بايت بالضبط (`INVALID_REQUEST` 400) ← `push_token` إن وُجد بصيغة Expo (وإلا يُتجاهل) ← SHA-256 للسر بالدالة ← `submit_driver_request`.
+- بالترتيب: `driver_request_rate_hit(cf-connecting-ip, null)` **أولاً**، حد الـ IP وحده (فشل ← `RATE_LIMITED` 429؛ فشل الدالة نفسها ← `REGISTER_FAILED` 500، تفشل مغلقة) ← جسم صالح (وإلا `INVALID_REQUEST` 400) ← `normalizeIraqiPhone` (`PHONE_INVALID` 400) ← الاسم 2..80 (`NAME_INVALID` 400) ← `device_secret` base64url يفكّ لـ 32 بايت بالضبط (`INVALID_REQUEST` 400) ← **حد الرقم** `driver_request_rate_hit(null, phone)` (3/24 ساعة؛ بعد الفحص فقط، R1 M3) ← `push_token` إن وُجد بصيغة Expo (وإلا يُتجاهل) ← SHA-256 للسر بالدالة ← `submit_driver_request`.
 - الرد: `201 {request_id}`؛ `PHONE_TAKEN` 409، `REQUEST_EXISTS` 409، `TOO_MANY_PENDING` 429، `REGISTER_FAILED` 500.
 - لا يُسجَّل الجسم ولا السر ولا الـ hash.
 
@@ -212,7 +219,7 @@ app/
 - بـ `apps/admin/src/lib/access.ts`: أدمن فقط، تحت "الإعدادات والموظفون" بجانب `/staff`، مع **شارة** بعدد الطلبات المعلّقة. الموظف ← 403 حتى بالرابط المباشر.
 - تبويبان: **"بانتظار الموافقة"** (`list_driver_requests('pending')`) و**"آخر القرارات"** (`'decided'`، 30 يوماً).
 - الصف: الاسم، الرقم (زر اتصال `tel:` ونسخ)، منذ متى، و(بالقرارات) الحالة ومن قرر ومتى والملاحظة.
-- **"موافقة"** ← نافذة: "اتصلت بالرقم 07… وتأكدت أنه نفس الشخص؟" (خانة إلزامية "اتصلت وتأكدت") ← `decide_driver_request(id, true)`. **"رفض"** ← نافذة بملاحظة اختيارية (≤ 300) ← `decide_driver_request(id, false, note)`.
+- **"موافقة"** ← نافذة: "اتصلت بالرقم 07… وتأكدت أنه نفس الشخص؟" (خانة إلزامية "اتصلت وتأكدت") ← `decide_driver_request(id, true)`. **"رفض"** ← نافذة بملاحظة اختيارية (≤ 300) ← `decide_driver_request(id, false, note)`. **"سحب الموافقة"** (R1 M1، بتبويب "آخر القرارات" لصف موافَق عليه أو منتهٍ) ← نفس نافذة الرفض ← `decide_driver_request(id, false, note)`؛ الجهاز يراه `rejected`. الشارة من `pending_driver_requests_count()` (R1 L8).
 - الأخطاء: `REQUEST_ALREADY_DECIDED` ← تحديث القائمة؛ `PHONE_TAKEN` ← "الرقم صار له حساب. رقّيه كسائق من صفحة الموظفين".
 - إشعار جهاز للأدمن عند طلب جديد (`admins_only`، D3)؛ فتحه ← هذه الصفحة.
 - بعد اكتمال التسجيل يظهر السائق تلقائياً بـ `/staff` (دور `driver`)، والتعطيل والإدارة بالمسار الموجود.
@@ -331,7 +338,7 @@ export function nextAction(status: OrderStatus): DriverAction {
 ## قرارات المالك (2026-11-19، عند اعتماد الـ SPEC)
 
 1. **الطابق والشقة** يُخفيان حتى القبول (البطاقة الجاهزة: البلوك والبناية فقط). `available_orders` لا يكشفهما.
-2. **رقم مسجّل أصلاً كزبون:** `PHONE_TAKEN` كما هو، ومسار الترقية الموجود: الأدمن يعيد ضبط رمزه أولاً (`admin-reset-pin`، بعد مكالمة) ثم يجعله سائقاً (`set_user_role`)؛ إجراء بالـ RUNBOOK لا قيد بقاعدة البيانات.
+2. **رقم مسجّل أصلاً كزبون:** `PHONE_TAKEN` كما هو، ومسار الترقية الموجود: الأدمن يعيد ضبط رمزه أولاً (`admin-reset-pin`، بعد مكالمة) ثم يجعله سائقاً (`set_user_role`). **(حُدِّث 2026-11-20، R1 H1: كان إجراءً بالـ RUNBOOK فقط؛ صار قاعدة بقاعدة البيانات:** `set_user_role` يرفض ترقية زبون لسائق بـ `PIN_RESET_REQUIRED` ما لم يكن `must_change_pin` مضبوطاً، مثل الموظف والأدمن. صاحب الرقم الحقيقي يستلم الرمز المؤقت بالمكالمة ويغيّره إجبارياً عند أول دخول.)
 3. **صلاحية الموافقة 7 أيام.**
 4. **"حذف الحساب"** بصفحة حسابي (زر ثانوي بتأكيد).
 5. **"N منتجات"** بالبطاقة الجاهزة = عدد البنود المختلفة (`line_count`، D13).
@@ -349,4 +356,5 @@ export function nextAction(status: OrderStatus): DriverAction {
 7. لا PWA للسائق (تطبيق أصلي فقط؛ الإشعارات والتخزين الآمن أساسيان).
 8. الإشعار بالموافقة أفضل جهد؛ الاستطلاع كل 30 ثانية هو الضمان.
 9. **تنفيذ T27 (2026-11-20، migration `20261208000001`):** الـ hash = SHA-256 لنص السر (base64url، 43 محرفاً) بـ `sha256()` المدمجة؛ موافقة منتهية تُستبدل (تُحذف) عند تسجيل جديد لنفس الرقم؛ `finish_driver_registration` يرفض حساباً برقم غير رقم الطلب؛ مستلم إشعار الطلب `platform = 'unknown'`. التفاصيل: SPEC-backend §5 "طلبات تسجيل السواق" والافتراض 63.
+11. **إصلاحات R1 (2026-11-20، migration `20261209000001` ودالة `driver-register` وتطبيق السائق):** H1 و M1 و M3 و M4 كما بقرارات المالك أعلاه (D14، §2.1، §3، §4.2، §5). L1 (`finish` يفحص الانتهاء)، L5 (المنتهية تبقى مرفوضة بملاحظة)، L8 (دالة العدّ)، L7 (CI يبني حزمة Android للسائق: `export:android`). L2 (حد الـ IP عند الـ CGNAT) وL3 وL4: وثائق فقط (RUNBOOK §16b). L6: بنود T31 (`NOT_ALLOWED` من أي دالة سائق ← `refreshProfile` والحارس). حد الرقم يُحسب على كل طلب اجتاز الفحص حتى إعادة الإرسال بنفس السر (القرار الأبسط الذي يطابق "طلبات اجتازت الفحص فقط").
 10. **تنفيذ T30 (2026-11-20):** أيقونات التطبيق مؤقتاً نفس أيقونات الزبون حتى تصل أيقونة السائق؛ `register_push_token` بعد اختيار الرمز والدخول يُنفَّذ مع الإشعارات بـ T32 (T30 يرسل رمز Expo مع طلب التسجيل فقط إن سُمح)؛ سر الجهاز يُخزَّن بـ `WHEN_UNLOCKED_THIS_DEVICE_ONLY` ويُعاد استخدامه إن انقطعت محاولة قبل وصول `request_id` (نفس الطلب على الخادم)؛ حالة التطبيق `unknown` عند التشغيل تُعامل كواجهة (الاستطلاع يتوقف فقط بالخلفية)؛ خطأ الشبكة بالدخول يعرض رسالة الشبكة المشتركة (`NETWORK_ERROR_MESSAGE`) بدل "صار خلل" للتوحيد مع تطبيق الزبون؛ `PHONE_TAKEN` بالتسجيل يعرض "الرقم مسجّل عدنا. تواصل مع المحل حتى يفعّلك كسائق". الدوال المشتركة المنقولة من تطبيق الزبون لـ `packages/shared`: `whatsappUrl`، `telUrl`، `forgotPinWhatsappUrl`، `displayPhone`، `createChunkedStorage`، `changePin`.

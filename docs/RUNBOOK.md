@@ -492,19 +492,23 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 
 ### المراقبة والتشغيل
 - السجل (Dashboard ← Edge Functions ← Logs، أو `function_logs`): `driver-register done {request_id, phone: 9647******67}`، `driver-register refused {code}`، `driver-register rate limited`، `driver-complete done {request_id, user_id}`، `driver-complete refused {code, request_id}`، `driver-complete phone taken`. لا سر ولا رمز ولا hash ولا رقم كامل بأي سطر (Deno يفحص ذلك).
-- **`driver-complete ORPHAN account: delete it by hand {user_id}`:** فشل `finish_driver_registration` ثم فشل حذف الحساب: احذف الحساب من Auth يدوياً (دوره `customer`، بلا طلبات)، ويبقى الطلب `approved` فيعيد السائق المحاولة.
+- **`driver-complete ORPHAN account: delete it by hand {user_id}`:** فشل `finish_driver_registration` ثم فشل حذف الحساب: الحساب المتبقي (دوره `customer`، بلا طلبات) إما يُحذف من Auth يدوياً، وإما **يُصلَح بالمسار الرسمي (R1 L4)**: أعد ضبط رمزه من `/staff` ثم غيّر دوره إلى سائق (§16c) واسحب موافقة الطلب. ويبقى الطلب `approved` فيعيد السائق المحاولة إن حُذف الحساب.
 - كثرة `rate check failed` أو `submit failed` (500 `REGISTER_FAILED`/`INTERNAL`) = عطل بقاعدة البيانات أو المفتاح السري: افحص `keys {"secret":"new"}` بأول السجل و`pnpm sb migration list --remote`.
-- `PHONE_TAKEN` عند الإكمال والطلب `approved`: للرقم حساب (زبون مثلاً). الأدمن يقرر: يحذف الطلب، أو يرقّي الحساب الموجود.
+- `PHONE_TAKEN` عند الإكمال والطلب `approved`: للرقم حساب (زبون مثلاً). الأدمن يقرر: **"سحب الموافقة"** من `/driver-requests` (آخر القرارات، R1 M1)، أو يرقّي الحساب الموجود (§16c: إعادة ضبط الرمز أولاً ثم الدور).
+- **حد الرقم (R1 M3):** 3/يوم لكل رقم لا يُستهلك إلا بطلب اجتاز الفحص؛ الجسم الفاسد يُحدّه حد الـ IP (10/ساعة) فقط.
+- **كثرة `rate limited` مع قلة `done` (R1 L2):** غالباً CGNAT (شبكات الموبايل العراقية تشارك عنواناً عاماً واحداً بين كثيرين) أو غياب الترويسة. افحص أن مفتاح الـ IP ليس `unknown` للجميع (عدد صفوف bucket = ip بـ `private.driver_request_rate_limits`)، وتحقق من `cf-connecting-ip` على مشروع الإنتاج قبل الإطلاق (§17.4). التسجيلات قليلة فالحد مقبول.
+- **`PHONE_TAKEN` و`REQUEST_EXISTS` (R1 L3):** يكشفان أن للرقم حساباً أو طلباً مفتوحاً؛ مقبول (محدود بحدود المعدل أعلاه).
 
 ### الحالة على mukhdar-dev (2026-11-20)
 الدالتان منشورتان (`--no-verify-jwt`)، و`pnpm it:driver-register` نجح (34 فحصاً، 4 تشغيلات متتالية) وحُذفت بياناته المؤقتة. الإنتاج: لم يُنشر شيء.
 
 ## 16c) طلبات السواق: اللوحة (T29)
-الصفحة `/driver-requests` (أدمن فقط، SPEC-admin §2.10). لا migration ولا نشر دالة: تستعمل `list_driver_requests` و`decide_driver_request` (T27).
+الصفحة `/driver-requests` (أدمن فقط، SPEC-admin §2.10). تستعمل `list_driver_requests` و`decide_driver_request` و`pending_driver_requests_count` (T27 وR1).
 - **اتصل بالرقم قبل الموافقة** وتأكد من الاسم وأنه فعلاً قدّم الطلب؛ لا موافقة من رسالة فقط (الخانة "اتصلت وتأكدت" إلزامية). الرفض بملاحظة اختيارية.
 - **الموافقة صالحة 7 أيام**؛ بعدها تظهر "منتهية" ويسجّل السائق من جديد وتوافق بعد مكالمة جديدة.
-- **سائق غيّر جهازه قبل اختيار الرمز** ← ارفض الطلب القديم، ويسجّل من الجهاز الجديد طلباً جديداً (السر مربوط بالجهاز).
-- **رقم مسجّل كزبون** (`PHONE_TAKEN`) ← أعد ضبط رمزه من `/staff` ثم غيّر دوره إلى سائق (`set_user_role`)، وارفض الطلب.
+- **سائق غيّر جهازه قبل اختيار الرمز** ← ارفض الطلب القديم (إن كان معلّقاً) أو **اسحب موافقته** (إن كان موافَقاً عليه: "آخر القرارات" ← "سحب الموافقة")، ويسجّل من الجهاز الجديد طلباً جديداً (السر مربوط بالجهاز).
+- **سحب الموافقة (R1 M1):** لموافقة تبيّن بعدها أن المتصل كذب أو اعترض صاحب الرقم الحقيقي. يصير الطلب `rejected` (مدقَّق)، والجهاز يراه "مرفوض" ولا يكمل. لا يُسحب طلب اكتمل تسجيله (عطّل الحساب من `/staff`).
+- **رقم مسجّل كزبون** (`PHONE_TAKEN`) ← **أعد ضبط رمزه أولاً من `/staff`** (رمز مؤقت تسلّمه للشخص على المكالمة)، ثم غيّر دوره إلى سائق (`set_user_role`)، ثم اسحب موافقة الطلب إن وُجد. **قاعدة بقاعدة البيانات (R1 H1، 2026-11-20):** تغيير دور زبون إلى سائق بلا إعادة ضبط رمزه يُرفض بـ `PIN_RESET_REQUIRED`؛ فلا يصير سائقاً من يحمل رمز الحساب وهو لا يملك الرقم. السائق الجديد يغيّر الرمز المؤقت عند أول دخول.
 - **نسيان الرمز لاحقاً** ← `admin-reset-pin` (§7)، مكالمة للسائق.
 - شارة القائمة = عدد المعلّق. الدمج بـ `main` ينشر اللوحة تلقائياً على Cloudflare (نسخة المعاينة).
 
@@ -523,7 +527,7 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
 > إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (جلسة C: migration `20261125000001` لـ H1/M1 والبنود Low، وإعادة نشر `admin-reset-pin`) مدرجة أدناه (الصفان 24 و25).
 
-### 1. الـ migrations بالترتيب (38 ملفاً)
+### 1. الـ migrations بالترتيب (39 ملفاً)
 | # | الملف |
 |---|---|
 | 1 | `20261110000001_init.sql` |
@@ -564,6 +568,7 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 | 36 | `20261206000001_category_management.sql` (قرار المالك 2026-11-18: إدارة الأقسام للأدمن فقط. `admin_audit.action` يقبل `'category'`؛ قيد اسم القسم وفهرس فريد بلا فرق بالحالة؛ دوال `admin_save_category` و`delete_category` (فقط لقسم بلا منتجات) و`reorder_categories` (ذرّي) مع تدقيق؛ سحب الكتابة المباشرة على `categories` من authenticated وحذف سياساتها؛ سياسة `products_read` تشترط قسماً ظاهراً، و`place_order` يرفض منتجاً بقسم مخفي (تبديل حرفي لموضع واحد يفشل إن لم يجده). بلا تغيير بيانات. **طُبّقت على mukhdar-dev فقط** بـ `pnpm sb db push`، لا إنتاج. بعد `20261205000001`. فُحصت أولاً بـ `db:test:remote --prelude` |
 | 37 | `20261207000001_address_ranges.sql` (قرار المالك 2026-11-19: trigger `addresses_clean_text` يرفض `FLOOR_INVALID` (طابق خارج 0..9) و`APARTMENT_INVALID` (شقة خارج 1..12) و`BUILDING_INACTIVE` (عمارة/بلوك غير فعّال)، للجديد وللحقل المعدَّل فقط؛ العناوين القديمة تبقى. بلا تغيير بيانات (الشجرة بـ `scripts/address-tree`). **طُبّقت على mukhdar-dev فقط** بـ `pnpm sb db push`. بعد `20261206000001`. فُحصت أولاً بـ `db:test:remote --prelude`) |
 | 38 | `20261208000001_driver_requests.sql` (T27، SPEC-driver §4.1 D1–D13، قرار المالك 2026-11-19: تطبيق السائق داخل الـ repo. جدول `driver_requests` (RLS بلا سياسات، بلا صلاحيات) وحد معدله `private.driver_request_rate_limits`؛ دوال service_role `driver_request_rate_hit` و`submit_driver_request` و`begin_driver_completion` و`finish_driver_registration`؛ `driver_request_status` لـ **anon** و`authenticated` (الدالة الـ definer الوحيدة المكشوفة لـ anon: تحذير Advisor متوقع)؛ `list_driver_requests` و`decide_driver_request` للأدمن aal2 (`admin_audit` يقبل `driver_request`)؛ جمهور إشعار `driver_request` وعمود `notification_outbox.driver_request_id` و`claim_push_notifications` بنفس شكل المخرجات (`push-dispatch` بلا تغيير)؛ التنظيف اليومي؛ و`available_orders` + `line_count` (drop + create، نفس الصلاحيات). **طُبّقت على mukhdar-dev فقط** بـ `pnpm sb db push` (2026-11-20). بعد `20261207000001`. **قبل** نشر `driver-register` و`driver-complete-registration` (T28) وقبل صفحة "طلبات السواق" باللوحة (T29). تطبيق السائق القديم لا يوجد، فلا مشكلة توافق لعمود `line_count`. فُحصت أولاً بـ `db:test:remote --prelude`) |
+| 39 | `20261209000001_r1_driver_fixes.sql` (إصلاحات مراجعة R1 لـ T27–T30، قرارات المالك 2026-11-20: `set_user_role` زبون ← سائق يتطلب رمزاً مؤقتاً (H1)؛ `decide_driver_request` يسحب الموافقة من `approved` (M1)؛ `finish_driver_registration` يفحص الانتهاء (L1)؛ `submit_driver_request` بإشعار أدمن عام (M4) وموافقة منتهية تبقى `rejected` بملاحظة (L5)؛ و`pending_driver_requests_count()` (L8). نسخ دوال بنفس الصلاحيات، ودالة جديدة لـ authenticated. بعد `20261208000001`. **تُنشر معها** `driver-register` (M3: حد الرقم بعد الفحص) واللوحة (سحب الموافقة، العدّاد). فُحصت أولاً بـ `db:test:remote --prelude`) |
 
 **شجرة عناوين بسماية الدقيقة (2026-11-19):** `pnpm exec node scripts/address-tree/run.mjs --remote` (معاينة، لا يكتب) ثم `--apply`. البيانات بملف واحد `scripts/address-tree/data.json` (13 بلوكاً: A1..A9 وB1 وB2 وB3 وB8 بعماراتها 1..N)، والسكربت قابل للإعادة (يُنشئ الناقص، يفعّل المذكور، يُخفي ما عداه، لا يحذف ولا يمس العناوين والطلبات) ويطبع العناوين المحفوظة غير الصالحة. **عند الإطلاق على الإنتاج** (بعد `db push` للـ migrations و`seed.sql` الأساسي): من نسخة الإنتاج المنفصلة (§17.2) `MUKHDAR_TARGET=prod node scripts/address-tree/run.mjs --remote --target=prod --confirm-ref=<ref الإنتاج>` (معاينة) ثم الأمر نفسه مع `--apply`؛ يرفض أي مشروع غير مسجَّل بـ `PROD_PROJECT_REFS`.
 
@@ -591,7 +596,7 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
    ```
    كل أوامر الإنتاج بالخطوات التالية تُشغَّل من `../mukhdar-prod` فقط، بـ `MUKHDAR_TARGET=prod pnpm sb …`، وتكتب الـ ref عند السؤال. لا حاجة لـ "إعادة ربط التطوير": نسخة التطوير لم تُمس. (سكربتات `seed:*` و`db:concurrency` و`it:*` ترفض أي مشروع غير mukhdar-dev، **وترفض ref الإنتاج دائماً حتى لو أُضيف خطأً لقائمة التطوير** (T23 H3، `scripts/seed-guard.test.mjs`)، وهذا مقصود. اختبار الحمل على الإنتاج له مسار صريح منفصل: §17.4.)
 2. إعدادات Auth من اللوحة **أولاً**: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7، و**8 (TOTP: Enabled) قبل أي migration** (`20261130000001` تقفل الأدمن عن اللوحة بلا TOTP). **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
-3. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 38 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد). **لا** `insert into private.deployment` على الإنتاج (علامة التطوير فقط، L3؛ تُضاف على mukhdar-dev مرة واحدة يدوياً وبـ `seed.sql` محلياً).
+3. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 39 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد). **لا** `insert into private.deployment` على الإنتاج (علامة التطوير فقط، L3؛ تُضاف على mukhdar-dev مرة واحدة يدوياً وبـ `seed.sql` محلياً).
 4. الدوال، بالترتيب (كلها بعد الخطوة 3، فالقواعد أعلاه محققة تلقائياً؛ **كلها `--no-verify-jwt`** منذ T23 F H2: التحقق من المستخدم داخل الدالة):
    ```bash
    pnpm sb functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt
