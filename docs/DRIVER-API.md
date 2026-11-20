@@ -466,7 +466,9 @@ supabase.from('orders').select('id, order_number, total_iqd, delivered_at, addre
 **your assigned orders only**:
 
 ```ts
-supabase.channel('driver-orders')
+// one UNIQUE topic per subscription (e.g. `driver-orders-${uid}-${n}`): supabase-js returns the
+// already-joined channel for the same topic, and `.on()` after `subscribe()` throws (R2 C1)
+supabase.channel(`driver-orders-${uid}-${n}`)
   .on('postgres_changes',
       { event: '*', schema: 'public', table: 'orders', filter: `driver_id=eq.${uid}` },
       (payload) => { /* update the list / open order */ })

@@ -5,8 +5,8 @@ import * as Notifications from 'expo-notifications';
 import { Linking } from 'react-native';
 import AccountScreen from '../app/(tabs)/account';
 import ChangePinScreen from '../app/account/change-pin';
-import { deleteDriverAccount, signOutDriver } from '../features/account/account';
-import { useAuth } from '../features/auth/store';
+import { deleteDriverAccount } from '../features/account/account';
+import { signOut, useAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
 import { registerPushToken } from '../lib/push';
 import {
@@ -111,7 +111,7 @@ describe('AccountScreen', () => {
   });
 });
 
-describe('signOutDriver: token row first, then the session', () => {
+describe('signOut: token row first, then channels, then this device only', () => {
   async function remember(client: never) {
     jest
       .mocked(Notifications.getPermissionsAsync)
@@ -122,7 +122,7 @@ describe('signOutDriver: token row first, then the session', () => {
     await registerPushToken(client, { ask: false });
   }
 
-  it('deletes the push_tokens row BEFORE signOut, and removes Realtime channels', async () => {
+  it('deletes the push_tokens row BEFORE signOut (local scope), and removes Realtime channels', async () => {
     const order: string[] = [];
     const auth = makeAuth({
       signOut: jest.fn(() => (order.push('signOut'), Promise.resolve({ error: null }))),
@@ -136,32 +136,27 @@ describe('signOutDriver: token row first, then the session', () => {
     });
     await remember(client as never);
     order.length = 0;
-    expect(await signOutDriver(client as never)).toEqual({ ok: true });
+    await signOut(client as never);
     expect(order).toEqual(['delete-token', 'channels', 'signOut']);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
   });
 
-  it('token delete fails: the user is NOT signed out (no stale pushes), with a message', async () => {
+  it('the Sign out button on the account tab uses it', async () => {
     const auth = makeAuth();
-    const fake = createFakeSupabase(
-      (call) =>
-        call.table === 'push_tokens'
-          ? { data: null, error: { message: 'Network request failed' } }
-          : ok,
-      auth,
-    );
-    const client = Object.assign(fake.client, { removeAllChannels: jest.fn() });
-    await remember(client as never);
-    const r = await signOutDriver(client as never);
-    expect(r.ok).toBe(false);
-    expect(auth.signOut).not.toHaveBeenCalled();
+    const fake = createFakeSupabase(() => ok, auth);
+    mockClient = Object.assign(fake.client, { removeAllChannels: jest.fn() });
+    await renderScreen(<AccountScreen />);
+    await fireEvent.press(screen.getByTestId('account-sign-out'));
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
   });
 
   it('no remembered token: just signs out', async () => {
     const auth = makeAuth();
     const fake = createFakeSupabase(() => ok, auth);
     const client = Object.assign(fake.client, { removeAllChannels: jest.fn() });
-    expect(await signOutDriver(client as never)).toEqual({ ok: true });
-    expect(auth.signOut).toHaveBeenCalled();
+    await signOut(client as never);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(Notifications.unregisterForNotificationsAsync).not.toHaveBeenCalled();
   });
 });
 

@@ -5,7 +5,13 @@ import { Linking } from 'react-native';
 import OrderDetailScreen from '../app/order/[id]';
 import { useAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
-import { createFakeSupabase, opArgs, type Call, type Result } from '../test-utils/fakeSupabase';
+import {
+  createFakeSupabase,
+  opArgs,
+  withRealtime,
+  type Call,
+  type Result,
+} from '../test-utils/fakeSupabase';
 import { renderScreen } from '../test-utils/render';
 
 let mockClient: unknown = null;
@@ -94,13 +100,7 @@ const driver = {
 
 function setup(resolve: (call: Call) => Result) {
   const fake = createFakeSupabase(resolve);
-  Object.assign(fake.client, {
-    channel: () => {
-      const ch = { on: () => ch, subscribe: () => ch };
-      return ch;
-    },
-    removeChannel: jest.fn(),
-  });
+  withRealtime(fake);
   mockClient = fake.client;
   return fake;
 }

@@ -4,6 +4,7 @@
 import type { MukhdarClient, Session } from '@mukhdar/shared';
 import { AppState } from 'react-native';
 import { create } from 'zustand';
+import { removePushForSignOut, retryPendingPushUnregister } from '../../lib/push';
 import { clearRegistration, loadRegistration } from '../../lib/secureStore';
 import type { DriverProfile, GuardState } from './guard';
 
@@ -123,16 +124,19 @@ export async function refreshRegistration(): Promise<void> {
   }
 }
 
-/** تسجيل الخروج (يبطل رمز التحديث بالخادم)؛ فشل الشبكة ← خروج محلي على أي حال. */
+/**
+ * الخروج الوحيد من هذا الجهاز (R2 M2، كل الشاشات: حسابي، ماكو اتصال، غير سائق، الرمز الإجباري). بالترتيب: حذف رمز
+ * الإشعارات (أو إبطاله وتأجيل حذفه بلا شبكة) ← إلغاء اشتراكات Realtime ← خروج `local` (هذا الجهاز فقط، قرار المالك
+ * 2026-11-21، SPEC-driver §2.10). لا يفشل ولا يعلّق على الشبكة.
+ */
 export async function signOut(client: MukhdarClient): Promise<void> {
+  await removePushForSignOut(client);
   try {
-    const { error } = await client.auth.signOut();
-    if (error) throw error;
+    await client.removeAllChannels();
   } catch {
-    await localSignOut(client);
-    return;
+    // الاشتراكات تسقط مع الجلسة على أي حال
   }
-  useAuth.setState({ session: null, profile: null, profileError: false, sessionOffline: false });
+  await localSignOut(client);
 }
 
 /** يمسح الطلب المحفوظ من الجهاز (السر معه) ويبلّغ الحارس. الطلب على الخادم يبقى للأدمن. */
@@ -155,6 +159,7 @@ export function initAuth(client: MukhdarClient | null): () => void {
     await refreshRegistration();
     await loadSession(client);
     await refreshProfile(client);
+    if (useAuth.getState().session) void retryPendingPushUnregister(client);
   })();
 
   const { data } = client.auth.onAuthStateChange((event, session) => {
@@ -187,6 +192,7 @@ export function initAuth(client: MukhdarClient | null): () => void {
       // الرجوع للتطبيق: الأدمن قد يكون عطّله أو أعاد ضبط رمزه أثناء غيابه. "ماكو اتصال" تُعاد محاولتها تلقائياً.
       if (useAuth.getState().sessionOffline) void retrySession(client);
       else void refreshProfile(client);
+      if (useAuth.getState().session) void retryPendingPushUnregister(client);
       void refreshRegistration();
     } else void client.auth.stopAutoRefresh();
   };

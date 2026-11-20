@@ -47,6 +47,8 @@ export function removedOrders(prev: readonly MyOrder[], next: readonly MyOrder[]
   return removed;
 }
 
+let channelSeq = 0;
+
 interface RealtimeClient {
   channel(name: string): {
     on(type: 'postgres_changes', filter: object, cb: () => void): unknown;
@@ -65,7 +67,9 @@ export function subscribeMyOrders(
   onChange: () => void,
 ): () => void {
   const c = client as unknown as RealtimeClient;
-  const channel = c.channel(`driver-orders-${userId}`);
+  // R2 C1: realtime-js يرجع القناة المنضمّة نفسها لنفس الاسم، و`.on()` بعد `subscribe()` يرمي. فلكل اشتراك اسم فريد،
+  // وإلغاؤه لا يمس اشتراك شاشة أخرى (طلباتي وتفاصيل الطلب يعملان معاً).
+  const channel = c.channel(`driver-orders-${userId}-${++channelSeq}`);
   channel.on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'orders', filter: `driver_id=eq.${userId}` },

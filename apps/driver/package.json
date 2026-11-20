@@ -53,6 +53,8 @@
     "setupFilesAfterEnv": [
       "./jest.setup.ts"
     ],
+    "maxWorkers": 2,
+    "workerIdleMemoryLimit": "1GB",
     "testTimeout": 15000
   }
 }

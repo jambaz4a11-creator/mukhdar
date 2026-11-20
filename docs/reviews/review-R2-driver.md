@@ -201,17 +201,21 @@ None.
   216/216. CI (Linux) is green. **Impact:** false red runs on the owner's machine. **Fix:** set
   `"workerIdleMemoryLimit": "512MB"` or `--maxWorkers=50%` in the test script. **Needs:** repo only.
 
+## Fix status (2026-11-21, PR `fix/r2-driver-review`)
+
+Items 1–6 are done (app code, Jest, SPEC/RUNBOOK, and the EAS `preview` variables). Owner decisions: C1 unique topic per subscription plus a realistic Realtime fake; M2 one `signOut` path with offline queue; L2 = `scope: 'local'`; M1 = `preview` variables for the dev URL and publishable key only. Item 7 (L5 and the device checks) stays with T33 and is now in its checklist. No migration, no Edge Function, nothing on prod. `EXPO_PUBLIC_SHOP_*` were **not** created in `preview` (not in the approval); T33 asks the owner.
+
 ## Ordered fix list (before T33)
 
 | # | Item | Change | Deploy |
 |---|---|---|---|
-| 1 | C1 unique / shared Realtime subscription | `features/orders/mine.ts` (+ both screens), realistic channel fake, mount-both test | none (app code) |
-| 2 | M2 one sign-out path, token deleted or device unregistered | `features/account/account.ts` / `store.ts`, `auth/offline`, `auth/not-driver`, `auth/change-pin` + Jest | none |
-| 3 | L1, L3 in-flight refs | `(tabs)/index.tsx`, `(tabs)/today.tsx` | none |
-| 4 | L4, L6 repo hygiene | `.gitignore`, `apps/driver/package.json` jest config | none |
-| 5 | L2 decide the sign-out scope | SPEC-driver §2.10 (+ code if changed) | none |
-| 6 | M1 EAS `preview` environment | `eas.json` `environment` per profile, project id in `app.config.ts` (optional), RUNBOOK §16e; then the EAS variables | EAS env vars (**owner approval**) |
-| 7 | L5 + the existing T32 device checks | T33 checklist | T33 APK build (owner approval) |
+| 1 ✅ | C1 unique / shared Realtime subscription | `features/orders/mine.ts` (+ both screens), realistic channel fake, mount-both test | none (app code) |
+| 2 ✅ | M2 one sign-out path, token deleted or device unregistered | `features/account/account.ts` / `store.ts`, `auth/offline`, `auth/not-driver`, `auth/change-pin` + Jest | none |
+| 3 ✅ | L1, L3 in-flight refs | `(tabs)/index.tsx`, `(tabs)/today.tsx` | none |
+| 4 ✅ | L4, L6 repo hygiene | `.gitignore`, `apps/driver/package.json` jest config | none |
+| 5 ✅ | L2 decide the sign-out scope | SPEC-driver §2.10 (+ code if changed) | none |
+| 6 ✅ | M1 EAS `preview` environment | `eas.json` `environment` per profile, project id in `app.config.ts` (optional), RUNBOOK §16e; then the EAS variables | EAS env vars (**owner approval**) |
+| 7 ⬜ (T33) | L5 + the existing T32 device checks | T33 checklist | T33 APK build (owner approval) |
 
 Items 1–5 fit in one app-only PR (no migration, no Edge Function redeploy). Item 6 needs the owner to create the EAS
 `preview` variables before the first T33 build. After the fixes: `pnpm lint && pnpm typecheck && pnpm test`, the

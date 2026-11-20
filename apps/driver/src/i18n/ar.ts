@@ -163,7 +163,6 @@ export const ar = {
     changePin: 'تغيير الرمز السري',
     callShop: 'اتصل بالمحل',
     whatsappShop: 'واتساب المحل',
-    signOutFailed: 'تعذّر تسجيل الخروج، تأكد من الاتصال وحاول مرة ثانية.',
     deleteAccount: 'حذف الحساب',
     deleteTitle: 'حذف حسابك؟',
     deleteBody:
