@@ -1,8 +1,8 @@
 // الطلبات الجاهزة (SPEC-driver §2.6، التصميم Main). available_orders(20)؛ تحديث بالسحب وكل 30 ثانية والشاشة ظاهرة
 // وعند الرجوع للتطبيق. القبول ذرّي بالخادم: الخسارة ← "قبله سائق ثاني" ثم تُحذف بالتحديث التالي. NOT_ALLOWED ← فحص الحارس.
 import { router } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../components/AppText';
 import { ReadyOrderCard } from '../../components/ReadyOrderCard';
@@ -10,11 +10,15 @@ import { SecondaryButton } from '../../components/SecondaryButton';
 import { useAuth } from '../../features/auth/store';
 import { acceptOrder, fetchAvailableOrders } from '../../features/orders/available';
 import { guardDriverError } from '../../features/orders/driverErrors';
+import { useNotificationRefresh } from '../../features/notifications/events';
 import type { AvailableOrder } from '../../features/orders/types';
 import { useFocusedPoll } from '../../features/orders/useFocusedPoll';
 import { ar } from '../../i18n/ar';
+import { getPermissionState, type PermissionState } from '../../lib/push';
 import { getSupabase } from '../../lib/supabase';
 import { colors, radius, spacing } from '../../theme';
+
+const NEW_ORDER_TYPES = ['new_order', 'ready', 'assigned'] as const;
 
 export default function ReadyScreen() {
   const [orders, setOrders] = useState<AvailableOrder[]>([]);
@@ -56,6 +60,13 @@ export default function ReadyScreen() {
   }, []);
 
   useFocusedPoll(load);
+  // إشعار new_order والتطبيق مفتوح: تحديث فوري (SPEC-driver §2.6)
+  useNotificationRefresh(NEW_ORDER_TYPES, () => void load());
+
+  const [permission, setPermission] = useState<PermissionState>('granted');
+  useEffect(() => {
+    void getPermissionState().then(setPermission);
+  }, [orders.length]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -108,6 +119,19 @@ export default function ReadyScreen() {
           </View>
         ) : null}
       </View>
+
+      {permission === 'denied' ? (
+        <View style={styles.warn} testID="push-off-banner">
+          <AppText size="small" color={colors.warningText}>
+            {ar.push.offBanner}
+          </AppText>
+          <SecondaryButton
+            title={ar.push.openSettings}
+            onPress={() => void Linking.openSettings()}
+            testID="push-open-settings"
+          />
+        </View>
+      ) : null}
 
       {error ? (
         <View style={styles.error} testID="ready-error">
@@ -176,6 +200,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.control,
     backgroundColor: colors.dangerSoft,
+    gap: spacing.xs,
+  },
+  warn: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.control,
+    backgroundColor: colors.warningSoft,
     gap: spacing.xs,
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.screen },

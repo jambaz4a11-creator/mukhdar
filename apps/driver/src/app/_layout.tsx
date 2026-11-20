@@ -16,12 +16,15 @@ import { AppText } from '../components/AppText';
 import { config } from '../config';
 import { AuthGuard } from '../features/auth/AuthGuard';
 import { initAuth } from '../features/auth/store';
+import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
 import { ar } from '../i18n/ar';
+import { configureNotificationHandler } from '../lib/push';
 import { ensureRTL } from '../lib/rtl';
 import { getSupabase } from '../lib/supabase';
 import { colors, spacing } from '../theme';
 
 void SplashScreen.preventAutoHideAsync();
+configureNotificationHandler();
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -64,6 +67,7 @@ function RootLayout() {
         <Stack.Screen name="auth/set-pin" options={{ gestureEnabled: false }} />
       </Stack>
       <AuthGuard />
+      <NotificationsBridge />
     </SafeAreaProvider>
   );
 }

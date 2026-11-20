@@ -22,6 +22,7 @@ import { subscribeMyOrders } from '../../features/orders/mine';
 import { formatBaghdadClock } from '../../features/orders/time';
 import { nextAction, setOrderStatus } from '../../features/orders/transitions';
 import type { OrderDetail, OrderItemView } from '../../features/orders/types';
+import { useNotificationRefresh } from '../../features/notifications/events';
 import { useFocusedPoll } from '../../features/orders/useFocusedPoll';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
@@ -67,6 +68,7 @@ export default function OrderDetailScreen() {
   }, [id]);
 
   useFocusedPoll(load);
+  useNotificationRefresh(null, () => void load());
 
   // الأدمن/اللوحة قد يغيّر الحالة (يؤدي الاستلام أو التسليم نيابة عنه): Realtime على طلباتي يعيد الجلب
   useEffect(() => {
