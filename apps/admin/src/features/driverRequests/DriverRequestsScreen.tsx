@@ -15,7 +15,14 @@ import {
   type DriverRequestRow,
   type DriverRequestTab,
 } from './api';
-import { NOTE_MAX, approveBlocked, decisionErrorMessage, sinceLabel, statusLabel } from './format';
+import {
+  NOTE_MAX,
+  approveBlocked,
+  canWithdraw,
+  decisionErrorMessage,
+  sinceLabel,
+  statusLabel,
+} from './format';
 
 const POLL_MS = 60_000;
 const TABS: { id: DriverRequestTab; label: string }[] = [
@@ -23,7 +30,7 @@ const TABS: { id: DriverRequestTab; label: string }[] = [
   { id: 'decided', label: 'آخر القرارات' },
 ];
 
-type Decision = { kind: 'approve' | 'reject'; row: DriverRequestRow };
+type Decision = { kind: 'approve' | 'reject' | 'withdraw'; row: DriverRequestRow };
 
 export function DriverRequestsScreen() {
   const { supabase } = usePanel();
@@ -93,6 +100,7 @@ export function DriverRequestsScreen() {
             first={i === 0}
             onApprove={() => setDecision({ kind: 'approve', row: r })}
             onReject={() => setDecision({ kind: 'reject', row: r })}
+            onWithdraw={() => setDecision({ kind: 'withdraw', row: r })}
           />
         ))}
       </section>
@@ -102,6 +110,9 @@ export function DriverRequestsScreen() {
       )}
       {decision?.kind === 'reject' && (
         <RejectDialog row={decision.row} onClose={() => setDecision(null)} />
+      )}
+      {decision?.kind === 'withdraw' && (
+        <RejectDialog withdraw row={decision.row} onClose={() => setDecision(null)} />
       )}
     </div>
   );
@@ -113,12 +124,14 @@ function RequestLine({
   first,
   onApprove,
   onReject,
+  onWithdraw,
 }: {
   row: DriverRequestRow;
   tab: DriverRequestTab;
   first: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onWithdraw: () => void;
 }) {
   const phone = displayPhone(row.phone);
   const links = phoneLinks(row.phone);
@@ -197,6 +210,15 @@ function RequestLine({
               {row.decision_note}
             </span>
           )}
+          {canWithdraw(row.status) && (
+            <button
+              type="button"
+              onClick={onWithdraw}
+              className="mt-1 h-10 rounded-[10px] border border-[#F3CFCA] bg-danger-soft px-3 text-[13px] text-danger"
+            >
+              سحب الموافقة
+            </button>
+          )}
         </span>
       )}
     </article>
@@ -271,11 +293,29 @@ function ApproveDialog({ row, onClose }: { row: DriverRequestRow; onClose: () =>
   );
 }
 
-function RejectDialog({ row, onClose }: { row: DriverRequestRow; onClose: () => void }) {
+/** الرفض (من المعلّق) وسحب الموافقة (من الموافَق عليه، R1 M1) نفس القرار بقاعدة البيانات (approve = false). */
+function RejectDialog({
+  row,
+  onClose,
+  withdraw = false,
+}: {
+  row: DriverRequestRow;
+  onClose: () => void;
+  withdraw?: boolean;
+}) {
   const [note, setNote] = useState('');
   const { mutation, error } = useDecision(row, false, onClose);
   return (
-    <Modal title={`رفض طلب ${row.full_name}`} onClose={onClose} testId="reject-dialog">
+    <Modal
+      title={withdraw ? `سحب الموافقة على ${row.full_name}` : `رفض طلب ${row.full_name}`}
+      onClose={onClose}
+      testId="reject-dialog"
+    >
+      {withdraw && (
+        <p className="m-0 text-[15px]">
+          الطلب يصير مرفوضاً، والجهاز ما يكدر يكمل التسجيل، وتظهر له حالة "مرفوض".
+        </p>
+      )}
       <Field label="ملاحظة (اختيارية)" htmlFor="reject-note" hint={`حتى ${NOTE_MAX} حرف`}>
         <textarea
           id="reject-note"
@@ -298,7 +338,7 @@ function RejectDialog({ row, onClose }: { row: DriverRequestRow; onClose: () => 
           onClick={() => mutation.mutate(note.trim() || undefined)}
           className="h-11 flex-1 rounded-control border border-[#F3CFCA] bg-danger-soft px-4 text-sm font-bold text-danger disabled:opacity-50"
         >
-          {mutation.isPending ? 'جارٍ الحفظ…' : 'رفض الطلب'}
+          {mutation.isPending ? 'جارٍ الحفظ…' : withdraw ? 'سحب الموافقة' : 'رفض الطلب'}
         </button>
         <button
           type="button"

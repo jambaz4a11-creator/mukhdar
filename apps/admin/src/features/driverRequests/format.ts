@@ -43,6 +43,11 @@ export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
 
+/** موافقة قائمة (سارية أو منتهية) يسحبها الأدمن (R1 M1)؛ المكتمل والمرفوض لا. */
+export function canWithdraw(status: string): boolean {
+  return status === 'approved' || status === 'expired';
+}
+
 /** الموافقة مستحيلة بلا خانة "اتصلت وتأكدت" (SPEC-driver §5). */
 export function approveBlocked(confirmedCall: boolean): boolean {
   return !confirmedCall;
