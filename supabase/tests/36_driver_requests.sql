@@ -1,7 +1,7 @@
 -- 36: طلبات تسجيل السواق (T27، SPEC-driver §3 و§4.1 D1–D13، migration 20261208000001).
 --   كل نداء بدوره الحقيقي: الجهاز بلا حساب = anon، الأدمن aal2 (و aal1 مرفوض)، Edge Functions = service_role.
 --   دور postgres للتجهيز وللتحقق من الصفوف فقط (الجدول بلا سياسات؛ لا أحد يقرأه مباشرة).
-select plan(97);
+select plan(128);
 
 -- ================================================================ التجهيز (postgres)
 select tests.remember('admin', tests.new_user('admin'));
@@ -15,6 +15,8 @@ select set_config('t.p2', nextval('tests.phone_seq')::text, true);
 select set_config('t.p3', nextval('tests.phone_seq')::text, true);
 select set_config('t.p4', nextval('tests.phone_seq')::text, true);
 select set_config('t.p5', nextval('tests.phone_seq')::text, true);
+select set_config('t.p6', nextval('tests.phone_seq')::text, true);
+select set_config('t.p7', nextval('tests.phone_seq')::text, true);
 select set_config('t.cust_phone', (select phone from public.profiles where id = tests.id('cust')), true);
 
 -- سر الجهاز: 32 بايت base64url بلا حشو = 43 محرفاً. الخادم يخزّن SHA-256 (hex) للنص نفسه.
@@ -25,6 +27,8 @@ select set_config('t.s1', repeat('a', 42) || 'A', true);
 select set_config('t.s2', repeat('b', 42) || 'B', true);
 select set_config('t.s3', repeat('c', 42) || '-', true);
 select set_config('t.s4', repeat('d', 42) || '_', true);
+select set_config('t.s5', repeat('e', 42) || 'E', true);
+select set_config('t.s6', repeat('f', 42) || 'F', true);
 grant execute on all functions in schema tests to anon, authenticated, service_role;
 
 -- الصندوق يبدأ فارغاً من منظور الاختبار (يُلغى مع المعاملة)
@@ -45,22 +49,25 @@ select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname in
           ('driver_request_rate_hit', 'submit_driver_request', 'driver_request_status', 'list_driver_requests',
-           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration')
+           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration',
+           'pending_driver_requests_count')
       and has_function_privilege('anon', p.oid, 'execute')),
   array['driver_request_status'], 'anon executes driver_request_status only');
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname in
           ('driver_request_rate_hit', 'submit_driver_request', 'driver_request_status', 'list_driver_requests',
-           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration')
+           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration',
+           'pending_driver_requests_count')
       and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['decide_driver_request', 'driver_request_status', 'list_driver_requests'],
-  'authenticated executes status + the two admin functions only');
+  array['decide_driver_request', 'driver_request_status', 'list_driver_requests', 'pending_driver_requests_count'],
+  'authenticated executes status + the three admin functions only');
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname in
           ('driver_request_rate_hit', 'submit_driver_request', 'driver_request_status', 'list_driver_requests',
-           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration')
+           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration',
+           'pending_driver_requests_count')
       and has_function_privilege('service_role', p.oid, 'execute')
       and not has_function_privilege('authenticated', p.oid, 'execute')),
   array['begin_driver_completion', 'driver_request_rate_hit', 'finish_driver_registration', 'submit_driver_request'],
@@ -69,9 +76,10 @@ select is(
   (select count(*)::int from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname in
           ('driver_request_rate_hit', 'submit_driver_request', 'driver_request_status', 'list_driver_requests',
-           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration')
+           'decide_driver_request', 'begin_driver_completion', 'finish_driver_registration',
+           'pending_driver_requests_count')
       and p.prosecdef and p.proconfig = array['search_path=""']),
-  7, 'all seven are SECURITY DEFINER with an empty search_path');
+  8, 'all eight are SECURITY DEFINER with an empty search_path');
 
 -- service_role فقط: كل دور آخر يُرفض بالصلاحية (42501 permission denied)
 create function tests.t36_service_calls() returns setof text language sql as $$
@@ -145,7 +153,7 @@ select is((select count(*)::int from auth.users where phone = current_setting('t
   'no Auth account is created for a request');
 select row_eq(format($$ select audience, title, body, data from public.notification_outbox
                          where data ->> 'request_id' = %L $$, current_setting('t.r1')),
-  row('admins_only'::text, 'طلب سائق جديد'::text, 'طلب سائق جديد: أحمد  علي'::text,
+  row('admins_only'::text, 'طلب سائق جديد'::text, 'طلب سائق جديد، افتح طلبات السواق'::text,
       jsonb_build_object('type', 'driver_request', 'request_id', current_setting('t.r1'))),
   'admins get one admins_only notification');
 
@@ -231,6 +239,7 @@ select throws_ok($$ select * from public.list_driver_requests('all') $$, 'INVALI
 select tests.as_postgres();
 create function tests.t36_admin_calls() returns setof text language sql as $$
   values ($q$ select * from public.list_driver_requests() $q$),
+         ($q$ select public.pending_driver_requests_count() $q$),
          (format($q$ select public.decide_driver_request(%L, true) $q$, current_setting('t.r1')))
 $$;
 create function tests.t36_admin_refused() returns text language sql as $$
@@ -239,16 +248,16 @@ $$;
 grant execute on all functions in schema tests to anon, authenticated, service_role;
 
 select tests.as_user_aal1(tests.id('admin'));
-select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED', 'admin with aal1 (PIN only) is refused');
+select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED,NOT_ALLOWED', 'admin with aal1 (PIN only) is refused');
 select tests.as_user(tests.id('staff'));
-select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED', 'staff is refused');
+select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED,NOT_ALLOWED', 'staff is refused');
 select tests.as_user_aal1(tests.id('drv'));
-select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED', 'driver is refused');
+select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED,NOT_ALLOWED', 'driver is refused');
 select tests.as_user_aal1(tests.id('cust'));
-select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED', 'customer is refused');
+select is(tests.t36_admin_refused(), 'NOT_ALLOWED,NOT_ALLOWED,NOT_ALLOWED', 'customer is refused');
 select tests.as_anon();
 select is((select string_agg(left(tests.try(c), 17), ',') from tests.t36_admin_calls() c),
-  'permission denied,permission denied', 'anon has no execute on the admin functions');
+  'permission denied,permission denied,permission denied', 'anon has no execute on the admin functions');
 select tests.as_postgres();
 select is((select status from public.driver_requests where id = current_setting('t.r1')::uuid), 'pending',
   'refused calls changed nothing');
@@ -274,8 +283,8 @@ select row_eq(format($$ select title, data from public.notification_outbox
   'the device gets a driver_request notification (it has a push token)');
 
 select tests.as_user(tests.id('admin'));
-select throws_ok(format($$ select public.decide_driver_request(%L, false) $$, current_setting('t.r1')),
-  'REQUEST_ALREADY_DECIDED', 'a decided request cannot be decided again');
+select throws_ok(format($$ select public.decide_driver_request(%L, true) $$, current_setting('t.r1')),
+  'REQUEST_ALREADY_DECIDED', 'an approved request cannot be approved again');
 select throws_ok(format($$ select public.decide_driver_request(%L, true) $$, gen_random_uuid()),
   'REQUEST_NOT_FOUND', 'an unknown id is REQUEST_NOT_FOUND');
 select throws_ok(format($$ select public.decide_driver_request(%L, false, %L) $$, current_setting('t.r2'), repeat('x', 301)),
@@ -414,10 +423,134 @@ select tests.as_service();
 select isnt(public.submit_driver_request(current_setting('t.p4'), 'سائق رابع', tests.t36_hash(current_setting('t.s1')), null)::text,
   current_setting('t.r4'), 'an expired approval does not block a new request for the same phone');
 select tests.as_postgres();
-select is((select count(*)::int from public.driver_requests where id = current_setting('t.r4')::uuid), 0,
-  'the expired request is replaced');
+select row_eq(format($$ select status, decision_note, push_token, approved_until from public.driver_requests where id = %L $$,
+                     current_setting('t.r4')),
+  row('rejected'::text, 'انتهت مدة الموافقة وسُجّل طلب جديد'::text, null::text, null::timestamptz),
+  'L5: the expired request is kept as rejected (history stays), not deleted');
+
+
+-- ================================================================ M4: نص إشعار الأدمن عام (بلا اسم مكتوب من مجهول)
+select tests.as_postgres();
+select row_eq(format($$ select title, body, data from public.notification_outbox
+                         where audience = 'admins_only' and data ->> 'request_id' = %L $$, current_setting('t.r1')),
+  row('طلب سائق جديد'::text, 'طلب سائق جديد، افتح طلبات السواق'::text,
+      jsonb_build_object('type', 'driver_request', 'request_id', current_setting('t.r1'))),
+  'M4: the admin push is generic (no user-typed name)');
+
+-- ================================================================ M3: حد الرقم لا يُستهلك إلا بطلب صالح (service_role)
+select tests.as_service();
+select is(
+  (select array_agg(public.driver_request_rate_hit(null, current_setting('t.p6')) order by i) from generate_series(1, 4) i),
+  array[true, true, true, false], 'M3: a null IP counts the phone bucket only (3 per 24 hours)');
+select is(public.driver_request_rate_hit('10.36.9.9', null), true, 'M3: a null phone counts the IP bucket only');
+select tests.as_postgres();
+select is((select count(*)::int from private.driver_request_rate_limits
+            where bucket = 'phone' and key_hash = tests.t36_hash('10.36.9.9')), 0,
+  'M3: an IP-only hit leaves no phone-bucket row');
+
+-- ================================================================ M1 + L1: سحب الموافقة، وانتهاء الموافقة عند الإكمال
+select tests.as_service();
+select lives_ok(format($$ select set_config('t.r6', public.submit_driver_request(%L, 'سائق سادس', %L, 'ExpoPushToken[t36-r6]')::text, true) $$,
+                       current_setting('t.p6'), tests.t36_hash(current_setting('t.s5'))), 'a sixth request');
+select lives_ok(format($$ select set_config('t.r7', public.submit_driver_request(%L, 'سائق سابع', %L, 'ExpoPushToken[t36-r7]')::text, true) $$,
+                       current_setting('t.p7'), tests.t36_hash(current_setting('t.s6'))), 'a seventh request');
+select tests.as_user(tests.id('admin'));
+select is(public.decide_driver_request(current_setting('t.r6')::uuid, true), 'approved', 'r6 approved');
+select is(public.decide_driver_request(current_setting('t.r7')::uuid, true), 'approved', 'r7 approved');
+select throws_ok(format($$ select public.decide_driver_request(%L, true) $$, current_setting('t.r6')),
+  'REQUEST_ALREADY_DECIDED', 'M1: approving an already approved request is still refused');
+
+-- L1: finish يتحقق من الانتهاء بنفسه (الإكمال بدأ قبل ثانية من الانتهاء)
+select tests.as_postgres();
+select tests.remember('drv6', gen_random_uuid());
+insert into auth.users (id, phone, aud, role) values (tests.id('drv6'), current_setting('t.p6'), 'authenticated', 'authenticated');
+update public.driver_requests set approved_until = now() - interval '1 second' where id = current_setting('t.r6')::uuid;
+select tests.as_service();
+select throws_ok(format($$ select public.finish_driver_registration(%L, %L) $$, current_setting('t.r6'), tests.id('drv6')),
+  'REQUEST_EXPIRED', 'L1: finish_driver_registration refuses an expired approval');
+select tests.as_postgres();
+select is((select role::text from public.profiles where id = tests.id('drv6')), 'customer',
+  'L1: the refused finish left the profile untouched');
+
+-- M1: سحب موافقة سارية
+select tests.as_user(tests.id('admin'));
+select is(public.decide_driver_request(current_setting('t.r7')::uuid, false, 'اتصل صاحب الرقم وأنكر'), 'rejected',
+  'M1: admin withdraws a live approval');
+select tests.as_postgres();
+select row_eq(format($$ select status, decision_note, push_token, approved_until, decided_by from public.driver_requests where id = %L $$,
+                     current_setting('t.r7')),
+  row('rejected'::text, 'اتصل صاحب الرقم وأنكر'::text, null::text, null::timestamptz, tests.id('admin')),
+  'M1: withdrawn = rejected, note kept, no approval window');
+select row_eq(format($$ select before, after from public.admin_audit where action = 'driver_request' and target_id = %L
+                         order by created_at desc, id desc limit 1 $$, current_setting('t.r7')),
+  row('{"status": "approved"}'::jsonb,
+      jsonb_build_object('status', 'rejected', 'note', 'اتصل صاحب الرقم وأنكر', 'phone', current_setting('t.p7'))),
+  'M1: the withdrawal is audited (before.status = approved)');
+select tests.as_service();
+select throws_ok(format($$ select * from public.begin_driver_completion(%L, %L) $$,
+                        current_setting('t.r7'), tests.t36_hash(current_setting('t.s6'))),
+  'REQUEST_NOT_APPROVED', 'M1: a withdrawn request cannot be completed');
+select is((select recipients from public.claim_push_notifications(50)
+            where data ->> 'request_id' = current_setting('t.r7') and data ->> 'type' = 'driver_request_approved'),
+  '[]'::jsonb, 'M1: a withdrawn approval resolves to no device');
+select tests.as_anon();
+select is(public.driver_request_status(current_setting('t.r7')::uuid, current_setting('t.s6')), 'rejected',
+  'M1: the device sees the withdrawal as rejected');
+
+-- M1: سحب موافقة منتهية، ولا سحب لمكتمل أو مرفوض
+select tests.as_user(tests.id('admin'));
+select is(public.decide_driver_request(current_setting('t.r6')::uuid, false), 'rejected', 'M1: an expired approval can be withdrawn too');
+select throws_ok(format($$ select public.decide_driver_request(%L, false) $$, current_setting('t.r1')),
+  'REQUEST_ALREADY_DECIDED', 'M1: a completed request cannot be withdrawn');
+select throws_ok(format($$ select public.decide_driver_request(%L, false) $$, current_setting('t.r7')),
+  'REQUEST_ALREADY_DECIDED', 'M1: a rejected request cannot be decided again');
+select tests.as_postgres();
+select is((select count(*)::int from public.admin_audit where action = 'driver_request'
+            and target_id in (current_setting('t.r6')::uuid, current_setting('t.r7')::uuid)), 4,
+  'M1: approve + withdraw were audited for both requests');
+
+-- M1: غير الأدمن لا يسحب
+select tests.as_user(tests.id('staff'));
+select throws_ok(format($$ select public.decide_driver_request(%L, false) $$, current_setting('t.r1')), 'NOT_ALLOWED',
+  'M1: staff cannot withdraw');
+
+-- ================================================================ L8 pending_driver_requests_count (أدمن aal2)
+select tests.as_user(tests.id('admin'));
+select is(public.pending_driver_requests_count(),
+  (select count(*)::int from public.list_driver_requests('pending', 200)), 'L8: the count equals the pending list size');
+select is(pg_typeof(public.pending_driver_requests_count())::text, 'integer', 'L8: returns an integer');
+
+-- ================================================================ H1: زبون ← سائق يتطلب رمزاً مؤقتاً أولاً (السائق الجديد يغيّره عند أول دخول)
+select tests.as_postgres();
+select tests.remember('c_h1', tests.new_user('customer'));
+select tests.as_user(tests.id('admin'));
+select throws_ok(format($$ select public.set_user_role(%L, 'driver') $$, tests.id('c_h1')),
+  'P0001', 'PIN_RESET_REQUIRED', 'H1: customer → driver without a PIN reset is refused');
+select tests.as_postgres();
+select is((select role::text from public.profiles where id = tests.id('c_h1')), 'customer', 'H1: the refused promotion changed nothing');
+update public.profiles set must_change_pin = true where id = tests.id('c_h1');
+select tests.as_user(tests.id('admin'));
+select lives_ok(format($$ select public.set_user_role(%L, 'driver') $$, tests.id('c_h1')),
+  'H1: after the PIN reset the promotion to driver works');
+select tests.as_postgres();
+select row_eq(format($$ select role::text, must_change_pin from public.profiles where id = %L $$, tests.id('c_h1')),
+  row('driver'::text, true), 'H1: the new driver still has the temporary PIN (the app forces the change)');
+select tests.as_user_aal1(tests.id('c_h1'));
+select throws_ok($$ select * from public.available_orders(5) $$, '42501', 'NOT_ALLOWED',
+  'H1: until the PIN is changed the new driver is refused by the database');
+select tests.as_postgres();
+select tests.remember('d_h1', tests.new_user('driver'));
+select tests.as_user(tests.id('admin'));
+select lives_ok(format($$ select public.set_user_role(%L, 'driver', false) $$, tests.id('d_h1')),
+  'H1: driver → driver (deactivate) is not a promotion');
+select tests.as_postgres();
+select tests.remember('c_h1b', tests.new_user('customer'));
+select tests.as_user(tests.id('admin'));
+select lives_ok(format($$ select public.set_user_role(%L, 'customer', false) $$, tests.id('c_h1b')),
+  'H1: customer → customer (deactivate) is not a promotion');
 
 -- ================================================================ D10 التنظيف اليومي
+select tests.as_postgres();
 update public.driver_requests set decided_at = now() - interval '31 days' where id = current_setting('t.r2')::uuid;
 update public.driver_requests set completed_at = now() - interval '31 days' where id = current_setting('t.r1')::uuid;
 update public.driver_requests set created_at = now() - interval '90 days' where id = current_setting('t.r3')::uuid;

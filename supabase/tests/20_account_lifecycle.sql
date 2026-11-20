@@ -116,6 +116,8 @@ select results_eq(
                     '{"role": "staff", "is_active": false}'::jsonb) $$, tests.id('admin')),
   'audit row: who, old → new');
 
+select tests.as_postgres();
+update public.profiles set must_change_pin = true where id = tests.id('cust');  -- R1 H1: ترقية زبون لسائق بعد إعادة ضبط الرمز
 select tests.as_user(tests.id('admin'));
 select lives_ok(format($$ select public.set_user_role(%L, 'staff', true) $$, tests.id('staff')), 'reactivate');
 select lives_ok(format($$ select public.set_user_role(%L, 'staff', true) $$, tests.id('staff')), 'same values again: no-op');

@@ -135,8 +135,8 @@ select throws_ok(format($$ select public.set_user_role(%L, 'staff', true) $$, te
   'P0001', 'PIN_RESET_REQUIRED', 'customer → staff without a temporary PIN: refused');
 select throws_ok(format($$ select public.set_user_role(%L, 'admin', true) $$, tests.id('d_promo')),
   'P0001', 'PIN_RESET_REQUIRED', 'driver → admin without a temporary PIN: refused');
-select lives_ok(format($$ select public.set_user_role(%L, 'driver', true) $$, tests.id('c_promo')),
-  'customer → driver is not a panel promotion (allowed)');
+select throws_ok(format($$ select public.set_user_role(%L, 'driver', true) $$, tests.id('c_promo')),
+  'P0001', 'PIN_RESET_REQUIRED', 'R1 H1: customer → driver needs a temporary PIN too');
 select tests.as_postgres();
 update public.profiles set must_change_pin = true where id = tests.id('c_promo');
 select ok((select pin_reset_at = now() from public.profiles where id = tests.id('c_promo')),
