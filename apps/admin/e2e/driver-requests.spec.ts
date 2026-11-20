@@ -101,6 +101,7 @@ test.describe.serial('driver requests (admin, decisions)', () => {
   let toApprove: SeededDriverRequest;
   let toReject: SeededDriverRequest;
   let raced: SeededDriverRequest;
+  let withdrawn: SeededDriverRequest;
 
   test.beforeAll(async ({ browser }) => {
     page = await pageAs(browser, 'admin');
@@ -108,6 +109,12 @@ test.describe.serial('driver requests (admin, decisions)', () => {
     toApprove = await seedDriverRequest('موافقة');
     toReject = await seedDriverRequest('رفض');
     raced = await seedDriverRequest('سباق');
+    withdrawn = await seedDriverRequest('سحب');
+    const approved = await admin.rpc('decide_driver_request', {
+      p_id: withdrawn.id,
+      p_approve: true,
+    });
+    if (approved.error) throw approved.error;
   });
   test.afterAll(async () => page.context().close());
 
@@ -171,12 +178,42 @@ test.describe.serial('driver requests (admin, decisions)', () => {
     expect(adminName).toBeTruthy();
     await expect(rejected.getByTestId('request-decider')).toContainText(adminName ?? '');
     // لا أزرار قرار بتبويب القرارات: قرار واحد لكل طلب
-    await expect(approved.getByRole('button', { name: 'موافقة' })).toHaveCount(0);
+    await expect(approved.getByRole('button', { name: 'موافقة', exact: true })).toHaveCount(0);
+  });
+
+  test('R1 M1: an approved request can be withdrawn from "last decisions" (audited), and only once', async () => {
+    await page.goto('/driver-requests');
+    await page.getByRole('tab', { name: 'آخر القرارات' }).click();
+    const row = line(page, withdrawn);
+    await expect(row.getByTestId('request-status')).toHaveText('موافَق عليه');
+    await row.getByRole('button', { name: 'سحب الموافقة' }).click();
+    const dialog = page.getByTestId('reject-dialog');
+    await dialog.getByLabel('ملاحظة (اختيارية)').fill('اتصل صاحب الرقم وأنكر');
+    await dialog.getByRole('button', { name: 'سحب الموافقة' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(row.getByTestId('request-status')).toHaveText('مرفوض');
+    await expect(row.getByRole('button', { name: 'سحب الموافقة' })).toHaveCount(0);
+
+    const { data, error } = await admin
+      .from('admin_audit')
+      .select('before, after')
+      .eq('action', 'driver_request')
+      .eq('target_id', withdrawn.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    expect(error).toBeNull();
+    expect(data?.[0]?.before).toMatchObject({ status: 'approved' });
+    expect(data?.[0]?.after).toMatchObject({ status: 'rejected', note: 'اتصل صاحب الرقم وأنكر' });
+    const again = await admin.rpc('decide_driver_request', {
+      p_id: withdrawn.id,
+      p_approve: false,
+    });
+    expect(again.error?.message).toBe('REQUEST_ALREADY_DECIDED');
   });
 
   test('the database allows one decision per request, and every decision is audited', async () => {
     const again = await admin.rpc('decide_driver_request', {
-      p_id: toApprove.id,
+      p_id: toReject.id,
       p_approve: false,
     });
     expect(again.error?.message).toBe('REQUEST_ALREADY_DECIDED');

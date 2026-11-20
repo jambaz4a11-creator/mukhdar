@@ -47,6 +47,9 @@ select throws_ok(format($$ select public.set_user_role(%L, 'driver') $$, tests.i
 select isnt_empty(format($$ select 1 from public.orders where id = %L $$, tests.id('o2')), 'staff reads all orders');
 
 -- ---------------------------------------------------------------- admin
+-- R1 H1: زبون ← سائق يتطلب رمزاً مؤقتاً (أعاد الأدمن ضبط رمزه)
+select tests.as_postgres();
+update public.profiles set must_change_pin = true where id = tests.id('cust');
 select tests.as_user(tests.id('admin'));
 select lives_ok(format($$ select public.set_user_role(%L, 'driver') $$, tests.id('cust')), 'admin makes a customer a driver');
 select is((select role from public.profiles where id = tests.id('cust')), 'driver'::public.user_role, 'role changed');

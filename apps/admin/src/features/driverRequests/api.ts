@@ -37,12 +37,17 @@ export async function fetchDriverRequests(
   return (data ?? []) as DriverRequestRow[];
 }
 
-/** عدد المعلّق لشارة القائمة (من نفس الدالة؛ سقف الطلبات المعلّقة بقاعدة البيانات 50 فلا يقصّ الحد). */
+/** عدد المعلّق لشارة القائمة (دالة العدّ، بلا جلب أسماء وأرقام: R1 L8). */
 export async function fetchPendingDriverRequestCount(supabase: MukhdarClient): Promise<number> {
-  return (await fetchDriverRequests(supabase, 'pending')).length;
+  const { data, error } = await supabase.rpc('pending_driver_requests_count');
+  if (error) throw error;
+  return Number(data ?? 0);
 }
 
-/** approve=true ← موافقة (7 أيام)؛ false ← رفض بملاحظة اختيارية. يرجع 'approved' | 'rejected'. */
+/**
+ * approve=true ← موافقة (7 أيام)؛ false ← رفض (من pending) أو سحب موافقة (من approved، سارية أو منتهية؛ R1 M1)،
+ * بملاحظة اختيارية. يرجع 'approved' | 'rejected'.
+ */
 export async function decideDriverRequest(
   supabase: MukhdarClient,
   id: string,

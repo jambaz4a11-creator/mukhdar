@@ -58,6 +58,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Customer PWA (expo export -p web)
         run: pnpm --filter @mukhdar/customer run export:web
+      # R1 L7: خطأ تجميع Metro أو app.config.ts بتطبيق السائق يظهر هنا لا ببناء EAS (T32/T33). بلا EAS ولا أسرار.
+      - name: Driver app (expo export -p android, bundle check only)
+        run: pnpm --filter @mukhdar/driver run export:android
       - name: Admin on Cloudflare (OpenNext build)
         run: pnpm --filter @mukhdar/admin run build:cf
 

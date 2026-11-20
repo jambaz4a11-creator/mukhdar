@@ -59,6 +59,7 @@ function RootLayout() {
         {/* الشاشات الإجبارية: بلا سحب للرجوع */}
         <Stack.Screen name="auth/change-pin" options={{ gestureEnabled: false }} />
         <Stack.Screen name="auth/not-driver" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="auth/offline" options={{ gestureEnabled: false }} />
         <Stack.Screen name="auth/pending" options={{ gestureEnabled: false }} />
         <Stack.Screen name="auth/set-pin" options={{ gestureEnabled: false }} />
       </Stack>

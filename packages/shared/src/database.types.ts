@@ -1400,6 +1400,7 @@ export type Database = {
         }[];
       };
       panel_session_alive: { Args: Record<PropertyKey, never>; Returns: boolean };
+      pending_driver_requests_count: { Args: Record<PropertyKey, never>; Returns: number };
       place_order: {
         Args: { p_address_id: string; p_idempotency_key: string; p_items: Json; p_note?: string };
         Returns: Json;

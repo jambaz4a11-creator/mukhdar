@@ -63,6 +63,7 @@ create function tests.gate_calls() returns table (grp text, sql text) language s
     ('admin', format($q$ select public.admin_reset_mfa(%L) $q$, tests.id('staff2'))),
     ('admin', format($q$ select public.admin_cancel_customer_orders(%L) $q$, gen_random_uuid())),
     ('admin', $q$ select * from public.list_driver_requests() $q$),
+    ('admin', $q$ select public.pending_driver_requests_count() $q$),
     ('admin', format($q$ select public.decide_driver_request(%L, false) $q$, gen_random_uuid()))
   ) t(grp, sql)
 $$;

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { NOTE_MAX, approveBlocked, decisionErrorMessage, sinceLabel, statusLabel } from './format';
+import {
+  NOTE_MAX,
+  approveBlocked,
+  canWithdraw,
+  decisionErrorMessage,
+  sinceLabel,
+  statusLabel,
+} from './format';
 
 const NOW = Date.parse('2026-11-20T12:00:00Z');
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -49,6 +56,18 @@ describe('statusLabel', () => {
 
   it('unknown status is shown as is, not hidden', () => {
     expect(statusLabel('weird')).toBe('weird');
+  });
+});
+
+describe('canWithdraw (سحب الموافقة، R1 M1)', () => {
+  it.each([
+    ['approved', true],
+    ['expired', true],
+    ['pending', false],
+    ['rejected', false],
+    ['completed', false],
+  ])('%s -> %s', (status, ok) => {
+    expect(canWithdraw(status)).toBe(ok);
   });
 });
 

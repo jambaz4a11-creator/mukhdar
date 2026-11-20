@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { BackHandler } from 'react-native';
 import ChangePinScreen from '../app/auth/change-pin';
 import NotDriverScreen from '../app/auth/not-driver';
+import OfflineScreen from '../app/auth/offline';
 import { useAuth } from '../features/auth/store';
 import { ar } from '../i18n/ar';
 import { createFakeSupabase } from '../test-utils/fakeSupabase';
@@ -114,5 +115,45 @@ describe('not a driver', () => {
     await renderScreen(<NotDriverScreen />);
     await fireEvent.press(screen.getByTestId('not-driver-sign-out'));
     await waitFor(() => expect(useAuth.getState().session).toBeNull());
+  });
+});
+
+describe('R1 M2: offline screen', () => {
+  beforeEach(() => useAuth.setState({ session: null, profile: null, sessionOffline: true }));
+
+  it('shows "ماكو اتصال"; retry re-reads the session and clears the state when the network is back', async () => {
+    const auth = {
+      getSession: jest.fn(() => Promise.resolve({ data: { session: SESSION }, error: null })),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
+    };
+    const fake = createFakeSupabase(
+      () => ({ data: { ...PROFILE, must_change_pin: false }, error: null }),
+      auth,
+    );
+    mockClient = fake.client;
+    await renderScreen(<OfflineScreen />);
+    expect(screen.getByText(ar.offline.title)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('offline-retry'));
+    await waitFor(() => expect(useAuth.getState().sessionOffline).toBe(false));
+    expect(useAuth.getState().session).toEqual(SESSION);
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('retry while still offline keeps the screen and never signs out', async () => {
+    const auth = {
+      getSession: jest.fn(() =>
+        Promise.resolve({
+          data: { session: null },
+          error: { name: 'AuthRetryableFetchError', status: 0 },
+        }),
+      ),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
+    };
+    mockClient = createFakeSupabase(() => ({ data: null, error: null }), auth).client;
+    await renderScreen(<OfflineScreen />);
+    await fireEvent.press(screen.getByTestId('offline-retry'));
+    await waitFor(() => expect(auth.getSession).toHaveBeenCalled());
+    expect(useAuth.getState().sessionOffline).toBe(true);
+    expect(auth.signOut).not.toHaveBeenCalled();
   });
 });
