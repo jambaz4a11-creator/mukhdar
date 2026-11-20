@@ -203,7 +203,7 @@ app/
 
 ### 4.4 Edge Function جديدة: `driver-complete-registration`
 - `POST {request_id, device_secret, pin}`، `verify_jwt = false`.
-- بالترتيب: جسم صالح ← حد IP (نفس `driver_request_rate_hit` بلا رقم، أو مفتاح IP فقط) ← SHA-256 للسر ← `begin_driver_completion` (`REQUEST_NOT_FOUND` 404، `REQUEST_NOT_APPROVED` 409، `REQUEST_EXPIRED` 410) ← `validatePin(normalizePin(pin), phone)` (`PIN_INVALID` 400 مع `detail`) ← `auth.admin.createUser({ phone, password: pin, phone_confirm: true })` (موجود ← `PHONE_TAKEN` 409، والطلب يبقى `approved` ليحله الأدمن) ← `finish_driver_registration`؛ فشلها ← `auth.admin.deleteUser` للحساب المُنشأ (كـ `admin-create-user`) و`INTERNAL` 500.
+- بالترتيب: جسم صالح ← حد IP (نفس `driver_request_rate_hit` بلا رقم، أو مفتاح IP فقط) ← SHA-256 للسر ← `begin_driver_completion` (`REQUEST_NOT_FOUND` 404، `REQUEST_NOT_APPROVED` 409، `REQUEST_EXPIRED` 410) ← `validatePin(normalizePin(pin), phone)` (`PIN_INVALID` 400 مع `detail`) ← `auth.admin.createUser({ phone, password: pin, phone_confirm: true })` (موجود ← `PHONE_TAKEN` 409، والطلب يبقى `approved` ليحله الأدمن) ← `finish_driver_registration`؛ فشلها ← `auth.admin.deleteUser` للحساب المُنشأ (كـ `admin-create-user`) ثم: إن كان سبب الفشل `REQUEST_EXPIRED` (انتهت الموافقة بين `begin` و`finish`، R1 L1) ← 410، `REQUEST_NOT_APPROVED` (سُحبت) ← 409، `REQUEST_NOT_FOUND` ← 404 (T31، رد واضح بدل 500؛ التطبيق يعرض شاشة "انتهت مدة الموافقة")، وأي سبب آخر ← `INTERNAL` 500.
 - الرد `201 {created: true}`؛ التطبيق يدخل بـ `signInWithPassword`.
 - لا يُسجَّل الرمز ولا السر (`errTextWithout` الموجود).
 
