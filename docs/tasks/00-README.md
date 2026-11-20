@@ -46,7 +46,7 @@
 | R1 | **مراجعة** (`/review`) لـ T27–T30: الأمان (سر الجهاز، صلاحيات `anon`)، الاختبارات بالدور الحقيقي، الحارس. البنود تُصلَح قبل T31 | 27–30 | Opus | - | ✅ 2026-11-20 ([التقرير](../reviews/review-R1-driver.md): 0 Critical، 1 High، 4 Medium، 8 Low). **الإصلاحات منجزة (PR #19، 2026-11-20):** H1 وM1–M4 وبنود Low (migration `20261209000001` على mukhdar-dev، L6 بقائمة T31) |
 | 31 | [الطلبات الجاهزة وطلباتي والتفاصيل](31-driver-app-delivery.md) | 30، R1 | Sonnet | إعادة نشر `driver-complete-registration` فقط | ✅ 2026-11-20 (فحص الشاشات على جهاز يدوي ← T33) |
 | 32 | [سجل اليوم وحسابي والإشعارات](32-driver-app-today-account-push.md) | 31 | Sonnet | EAS + Firebase (development build) | 🟡 الكود منجز 2026-11-21 (مشروع EAS وFirebase وdevelopment build جاهزة؛ فحص الإشعارات على جهاز ← T33) |
-| R2 | **مراجعة نهائية** (`/review`) لـ T27–T32 قبل بناء الـ APK: كل مسار SPEC-driver §9 مغطى، لا سر أو رمز بالسجلات، `migration list` مطابق | 27–32 | Opus | - | ⬜ |
+| R2 | **مراجعة نهائية** (`/review`) لـ T27–T32 قبل بناء الـ APK: كل مسار SPEC-driver §9 مغطى، لا سر أو رمز بالسجلات، `migration list` مطابق | 27–32 | Opus | - | ✅ 2026-11-21 ([التقرير](../reviews/review-R2-driver.md): 1 Critical (C1: اشتراك Realtime مشترك يُسقط شاشة الطلب)، 0 High، 2 Medium (M1 بيئة EAS `preview`، M2 رمز الإشعار عند الخروج من شاشات أخرى)، 6 Low؛ `migration list` مطابق 39 = 39). **الإصلاحات قبل T33** (كود التطبيق + متغيرات EAS بموافقة المالك) |
 | 33 | [APK السائق والفحص على أجهزة حقيقية](33-driver-app-apk.md) | 32، R2 | Sonnet | EAS APK build | ⬜ |
 
 "على dev" = ما يحتاج **موافقة صاحب المشروع** قبل التنفيذ (migration بـ `pnpm sb db push`، نشر Edge Function، أو EAS/Firebase). الإنتاج خارج هذه الخطة. 29 مستقلة عن 28 (تُنفَّذ قبلها أو بعدها). iOS Ad Hoc لاحقاً، خارج T33.
