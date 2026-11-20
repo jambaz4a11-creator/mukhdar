@@ -38,6 +38,17 @@ describe('guardRedirect', () => {
     expect(guardRedirect(s, '/auth/set-pin')).toBeNull();
   });
 
+  it('R1 M2: a session that could not be refreshed (network) goes to the offline screen, not login', () => {
+    const s = { ...base, sessionOffline: true };
+    expect(guardRedirect(s, '/')).toBe('/auth/offline');
+    expect(guardRedirect(s, '/auth/login')).toBe('/auth/offline');
+    expect(guardRedirect(s, '/auth/offline')).toBeNull();
+    // رجعت الشبكة: لا حالة offline ← الدخول
+    expect(guardRedirect(base, '/auth/offline')).toBe('/auth/login');
+    // وبوجود جلسة صالحة تُترك الشاشة للتبويبات
+    expect(guardRedirect({ ...base, session, profile: DRIVER }, '/auth/offline')).toBe('/');
+  });
+
   it('session while the profile loads: wait (blocking overlay)', () => {
     const s = { ...base, session };
     expect(guardRedirect(s, '/auth/login')).toBeNull();

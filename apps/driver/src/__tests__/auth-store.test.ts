@@ -1,6 +1,12 @@
 // حالة الجلسة والملف الشخصي (SPEC-driver §2.1، DRIVER-API §2.3–§2.4).
 import type { MukhdarClient } from '@mukhdar/shared';
-import { initAuth, refreshProfile, useAuth } from '../features/auth/store';
+import {
+  initAuth,
+  isDefiniteSessionRejection,
+  refreshProfile,
+  retrySession,
+  useAuth,
+} from '../features/auth/store';
 import { saveRegistration, saveSecret } from '../lib/secureStore';
 import { createFakeSupabase, type Result } from '../test-utils/fakeSupabase';
 
@@ -51,6 +57,7 @@ beforeEach(() => {
     profile: null,
     profileError: false,
     hasRegistration: false,
+    sessionOffline: false,
   });
 });
 
@@ -90,6 +97,78 @@ it('session refresh failed (HTTP 400, revoked): local sign-out, no session', asy
   expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
   expect(useAuth.getState()).toMatchObject({ ready: true, session: null });
   stop();
+});
+
+describe('R1 M2: a network error at start-up does not sign the driver out', () => {
+  const retryable = {
+    name: 'AuthRetryableFetchError',
+    status: 0,
+    message: 'Network request failed',
+  };
+
+  it('AuthRetryableFetchError: the stored session is kept (no signOut), offline state is set', async () => {
+    const { auth, stop } = setup({
+      getSession: () => ({ data: { session: null }, error: retryable }),
+    });
+    await settle();
+    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(useAuth.getState()).toMatchObject({ ready: true, session: null, sessionOffline: true });
+    stop();
+  });
+
+  it.each([
+    ['a plain network failure', { message: 'Network request failed' }],
+    ['a 5xx from the auth server', { name: 'AuthApiError', status: 500 }],
+    ['a 502 gateway error', { name: 'AuthRetryableFetchError', status: 502 }],
+  ])('%s is not a rejection', async (_label, error) => {
+    const { auth, stop } = setup({ getSession: () => ({ data: { session: null }, error }) });
+    await settle();
+    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(useAuth.getState().sessionOffline).toBe(true);
+    stop();
+  });
+
+  it.each([
+    ['400', { name: 'AuthApiError', status: 400 }],
+    ['401', { name: 'AuthApiError', status: 401 }],
+    [
+      'refresh_token_not_found',
+      { name: 'AuthApiError', status: 400, code: 'refresh_token_not_found' },
+    ],
+    ['refresh_token_already_used', { code: 'refresh_token_already_used' }],
+    ['session_not_found', { code: 'session_not_found' }],
+  ])('a real rejection (%s) signs out locally', async (_label, error) => {
+    expect(isDefiniteSessionRejection(error)).toBe(true);
+    const { auth, stop } = setup({ getSession: () => ({ data: { session: null }, error }) });
+    await settle();
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(useAuth.getState()).toMatchObject({ ready: true, session: null, sessionOffline: false });
+    stop();
+  });
+
+  it('retry: when the network is back the session and profile load and the offline state clears', async () => {
+    let online = false;
+    const { client, auth, stop } = setup({
+      getSession: () =>
+        online
+          ? { data: { session: SESSION }, error: null }
+          : { data: { session: null }, error: retryable },
+    });
+    await settle();
+    expect(useAuth.getState().sessionOffline).toBe(true);
+
+    await retrySession(client as unknown as MukhdarClient);
+    expect(useAuth.getState().sessionOffline).toBe(true); // ما زالت بلا شبكة
+    expect(auth.signOut).not.toHaveBeenCalled();
+
+    online = true;
+    await retrySession(client as unknown as MukhdarClient);
+    await settle();
+    expect(useAuth.getState()).toMatchObject({ sessionOffline: false, session: SESSION });
+    expect(useAuth.getState().profile).toEqual(DRIVER);
+    expect(auth.signOut).not.toHaveBeenCalled();
+    stop();
+  });
 });
 
 it('profile read rejected as unauthenticated (401): local sign-out', async () => {

@@ -8,6 +8,7 @@ export const ROUTES = {
   setPin: '/auth/set-pin',
   changePin: '/auth/change-pin',
   notDriver: '/auth/not-driver',
+  offline: '/auth/offline',
   home: '/',
 } as const;
 
@@ -29,6 +30,11 @@ export interface GuardState {
   profileError: boolean;
   /** request_id + سر الجهاز محفوظان */
   hasRegistration: boolean;
+  /**
+   * تعذّر تجديد الجلسة المحفوظة بسبب الشبكة (لا رفض من الخادم): الجلسة باقية بالجهاز، فلا نرمي السائق لشاشة
+   * الدخول ولا نمسحها. تظهر "ماكو اتصال" مع إعادة المحاولة (R1 M2).
+   */
+  sessionOffline?: boolean;
 }
 
 const isAuthPath = (p: string) => p === '/auth' || p.startsWith('/auth/');
@@ -51,6 +57,7 @@ export function guardRedirect(s: GuardState, pathname: string): string | null {
     if (p.role !== 'driver' || !p.is_active) return only(ROUTES.notDriver);
     return isAuthPath(pathname) ? ROUTES.home : null;
   }
+  if (s.sessionOffline) return only(ROUTES.offline);
   if (s.hasRegistration) return only(ROUTES.pending, [ROUTES.pending, ROUTES.setPin]);
   return only(ROUTES.login, [ROUTES.login, ROUTES.register]);
 }

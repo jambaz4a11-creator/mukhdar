@@ -17,6 +17,7 @@ export const useAuth = create<AuthState>(() => ({
   profile: null,
   profileError: false,
   hasRegistration: false,
+  sessionOffline: false,
 }));
 
 const PROFILE_COLUMNS = 'role, is_active, must_change_pin, full_name, phone';
@@ -27,6 +28,25 @@ function isAuthFailure(error: unknown): boolean {
   return e.status === 401 || (typeof e.code === 'string' && /^PGRST30\d$/.test(e.code));
 }
 
+/** رموز GoTrue التي تعني أن رمز التحديث المحفوظ لم يعد صالحاً أبداً (لا فائدة من إعادة المحاولة). */
+const SESSION_GONE_CODES = new Set([
+  'refresh_token_not_found',
+  'refresh_token_already_used',
+  'session_not_found',
+  'session_expired',
+  'user_not_found',
+]);
+
+/**
+ * فشل `getSession()` برفض قاطع من الخادم (HTTP 400/401 أو رمز "الجلسة ضاعت"): نخرج محلياً. أي شيء آخر (شبكة،
+ * `AuthRetryableFetchError`، 5xx) مؤقت: الجلسة تبقى بالجهاز ونعيد المحاولة (R1 M2).
+ */
+export function isDefiniteSessionRejection(error: unknown): boolean {
+  const e = (error ?? {}) as { name?: unknown; status?: unknown; code?: unknown };
+  if (typeof e.code === 'string' && SESSION_GONE_CODES.has(e.code)) return true;
+  return e.name === 'AuthApiError' && (e.status === 400 || e.status === 401);
+}
+
 /** خروج محلي (جلسة أُبطلت: تعطيل، تخفيض دور، إعادة ضبط الرمز). لا طلب للخادم. */
 async function localSignOut(client: MukhdarClient): Promise<void> {
   try {
@@ -34,7 +54,7 @@ async function localSignOut(client: MukhdarClient): Promise<void> {
   } catch {
     // الجلسة المحلية تُمسح على أي حال
   }
-  useAuth.setState({ session: null, profile: null, profileError: false });
+  useAuth.setState({ session: null, profile: null, profileError: false, sessionOffline: false });
 }
 
 export async function refreshProfile(client: MukhdarClient): Promise<void> {
@@ -67,6 +87,34 @@ export async function refreshProfile(client: MukhdarClient): Promise<void> {
   });
 }
 
+/**
+ * يقرأ الجلسة المحفوظة (ويجدد رمز الوصول المنتهي). رفض قاطع ← خروج محلي. فشل مؤقت (شبكة) ← الجلسة تبقى محفوظة
+ * بالجهاز و`sessionOffline` (شاشة "ماكو اتصال")؛ تُعاد المحاولة بالزر وعند كل رجوع للتطبيق.
+ */
+export async function loadSession(client: MukhdarClient): Promise<void> {
+  try {
+    const { data, error } = await client.auth.getSession();
+    if (error) {
+      if (isDefiniteSessionRejection(error)) {
+        await localSignOut(client);
+        useAuth.setState({ ready: true });
+      } else {
+        useAuth.setState({ session: null, sessionOffline: true, ready: true });
+      }
+      return;
+    }
+    useAuth.setState({ session: data.session, sessionOffline: false, ready: true });
+  } catch {
+    useAuth.setState({ session: null, sessionOffline: false, ready: true });
+  }
+}
+
+/** زر "إعادة المحاولة": يعيد قراءة الجلسة ثم الملف الشخصي. */
+export async function retrySession(client: MukhdarClient): Promise<void> {
+  await loadSession(client);
+  await refreshProfile(client);
+}
+
 export async function refreshRegistration(): Promise<void> {
   try {
     useAuth.setState({ hasRegistration: (await loadRegistration()) !== null });
@@ -84,7 +132,7 @@ export async function signOut(client: MukhdarClient): Promise<void> {
     await localSignOut(client);
     return;
   }
-  useAuth.setState({ session: null, profile: null, profileError: false });
+  useAuth.setState({ session: null, profile: null, profileError: false, sessionOffline: false });
 }
 
 /** يمسح الطلب المحفوظ من الجهاز (السر معه) ويبلّغ الحارس. الطلب على الخادم يبقى للأدمن. */
@@ -105,24 +153,28 @@ export function initAuth(client: MukhdarClient | null): () => void {
 
   void (async () => {
     await refreshRegistration();
-    try {
-      const { data, error } = await client.auth.getSession();
-      // فشل تحديث الجلسة (HTTP 400: أُبطلت) ← خروج محلي ← الدخول
-      if (error) await localSignOut(client);
-      useAuth.setState({ session: error ? null : data.session, ready: true });
-    } catch {
-      useAuth.setState({ session: null, ready: true });
-    }
+    await loadSession(client);
     await refreshProfile(client);
   })();
 
   const { data } = client.auth.onAuthStateChange((event, session) => {
     if (!session) {
-      useAuth.setState({ session: null, profile: null, profileError: false, ready: true });
+      // INITIAL_SESSION بلا جلسة أثناء حالة "ماكو اتصال" لا تمسح العلامة (الجلسة ما زالت محفوظة بالجهاز)
+      useAuth.setState((s) => ({
+        session: null,
+        profile: null,
+        profileError: false,
+        ready: true,
+        sessionOffline: s.sessionOffline && event !== 'SIGNED_OUT',
+      }));
       return;
     }
     const changedUser = useAuth.getState().session?.user.id !== session.user.id;
-    useAuth.setState(changedUser ? { session, profile: null, profileError: false } : { session });
+    useAuth.setState(
+      changedUser
+        ? { session, profile: null, profileError: false, sessionOffline: false }
+        : { session, sessionOffline: false },
+    );
     // لا استدعاء Supabase داخل هذه الدالة مباشرة (توصية supabase-js): نؤجله
     if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || changedUser) {
       setTimeout(() => void refreshProfile(client), 0);
@@ -132,8 +184,9 @@ export function initAuth(client: MukhdarClient | null): () => void {
   const syncRefresh = (state: string) => {
     if (state === 'active') {
       void client.auth.startAutoRefresh();
-      // الرجوع للتطبيق: الأدمن قد يكون عطّله أو أعاد ضبط رمزه أثناء غيابه
-      void refreshProfile(client);
+      // الرجوع للتطبيق: الأدمن قد يكون عطّله أو أعاد ضبط رمزه أثناء غيابه. "ماكو اتصال" تُعاد محاولتها تلقائياً.
+      if (useAuth.getState().sessionOffline) void retrySession(client);
+      else void refreshProfile(client);
       void refreshRegistration();
     } else void client.auth.stopAutoRefresh();
   };
