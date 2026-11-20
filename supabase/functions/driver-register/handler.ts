@@ -8,7 +8,8 @@
 //         405 INVALID_REQUEST، 409 PHONE_TAKEN | REQUEST_EXISTS، 429 RATE_LIMITED | TOO_MANY_PENDING،
 //         500 REGISTER_FAILED (فشل الحد أو قاعدة البيانات: تفشل مغلقة).
 //
-// الترتيب: حد المعدل (IP المنصة + الرقم إن صلح) **قبل** أي فحص آخر، فكل محاولة تُحسب حتى الخاطئة.
+// الترتيب: حد الـ IP **قبل** أي فحص آخر (كل محاولة تُحسب حتى الخاطئة)، وحد الرقم (3/24 ساعة) **بعد** أن يصير الجسم
+// صالحاً فقط (R1 M3): طلب فاسد لا يستهلك حصة رقم أحد، فلا يُقفل رقم بطلبات مزيّفة. الحد الأقصى للفاسد = حد الـ IP.
 // السر لا يغادر هذا الملف إلا كـ SHA-256؛ لا يُسجَّل الجسم ولا السر ولا الـ hash ولا الرقم كاملاً ولا الاسم.
 import { normalizeIraqiPhone, toStoredPhone } from '../../../packages/shared/src/phone.ts';
 import { withCors } from '../_shared/cors.ts';
@@ -40,8 +41,11 @@ export interface SubmitInput {
 }
 
 export interface DriverRegisterDeps {
-  /** public.driver_request_rate_hit(ip, phone): يسجّل المحاولة؛ false إن تجاوز الـ IP أو الرقم الحد. */
-  rateHit(ip: string, phone: string | null): Promise<boolean>;
+  /**
+   * public.driver_request_rate_hit(ip, phone): يسجّل المحاولة؛ false إن تجاوز الحد. (ip, null) = حد الـ IP فقط،
+   * و(null, phone) = حد الرقم فقط.
+   */
+  rateHit(ip: string | null, phone: string | null): Promise<boolean>;
   /** public.submit_driver_request: {id} أو {error: رمز قاعدة البيانات (message)}. يرمي لفشل الشبكة. */
   submit(input: SubmitInput): Promise<{ id: string } | { error: string }>;
   log?: (msg: string, extra?: unknown) => void;
@@ -78,18 +82,21 @@ export function createDriverRegisterHandler(
     ];
     const logErr = (msg: string, e: unknown) => deps.log?.(msg, scrub(e, ...hidden));
 
-    // 1) الحد قبل أي عمل (الجسم الخاطئ يُحسب على الـ IP وحده)
-    let allowed: boolean;
-    try {
-      allowed = await deps.rateHit(ip, phone);
-    } catch (e) {
-      logErr('driver-register rate check failed', e);
-      return fail(500, 'REGISTER_FAILED');
-    }
-    if (!allowed) {
-      deps.log?.('driver-register rate limited', { phone: maskPhone(phone) });
+    // 1) حد الـ IP قبل أي عمل (الجسم الخاطئ يُحسب على الـ IP وحده)
+    const hit = async (ipKey: string | null, phoneKey: string | null): Promise<Response | null> => {
+      let allowed: boolean;
+      try {
+        allowed = await deps.rateHit(ipKey, phoneKey);
+      } catch (e) {
+        logErr('driver-register rate check failed', e);
+        return fail(500, 'REGISTER_FAILED');
+      }
+      if (allowed) return null;
+      deps.log?.('driver-register rate limited', { phone: maskPhone(phoneKey) });
       return fail(429, 'RATE_LIMITED');
-    }
+    };
+    const ipLimited = await hit(ip, null);
+    if (ipLimited) return ipLimited;
 
     // 2) الجسم والرقم والاسم والسر
     if (!body) return fail(400, 'INVALID_REQUEST');
@@ -104,7 +111,11 @@ export function createDriverRegisterHandler(
         ? body.push_token
         : null;
 
-    // 3) SHA-256 ثم الحفظ
+    // 3) حد الرقم: بعد أن صار الطلب صالحاً فقط (R1 M3)
+    const phoneLimited = await hit(null, phone);
+    if (phoneLimited) return phoneLimited;
+
+    // 4) SHA-256 ثم الحفظ
     const secretHash = await sha256Hex(secret);
     hidden.push(secretHash, token);
     let result: { id: string } | { error: string };

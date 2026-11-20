@@ -10,7 +10,7 @@
 // أرقام بالبادئة 9647008. يحذف كل ما أنشأه (الطلبات، الحسابات، سطور التدقيق والإشعارات، صفوف الحد) حتى عند
 // الفشل، ويعيد صف حد الـ IP لقيمته. لا يطبع السر ولا الرمز ولا المفاتيح.
 // يحتاج: .env.local (SUPABASE_DB_PASSWORD، SUPABASE_SERVICE_ROLE_KEY)، apps/customer/.env (المفتاح المنشور).
-// **يرسل إشعار "طلب سائق جديد" لأجهزة أدمن dev** (admins_only) لكل طلب يُنشئه (اثنان)؛ الصفوف تُحذف بعدها.
+// **يرسل إشعار "طلب سائق جديد" لأجهزة أدمن dev** (admins_only) لكل طلب يُنشئه (ثلاثة)؛ الصفوف تُحذف بعدها.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -301,6 +301,78 @@ try {
       rejected.json?.error === 'REQUEST_NOT_APPROVED' &&
       (await userCount(p2)) === 0,
     `rejected request → 409 REQUEST_NOT_APPROVED, no account (${brief(rejected)})`,
+  );
+
+  // ---------------------------------------------------------------- 5b) R1: سحب الموافقة، وحد الرقم، ونص إشعار الأدمن
+  if (ipRow) {
+    // هذه الفحوص تضيف نداءات؛ نعيد عدّاد الـ IP لـ 1 كي لا يلمس حد الـ 10 قبل فحصه المقصود بالقسم 7
+    await db.query(
+      `update private.driver_request_rate_limits set hits = 1, window_start = now() where bucket = 'ip' and key_hash = $1`,
+      [ipRow.key_hash],
+    );
+  }
+  const pw = newPhone();
+  phones.push(pw);
+  const sw = newSecret();
+  const rw = await register({ full_name: 'IT سحب الموافقة', phone: local(pw), device_secret: sw });
+  const idw = rw.json?.request_id;
+  if (idw) requestIds.push(idw);
+  const phoneHits = async (phone) =>
+    (
+      await db.query(
+        `select coalesce(max(hits), 0)::int n from private.driver_request_rate_limits where bucket = 'phone' and key_hash = $1`,
+        [sha(phone)],
+      )
+    ).rows[0].n;
+  check((await phoneHits(pw)) === 1, 'M3: a valid request spends one hit of its phone bucket');
+  const notice = await db.query(
+    `select body from public.notification_outbox where audience = 'admins_only' and data ->> 'request_id' = $1`,
+    [idw],
+  );
+  check(
+    notice.rows.length === 1 && notice.rows[0].body === 'طلب سائق جديد، افتح طلبات السواق',
+    'M4: the admin push is generic (no name, no phone)',
+  );
+  const pj = newPhone();
+  phones.push(pj);
+  const junk = await register({ full_name: 'x', phone: local(pj), device_secret: newSecret() });
+  check(
+    junk.status === 400 && junk.json?.error === 'NAME_INVALID' && (await phoneHits(pj)) === 0,
+    `M3: an invalid request does not spend the phone bucket (${brief(junk)})`,
+  );
+  const approvedW = await rpc(
+    'decide_driver_request',
+    { p_id: idw, p_approve: true },
+    adminUser.access,
+  );
+  check(
+    approvedW.json === 'approved' && (await status(idw, sw)) === 'approved',
+    'request approved',
+  );
+  const withdrawn = await rpc(
+    'decide_driver_request',
+    { p_id: idw, p_approve: false, p_note: 'IT سحب' },
+    adminUser.access,
+  );
+  check(
+    withdrawn.json === 'rejected' && (await status(idw, sw)) === 'rejected',
+    'M1: admin withdraws an approved request; the device sees "rejected"',
+  );
+  const afterWithdraw = await complete({ request_id: idw, device_secret: sw, pin: newPin(pw) });
+  check(
+    afterWithdraw.status === 409 &&
+      afterWithdraw.json?.error === 'REQUEST_NOT_APPROVED' &&
+      (await userCount(pw)) === 0,
+    `M1: a withdrawn request cannot be completed, no account (${brief(afterWithdraw)})`,
+  );
+  const again2 = await rpc(
+    'decide_driver_request',
+    { p_id: idw, p_approve: false },
+    adminUser.access,
+  );
+  check(
+    JSON.stringify(again2.json).includes('REQUEST_ALREADY_DECIDED'),
+    'M1: a rejected request cannot be decided again',
   );
 
   // ---------------------------------------------------------------- 6) CORS والأصل

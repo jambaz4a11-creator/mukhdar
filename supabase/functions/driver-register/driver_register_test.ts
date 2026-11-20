@@ -56,7 +56,8 @@ Deno.test(
     assert.equal(r.status, 201);
     assert.deepEqual(r.body, { request_id: '11111111-2222-4333-8444-555555555555' });
     assert.deepEqual(calls, [
-      `rate:5.6.7.8:${PHONE}`,
+      'rate:5.6.7.8:null',
+      `rate:null:${PHONE}`,
       `submit:${PHONE}:أحمد علي:${await sha256Hex(SECRET)}:ExponentPushToken[abc]`,
     ]);
   },
@@ -79,6 +80,52 @@ Deno.test(
 );
 
 Deno.test(
+  'R1 M3: the phone limit is spent only by a request that passes validation (junk never costs a phone)',
+  async () => {
+    const junk = [
+      body({ full_name: ' ع ' }),
+      body({ device_secret: 'short' }),
+      body({ device_secret: undefined }),
+      body({ phone: '0612345678' }),
+      'not json',
+    ];
+    for (const b of junk) {
+      const { handler, calls } = setup();
+      const r = await call(handler, post(b));
+      assert.equal(r.status, 400);
+      assert.deepEqual(calls, ['rate:5.6.7.8:null'], `only the IP bucket: ${JSON.stringify(b)}`);
+    }
+    // رقم الضحية بجسم فاسد لا يُحرق حصته حتى لو كان حد الرقم ممتلئاً
+    const full = setup({ rateHit: (_ip, phone) => Promise.resolve(phone === null) });
+    const bad = await call(full.handler, post(body({ full_name: ' ع ' })));
+    assert.equal(
+      bad.status,
+      400,
+      'junk with a locked phone still gets its validation error, not 429',
+    );
+  },
+);
+
+Deno.test('R1 M3: a valid request over the phone limit → 429 and nothing submitted', async () => {
+  const { handler, calls } = setup({ rateHit: (_ip, phone) => Promise.resolve(phone === null) });
+  const r = await call(handler, post(body()));
+  assert.equal(r.status, 429);
+  assert.deepEqual(r.body, { error: 'RATE_LIMITED' });
+  assert.deepEqual(calls, []);
+});
+
+Deno.test('R1 M3: the phone-limit check failing fails closed (500) before any submit', async () => {
+  const { handler, calls } = setup({
+    rateHit: (_ip, phone) =>
+      phone === null ? Promise.resolve(true) : Promise.reject(new Error('db down')),
+  });
+  const r = await call(handler, post(body()));
+  assert.equal(r.status, 500);
+  assert.deepEqual(r.body, { error: 'REGISTER_FAILED' });
+  assert.ok(!calls.some((c) => c.startsWith('submit')));
+});
+
+Deno.test(
   'the IP is the platform header: a forged X-Forwarded-For does not move the key',
   async () => {
     const { handler, calls } = setup();
@@ -86,7 +133,7 @@ Deno.test(
       handler,
       post(body(), { 'x-forwarded-for': '203.0.113.9', 'x-real-ip': '203.0.113.10' }),
     );
-    assert.equal(calls[0], `rate:5.6.7.8:${PHONE}`);
+    assert.equal(calls[0], 'rate:5.6.7.8:null');
     const noPlatform = setup();
     const req = new Request('https://x/driver-register', {
       method: 'POST',
@@ -94,7 +141,7 @@ Deno.test(
       body: JSON.stringify(body()),
     });
     await call(noPlatform.handler, req);
-    assert.equal(noPlatform.calls[0], `rate:unknown:${PHONE}`, 'no platform header → shared key');
+    assert.equal(noPlatform.calls[0], 'rate:unknown:null', 'no platform header → shared key');
   },
 );
 
@@ -144,7 +191,7 @@ Deno.test('a push token that is not an Expo token is ignored (null), not an erro
     const { handler, calls } = setup();
     const r = await call(handler, post(body({ push_token: token })));
     assert.equal(r.status, 201);
-    assert.match(calls[1] ?? '', /:null$/);
+    assert.match(calls[2] ?? '', /:null$/);
   }
 });
 
