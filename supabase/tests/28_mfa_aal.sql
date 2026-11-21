@@ -209,8 +209,9 @@ select set_eq(
   $$ select p.proname::text collate "default" from pg_proc p
       where p.pronamespace = 'public'::regnamespace and p.prosecdef
         and has_function_privilege('authenticated', p.oid, 'execute')
-        and p.proname not in ('place_order', 'rate_order', 'register_push_token', 'available_orders', 'accept_order',
-                            'touch_panel_session', 'driver_request_status') $$,
+        -- register_web_push (T36): مثل register_push_token، بوابة MFA خاصة بالأدمن/الموظف (37_webpush_db)
+        and p.proname not in ('place_order', 'rate_order', 'register_push_token', 'register_web_push', 'available_orders',
+                            'accept_order', 'touch_panel_session', 'driver_request_status') $$,
   $$ select distinct (regexp_match(sql, 'public\.(\w+)\('))[1] from tests.gate_calls() $$,
   'the aal matrix covers every admin/staff SECURITY DEFINER RPC (a new one must be added)');
 

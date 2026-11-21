@@ -4,7 +4,7 @@
 -- فلم تكشفه. (migration 20261203000001، قاعدة CLAUDE.md "اختبارات الكتابة بالدور الحقيقي".)
 -- التجهيز فقط (مستخدمون، منتج، عمارة) بدور postgres؛ كل كتابة يقوم بها التطبيق أو اللوحة أو السائق بدوره.
 -- بالنهاية فحوص آلية للكتالوج تمنع رجوع نفس الصنف من الأخطاء بأي جدول مستقبلاً.
-select plan(42);
+select plan(44);
 
 -- ================================================================ التجهيز (postgres)
 select tests.remember('cust',  tests.new_user('customer'));
@@ -146,6 +146,14 @@ select tests.as_user_aal1(tests.id('drv2'));
 select lives_ok($$ select * from public.available_orders(5) $$, 'new driver (aal1): lists available orders');
 select lives_ok($$ select public.register_push_token('ExponentPushToken[t32-drv2]', 'android') $$,
   'new driver (aal1): registers a push token');
+-- T36: اشتراك Web Push (PWA السائق والزبون) بالدور الحقيقي
+select lives_ok(format($$ select public.register_web_push('https://web.push.apple.com/t32-drv2', %L, %L) $$,
+                       'B' || repeat('A', 86), repeat('a', 22)),
+  'new driver (aal1): registers a Web Push subscription');
+select tests.as_user_aal1(tests.id('cust'));
+select lives_ok(format($$ select public.register_web_push('https://fcm.googleapis.com/fcm/send/t32-cust', %L, %L) $$,
+                       'B' || repeat('A', 86), repeat('a', 22)),
+  'customer (aal1): registers a Web Push subscription');
 
 -- ================================================================ حذف الحساب (delete-account: service_role ثم GoTrue)
 select tests.as_service();

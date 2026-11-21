@@ -1,7 +1,7 @@
 # Open questions for the owner
 
-Decisions that were not mine to make during the 2026-11-18 session. All were answered by the owner on
-2026-11-18 and are applied; nothing is open except the billing step in item 3.
+Decisions that were not mine to make. Items 1–3 (2026-11-18) were answered by the owner and are applied; open:
+the billing step in item 3 and the confirmation in item 4 (T35, not blocking).
 
 ## 1. Address wording everywhere — ✅ resolved (2026-11-18)
 **Decision:** use "بلوك / بناية / الطابق / شقة" everywhere (order screens, admin, receipts, driver data and
@@ -27,3 +27,13 @@ The deployed admin panel (`mukhdar-admin.jambaz4a11.workers.dev`) intermittently
   layouts now show "صار خلل، حاول مرة ثانية" with a retry button (HTTP 503, `/unavailable`). Access stays
   denied. A real missing/invalid/expired/idle session (4xx, no session) still goes to the login page.
   Tests: `apps/admin/src/lib/panelUser.test.ts`, `access.test.ts`.
+
+## 4. Web Push sender: in-house WebCrypto instead of `npm:web-push` (T35, 2026-11-21) — open, not blocking
+**What I found:** `npm:web-push@3.6.7` **does run on local Deno 2.9.6**. The Supabase Edge Runtime itself could not be
+tried (no Docker on this machine, and no deploys in T35), and the library depends on Deno's Node compatibility
+layer (`crypto.createECDH`, `https`, proxy agents), which is exactly where the Edge Runtime can differ.
+**What I did (reversible):** wrote the sender on WebCrypto only (`push-dispatch/webpush_crypto.ts`, ~200 lines). It
+reproduces the official RFC 8291 test vector **byte for byte**, adds no dependency to the frozen `deno.lock`, and
+keeps full control of the request (8 s timeout, no redirects, no URL in error messages). SPEC-webpush §5.4.
+**Your call:** keep it (my recommendation), or switch to the library. Either way, the first deploy (T38) sends a test
+notification to a desktop browser before any phone is involved.

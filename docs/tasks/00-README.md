@@ -57,7 +57,7 @@
 |---|---|---|---|---|---|
 | 34 | [التخزين المشفَّر للويب (W1)](34-web-secure-storage.md) | - | Opus | - | ✅ 2026-11-21 (PR #26، CI أخضر؛ Playwright الزبون Chromium وWebKit) |
 | 35 | [مرسِل Web Push بـ push-dispatch (W2)](35-webpush-sender.md) | - | Opus | - (كود محلي؛ النشر بـ 38) | ✅ 2026-11-21 (PR #27؛ قرار الاستكشاف: WebCrypto داخلي، متجه RFC 8291 مطابق بايتاً ببايت؛ Edge Runtime الفعلي يُفحص بأول نشر T38) |
-| 36 | [قاعدة بيانات Web Push (W3)](36-webpush-db.md) | 35 | Opus | **migrations (2)** | ⬜ |
+| 36 | [قاعدة بيانات Web Push (W3)](36-webpush-db.md) | 35 | Opus | **migrations (2)** | ✅ 2026-11-21 (PR #28، CI أخضر؛ `20261210000001` و`20261210000002` على mukhdar-dev بـ `db push --remote` بعد dry-run، `migration list` مطابق 41 = 41، `db:test:remote` 37/37) |
 | 37 | [تطبيق السائق PWA (W4)](37-driver-pwa.md) | 34 | Sonnet | **Cloudflare Pages `mukhdar-driver`** + `ALLOWED_ORIGINS` + إعادة نشر 3 دوال | ⬜ |
 | 38 | [Web Push بالعميل: السائق والزبون (W5)](38-webpush-client.md) | 35، 36، 37 | Sonnet | **أسرار VAPID** + نشر `push-dispatch` + متغير VAPID العام بمشروعي Pages | ⬜ |
 | W6 | اشتراك قبل الحساب لإشعار الموافقة | 36، 38 | Opus | migration + إعادة نشر `driver-register` | ⏸ مؤجَّلة (قرار المالك Q3: الـ polling كافٍ) |
