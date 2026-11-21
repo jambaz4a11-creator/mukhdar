@@ -709,3 +709,11 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 - **أداة البحث:** `node scripts/product-images/search.mjs` (مرشحون + شبكات معاينة بـ `.cache/` المتجاهَل بـ git) ثم `pick.mjs "اسم=رقم"` لإضافة الاختيار إلى `manifest.json`.
 - **بلا صورة حقيقية بعد (يبقى placeholder لحين وجود صورة حرة مناسبة):** بطيخ أصفر، تفاح أصفر، شبنت، كرفس، كزبرة، لهانة، دبس تمر، تين مجفف، جوز، زبيب، مشمش مجفف.
 - **السلال (2026-11-18):** عشر منتجات "سلة …" كلها بتاريخ طلبات/مخزون، فأُخفيت (`is_active = false`) لا حُذفت، بـ `scripts/hide-products.mjs --match=سلة --apply` (على mukhdar-dev فقط).
+
+## 16g) Web Push: مفاتيح VAPID والنشر (T38، mukhdar-dev فقط)
+- **التوليد (خارج الـ repo، مرة لكل بيئة):** زوج P-256 بـ `crypto.generateKeyPairSync('ec', {namedCurve:'prime256v1'})`؛ العام = `0x04‖x‖y` (65 بايت) والخاص = `d` (32 بايت)، كلاهما base64url. الملف المؤقت بمجلد خارج المشروع ويُحذف فور الضبط؛ لا طباعة للخاص بأي سجل.
+- **الأسرار (Edge، `pnpm sb secrets set --env-file <tmp> --remote=<ref> --yes`):** `VAPID_PUBLIC_KEY` و`VAPID_PRIVATE_KEY` و`VAPID_SUBJECT` (`mailto:` للمالك، **سر فقط، لا يُكتب بالـ repo/الوثائق**). التحقق بالأسماء فقط (`pnpm sb secrets list`).
+- **النشر:** `pnpm sb functions deploy push-dispatch --remote=<ref> --use-api --no-verify-jwt --yes`؛ السجل يطبع `webpush {"configured":true}` عند الإقلاع.
+- **Cloudflare:** `EXPO_PUBLIC_VAPID_PUBLIC_KEY` (العام فقط) بمشروعي `mukhdar-app` و`mukhdar-driver` (Production وPreview) ثم إعادة بناء.
+- **ما لا يُغيَّر:** المفتاح العام بعد أول اشتراك حقيقي (يُبطل كل الاشتراكات)؛ مفاتيح dev لا تُستعمل بالإنتاج أبداً. CI يبني بمفتاح عام وهمي (مثال web-push) لا علاقة له بمفتاح dev.
+- 2026-11-21: ضُبطت الأسرار ونُشرت الدالة على mukhdar-dev بموافقة المالك؛ لا migrations بـ T38.

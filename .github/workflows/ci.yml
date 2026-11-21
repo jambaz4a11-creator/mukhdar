@@ -46,6 +46,8 @@ jobs:
       # قيم عامة وهمية لتجاوز فحص الإعداد وقت البناء (المفاتيح الحقيقية تُضبط بـ Cloudflare)
       EXPO_PUBLIC_SUPABASE_URL: https://ghcohlrzvehtcettaaiu.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_placeholder
+      # T38: مفتاح VAPID **عام** وهمي (مثال web-push) ليظهر مسار Web Push بالبناء/Playwright؛ لا علاقة له بمفتاح dev
+      EXPO_PUBLIC_VAPID_PUBLIC_KEY: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
       NEXT_PUBLIC_SUPABASE_URL: https://ghcohlrzvehtcettaaiu.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_placeholder
     steps:

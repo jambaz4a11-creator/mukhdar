@@ -31,6 +31,7 @@ import { AppText } from '../../../components/AppText';
 import { FormMessage } from '../../../components/AuthFields';
 import { SummaryRow } from '../../../components/SummaryRow';
 import { useRequireAuth } from '../../../features/auth/useRequireAuth';
+import { PushPrompt } from '../../../features/notifications/PushPrompt';
 import { canRate, cancelOrder, type OrderDetail, orderKeys } from '../../../features/orders/api';
 import { formatOrderDate, formatTime } from '../../../features/orders/format';
 import { useOrderTracking } from '../../../features/orders/hooks';
@@ -84,6 +85,9 @@ export default function OrderScreen() {
           ) : null}
         </View>
       </View>
+
+      {/* T38: بطاقة إشعارات الويب بعد نجاح الطلب فقط (الرابط يحمل number من usePlaceOrder) */}
+      {params.number ? <PushPrompt /> : null}
 
       {data ? (
         <OrderBody order={data} refreshing={order.isRefetching} onRefresh={order.refetch} />

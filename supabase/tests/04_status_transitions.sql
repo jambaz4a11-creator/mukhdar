@@ -1,5 +1,5 @@
 -- 04: set_order_status. جدول الأدوار كاملاً (مسار ready)، التحويلات غير الصحيحة، الإشعارات، الإلغاء والتسليم
-select plan(97);
+select plan(98);
 
 select tests.remember('admin', tests.new_user('admin'));
 select tests.remember('staff', tests.new_user('staff'));
@@ -260,5 +260,10 @@ select public.set_order_status(tests.id('o_cancel2'), 'cancelled');
 select tests.as_postgres();
 select is((select s.cancelled_count - b.cancelled from public.daily_stats s, stats_before b
             where s.day = public.baghdad_today()), 1, 'cancellation (from ready) increments cancelled_count');
+-- T38 (SPEC-webpush §5.5): حمولة الصندوق (title/body/data) بلا نمط هاتف ولا طابق ولا شقة، لكل الأنواع والجمهور
+select is((select count(*) from public.notification_outbox
+            where (title || ' ' || body || ' ' || (data - 'order_id')::text) ~ '([+]?964|0)7[0-9]{8,9}'
+               or (title || ' ' || body || ' ' || (data - 'order_id')::text) ~ '(طابق|شقة|floor|apartment)'), 0::bigint,
+  'no outbox payload carries a phone number or a floor/apartment');
 
 select * from finish();
