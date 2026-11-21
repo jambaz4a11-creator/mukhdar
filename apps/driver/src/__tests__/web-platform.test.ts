@@ -17,6 +17,7 @@ const PAIRS: [native: string, web: string][] = [
   ['lib/secureStorage', 'lib/secureStorage.web'],
   ['lib/secureStore', 'lib/secureStore.web'],
   ['features/notifications/NotificationsBridge', 'features/notifications/NotificationsBridge.web'],
+  ['features/notifications/PushPrompt', 'features/notifications/PushPrompt.web'],
 ];
 
 function source(rel: string): string {

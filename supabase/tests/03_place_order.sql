@@ -1,5 +1,5 @@
 -- 03: place_order
-select plan(48);
+select plan(49);
 
 -- التجهيز (postgres): إعدادات معروفة، منتجات، زبائن، عناوين
 update public.app_settings set delivery_fee_iqd = 1000, min_order_iqd = 0, store_open = true;
@@ -206,6 +206,11 @@ select results_eq($$ select audience from public.notification_outbox
 select ok((select body from public.notification_outbox
             where data ->> 'order_id' = tests.id('o1')::text and audience = 'admins') like 'بلوك A1 - بناية 12 · المجموع %',
   'admin push names the unit and the building (numbers repeat across units)');
+-- T38 (SPEC-webpush §5.5): حمولة الصندوق (title/body/data) بلا نمط هاتف ولا طابق ولا شقة، لكل الأنواع والجمهور
+select is((select count(*) from public.notification_outbox
+            where (title || ' ' || body || ' ' || data::text) ~ '([+]?964|0)7[0-9]{8,9}'
+               or (title || ' ' || body || ' ' || data::text) ~ '(طابق|شقة|floor|apartment)'), 0::bigint,
+  'no outbox payload carries a phone number or a floor/apartment');
 select is((select address_snapshot ->> 'subsection' || '/' || (address_snapshot ->> 'building')
              from public.orders where id = tests.id('o1')),
   'A1/12', 'address snapshot keeps unit and building');

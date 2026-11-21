@@ -11,6 +11,7 @@ import { useAuth } from '../../features/auth/store';
 import { acceptOrder, fetchAvailableOrders } from '../../features/orders/available';
 import { guardDriverError } from '../../features/orders/driverErrors';
 import { useNotificationRefresh } from '../../features/notifications/events';
+import { PushPrompt } from '../../features/notifications/PushPrompt';
 import type { AvailableOrder } from '../../features/orders/types';
 import { useFocusedPoll } from '../../features/orders/useFocusedPoll';
 import { ar } from '../../i18n/ar';
@@ -123,6 +124,8 @@ export default function ReadyScreen() {
           </View>
         ) : null}
       </View>
+
+      <PushPrompt />
 
       {permission === 'denied' ? (
         <View style={styles.warn} testID="push-off-banner">

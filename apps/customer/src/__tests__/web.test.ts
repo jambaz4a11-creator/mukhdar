@@ -157,12 +157,13 @@ describe('web rtl + push stubs', () => {
     delete g.document;
   });
 
-  it('push is inert on web', async () => {
+  it('push is inert without a VAPID public key (T38: no key at build time = no Web Push)', async () => {
+    const client = {} as never;
     expect(push.canUseRemotePush()).toBe(false);
     expect(push.getProjectId()).toBeNull();
     expect(() => push.configureNotificationHandler()).not.toThrow();
-    await expect(push.registerPushToken()).resolves.toBe('unsupported');
-    await expect(push.askAfterFirstOrder()).resolves.toBeUndefined();
-    await expect(push.unregisterPushToken()).resolves.toBeUndefined();
+    await expect(push.registerPushToken(client, { ask: true })).resolves.toBe('unsupported');
+    await expect(push.askAfterFirstOrder(client)).resolves.toBeUndefined();
+    await expect(push.unregisterPushToken(client)).resolves.toBeUndefined();
   });
 });

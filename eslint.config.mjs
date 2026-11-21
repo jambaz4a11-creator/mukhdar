@@ -29,6 +29,12 @@ export default tseslint.config(
     languageOptions: { sourceType: 'module', globals: globals.node },
   },
   {
+    // خدمة الإشعارات (T38): سكربت Service Worker بلا وحدات (ES5 عمداً: يُقدَّم كما هو ويُختبر بـ vm)
+    files: ['apps/*/public/sw.js'],
+    languageOptions: { sourceType: 'script', globals: globals.serviceworker },
+    rules: { 'no-var': 'off', 'prefer-const': 'off' },
+  },
+  {
     // اختبارات Deno: assert يتحقق قبل الوصول، فالـ non-null assertion مقبول هنا.
     files: ['supabase/functions/**/*_test.ts'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
