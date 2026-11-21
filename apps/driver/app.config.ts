@@ -55,6 +55,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),
   },
+  // T37 (SPEC-webpush §3.1): PWA على https://mukhdar-driver.pages.dev. SPA واحدة تُعدَّل وسومها وCSP الخاص بها بـ
+  // scripts/postexport-web.mjs؛ الـ manifest والأيقونات و_headers بـ public/.
+  web: { bundler: 'metro', output: 'single', favicon: './public/icons/favicon.png' },
   plugins: [
     'expo-router',
     'expo-font',
