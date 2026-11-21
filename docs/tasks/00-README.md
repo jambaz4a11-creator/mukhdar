@@ -56,7 +56,7 @@
 | # | المهمة | تعتمد على | النموذج | على dev | الحالة |
 |---|---|---|---|---|---|
 | 34 | [التخزين المشفَّر للويب (W1)](34-web-secure-storage.md) | - | Opus | - | ✅ 2026-11-21 (PR #26، CI أخضر؛ Playwright الزبون Chromium وWebKit) |
-| 35 | [مرسِل Web Push بـ push-dispatch (W2)](35-webpush-sender.md) | - | Opus | - (كود محلي؛ النشر بـ 38) | ⬜ |
+| 35 | [مرسِل Web Push بـ push-dispatch (W2)](35-webpush-sender.md) | - | Opus | - (كود محلي؛ النشر بـ 38) | ✅ 2026-11-21 (PR #27؛ قرار الاستكشاف: WebCrypto داخلي، متجه RFC 8291 مطابق بايتاً ببايت؛ Edge Runtime الفعلي يُفحص بأول نشر T38) |
 | 36 | [قاعدة بيانات Web Push (W3)](36-webpush-db.md) | 35 | Opus | **migrations (2)** | ⬜ |
 | 37 | [تطبيق السائق PWA (W4)](37-driver-pwa.md) | 34 | Sonnet | **Cloudflare Pages `mukhdar-driver`** + `ALLOWED_ORIGINS` + إعادة نشر 3 دوال | ⬜ |
 | 38 | [Web Push بالعميل: السائق والزبون (W5)](38-webpush-client.md) | 35، 36، 37 | Sonnet | **أسرار VAPID** + نشر `push-dispatch` + متغير VAPID العام بمشروعي Pages | ⬜ |

@@ -1,10 +1,18 @@
 // Edge Function: push-dispatch
 // تُستدعى من القاعدة (trigger بعد insert بـ notification_outbox، و pg_cron كل دقيقة) عبر pg_net.
-// المفاتيح تحقنها Supabase تلقائياً (keys.ts). EXPO_ACCESS_TOKEN اختياري. verify_jwt = false: التفويض بسر
+// المفاتيح تحقنها Supabase تلقائياً (keys.ts). EXPO_ACCESS_TOKEN اختياري. VAPID_PUBLIC_KEY و
+// VAPID_PRIVATE_KEY وVAPID_SUBJECT اختيارية (Web Push، T35/T38). verify_jwt = false: التفويض بسر
 // x-dispatch-secret (Vault) لا بمفتاح.
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
-import { dispatchAll, type OutboxRow, type RowResult, type Store } from './dispatch.ts';
+import {
+  dispatchAll,
+  type OutboxRow,
+  type RowResult,
+  type Senders,
+  type Store,
+} from './dispatch.ts';
 import { createExpoSender } from './expo.ts';
+import { webPushSenderFromEnv } from './webpush.ts';
 import { createHandler } from './handler.ts';
 import { keyKind, secretKey, supabaseUrl } from '../_shared/keys.ts';
 
@@ -30,7 +38,15 @@ const store: Store = {
   },
 };
 
-const senders = { expo: createExpoSender({ accessToken: Deno.env.get('EXPO_ACCESS_TOKEN') }) };
+const senders: Senders = {
+  expo: createExpoSender({ accessToken: Deno.env.get('EXPO_ACCESS_TOKEN') }),
+};
+// T35: Web Push فقط إن ضُبطت أسرار VAPID الثلاثة (T38)؛ وإلا تُتخطى رموز webpush بملاحظة واضحة.
+const webpush = webPushSenderFromEnv((name) => Deno.env.get(name), {
+  log: (msg, extra) => console.log(msg, JSON.stringify(extra ?? null)),
+});
+if (webpush) senders.webpush = webpush;
+console.log('webpush', JSON.stringify({ configured: webpush !== null })); // لا قيم
 
 Deno.serve(
   createHandler({

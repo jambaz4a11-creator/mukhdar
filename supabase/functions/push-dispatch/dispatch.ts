@@ -1,20 +1,29 @@
 // منطق الإرسال (بدون شبكة ولا قاعدة بيانات): يُختبر بـ store و senders مزيفة.
 //
 // لكل صف بالصندوق: كل رمز يُرسل عبر مزوّده (push_tokens.provider). مزوّد بلا sender
-// (حالياً fcm) يُتخطى رمزه مع ملاحظة واضحة بـ last_error.
+// (fcm: غير منفَّذ؛ webpush: أسرار VAPID غير مضبوطة) يُتخطى رمزه مع ملاحظة واضحة بـ last_error.
 //
 // نتيجة الصف:
 //   * وصل لرمز واحد على الأقل      ← ok (مع ملاحظة إن فشل بعضها/تُخطي). لا إعادة، كي لا يتكرر الإشعار.
 //   * بلا رموز                      ← ok مع "no recipients" (لا أحد لإرساله؛ لا فائدة من الإعادة).
-//   * كل الأخطاء مؤقتة (شبكة/HTTP)  ← فشل يُعاد (attempts + 1، ونهائي عند المحاولة الخامسة).
-//   * الباقي ميت/متخطى فقط          ← فشل نهائي بسبب واضح.
+//   * خطأ مؤقت واحد على الأقل       ← فشل يُعاد (attempts + 1، ونهائي عند المحاولة الخامسة).
+//   * الباقي ميت/متخطى/فشل دائم     ← فشل نهائي بسبب واضح. الفشل الدائم (failed: إعداد خاطئ مثل VAPID،
+//                                     endpoint خارج القائمة البيضاء) لا يحذف الرمز.
 
-export type Provider = 'expo' | 'fcm';
+export type Provider = 'expo' | 'fcm' | 'webpush';
+
+/** مفاتيح اشتراك Web Push (base64url). */
+export interface WebPushKeys {
+  p256dh: string;
+  auth: string;
+}
 
 export interface Recipient {
   token: string;
   provider: Provider;
   platform: string;
+  /** webpush فقط (claim_push_notifications، T36). */
+  keys?: WebPushKeys | null;
 }
 
 export interface OutboxRow {
@@ -43,10 +52,16 @@ export interface PushMessage {
   title: string;
   body: string;
   data: Record<string, unknown>;
+  /** webpush فقط. */
+  keys?: WebPushKeys | null;
 }
 
+/** ok وصل؛ dead رمز ميت (يُحذف)؛ error مؤقت (يُعاد)؛ failed دائم (لا إعادة ولا حذف). */
 export type SendOutcome =
-  { status: 'ok' } | { status: 'dead'; error: string } | { status: 'error'; error: string };
+  | { status: 'ok' }
+  | { status: 'dead'; error: string }
+  | { status: 'error'; error: string }
+  | { status: 'failed'; error: string };
 
 /** يرسل الرسائل ويرجع نتيجة لكل رسالة بنفس الترتيب. */
 export type Sender = (messages: PushMessage[]) => Promise<SendOutcome[]>;
@@ -67,15 +82,28 @@ interface Tally {
   sent: number;
   dead: number;
   errors: string[];
+  failures: string[];
   skipped: Partial<Record<Provider, number>>;
 }
+
+const SKIP_REASON: Record<Provider, string> = {
+  expo: 'sender not configured',
+  fcm: 'provider not implemented',
+  webpush: 'sender not configured: VAPID secrets missing',
+};
 
 function describe(t: Tally): string[] {
   const notes: string[] = [];
   for (const [provider, n] of Object.entries(t.skipped)) {
-    notes.push(`${provider}: ${n} token(s) skipped (provider not implemented)`);
+    notes.push(`${provider}: ${n} token(s) skipped (${SKIP_REASON[provider as Provider]})`);
   }
   if (t.dead > 0) notes.push(`${t.dead} token(s) DeviceNotRegistered (removed)`);
+  if (t.failures.length > 0) {
+    const unique = [...new Set(t.failures)];
+    notes.push(
+      `${t.failures.length} permanent failure(s), token kept: ${unique.slice(0, 3).join('; ')}`,
+    );
+  }
   if (t.errors.length > 0) {
     const unique = [...new Set(t.errors)];
     notes.push(`${t.errors.length} send error(s): ${unique.slice(0, 3).join('; ')}`);
@@ -104,7 +132,13 @@ export async function dispatchOnce(
   const rows = await store.claim(limit);
   if (rows.length === 0) return { claimed: 0, sent: 0, failed: 0, deadTokens: 0 };
 
-  const tallies: Tally[] = rows.map(() => ({ sent: 0, dead: 0, errors: [], skipped: {} }));
+  const tallies: Tally[] = rows.map(() => ({
+    sent: 0,
+    dead: 0,
+    errors: [],
+    failures: [],
+    skipped: {},
+  }));
 
   // رسائل كل مزوّد عبر كل الصفوف (التقسيم لدفعات داخل الـ sender).
   const byProvider = new Map<Provider, { tally: Tally; message: PushMessage }[]>();
@@ -116,10 +150,14 @@ export async function dispatchOnce(
         continue;
       }
       const list = byProvider.get(r.provider) ?? [];
-      list.push({
-        tally,
-        message: { to: r.token, title: row.title, body: row.body, data: row.data ?? {} },
-      });
+      const message: PushMessage = {
+        to: r.token,
+        title: row.title,
+        body: row.body,
+        data: row.data ?? {},
+      };
+      if (r.provider === 'webpush') message.keys = r.keys ?? null;
+      list.push({ tally, message });
       byProvider.set(r.provider, list);
     }
   });
@@ -141,7 +179,8 @@ export async function dispatchOnce(
       else if (o.status === 'dead') {
         tally.dead++;
         deadTokens.push(message.to);
-      } else tally.errors.push(o.error);
+      } else if (o.status === 'failed') tally.failures.push(o.error);
+      else tally.errors.push(o.error);
     });
   }
 
