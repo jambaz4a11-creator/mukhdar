@@ -1,6 +1,6 @@
 # SPEC-webpush: تطبيق السائق PWA + إشعارات Web Push (للزبون والسائق)
 
-> **الحالة:** مسودة للمراجعة (2026-11-21). **لا كود ولا migration ولا نشر بهذه الوثيقة.** كل بند سحابي بالقسم 8 يحتاج موافقة صاحب المشروع قبل التنفيذ.
+> **الحالة:** ✅ **معتمدة** من المالك (2026-11-21) بإجاباته على القسم 9 (مثبَّتة هناك). **لا كود ولا migration ولا نشر بهذه الوثيقة.** كل بند سحابي بالقسم 8 يبقى يحتاج موافقة صاحب المشروع قبل تنفيذه بمهمته.
 > **الهدف:** مستخدمو iPhone بلا حساب Apple Developer: تطبيق السائق يعمل كـ PWA قابل للتثبيت، والإشعارات تصل لتطبيقَي السائق والزبون PWA. سائقو Android يبقون على الـ APK (T33).
 > **يلمس:** `apps/driver` (تصدير ويب)، `apps/customer` (تسجيل إشعارات الويب)، `packages/shared` (تخزين الويب)، `supabase/functions/push-dispatch`، migrations جديدة، Cloudflare Pages. **لا يغيّر** نموذج الدخول (رقم + PIN)، ولا صندوق `notification_outbox`، ولا مسار Expo الحالي.
 
@@ -31,8 +31,8 @@
 | A3 | أيقونات السائق = أيقونات الزبون مؤقتاً (نفس افتراض T30) | حتى تصل أيقونة خاصة. |
 | A4 | الإشعار "أفضل جهد": قد يتأخر، ولا يُعتمد عليه وحده. الـ polling كل 30 ثانية والتحديث عند الرجوع للتطبيق يبقيان شبكة الأمان | iOS لا يضمن زمن التسليم، والـ PWA المعلَّق لا يشغّل JS. |
 | A5 | نص الإشعار وبياناته **نفسها** بالصندوق اليوم (`title`, `body`, `data = {order_id, type}`)، بلا أي حقل جديد | الخصوصية (القسم 5.5). |
-| A6 | إشعار "تمت الموافقة" قبل وجود حساب: يُدعم بتسجيل اشتراك على `driver_requests` (المهمة W6)؛ وإلا يكفي الـ polling كل 30 ثانية الموجود | قرار صغير للمالك (القسم 9، Q3). |
-| A7 | النطاق النهائي للـ PWA يُقرَّر **قبل** أي سائق حقيقي | الاشتراك والتثبيت مربوطان بالأصل؛ تغييره لاحقاً يكسر الاثنين (Q1). |
+| A6 | إشعار "تمت الموافقة" قبل وجود حساب **مؤجَّل** (W6): يكفي الـ polling كل 30 ثانية الموجود (قرار المالك، Q3) | أرخص، ولا تغيير DB/دالة إضافي. |
+| A7 | أصل PWA السائق النهائي **`https://mukhdar-driver.pages.dev`** (قرار المالك، Q1)، وأصل الزبون يبقى `https://mukhdar-app.pages.dev`؛ يُثبَّتان قبل أي تثبيت حقيقي | الاشتراك والتثبيت مربوطان بالأصل؛ تغييره لاحقاً يكسر الاثنين. |
 
 ## 3. القسم 1: تطبيق السائق PWA
 
@@ -81,7 +81,7 @@ notification_outbox ──claim_push_notifications──▶ push-dispatch ──
 ## 5. القسم 2: Web Push (VAPID)
 
 ### 5.1 المفاتيح والأسرار
-- زوج VAPID (P-256) **لكل بيئة** (dev، production): يُولَّد مرة واحدة خارج الـ repo. السرّي `VAPID_PRIVATE_KEY` سر Edge Function (`supabase secrets set`)؛ العام `VAPID_PUBLIC_KEY` سر دالة أيضاً **و** `EXPO_PUBLIC_VAPID_PUBLIC_KEY` بمتغيرات بناء Pages للتطبيقين. `VAPID_SUBJECT` = `mailto:` لبريد مخصص للمحل (يظهر لخدمات الدفع، فلا يكون بريداً شخصياً، Q2).
+- زوج VAPID (P-256) **لكل بيئة** (dev، production): يُولَّد مرة واحدة خارج الـ repo. السرّي `VAPID_PRIVATE_KEY` سر Edge Function (`supabase secrets set`)؛ العام `VAPID_PUBLIC_KEY` سر دالة أيضاً **و** `EXPO_PUBLIC_VAPID_PUBLIC_KEY` بمتغيرات بناء Pages للتطبيقين. `VAPID_SUBJECT` = `mailto:` بقيمة يحددها المالك (Q2) **تُخزَّن كسر Edge فقط، ولا تُكتب بأي ملف بالـ repo**؛ تراها خدمات الدفع (Apple/Google/Mozilla).
 - **تغيير المفتاح العام يُبطل كل الاشتراكات** (مرتبطة بـ `applicationServerKey`): لا يُغيَّر إلا بخطة. مفاتيح dev لا تُستعمل بالإنتاج أبداً (نفس قاعدة `DEMO_PIN`). المفتاح الخاص لا يظهر بسجلات ولا بالـ bundle (فحص CI على الـ bundle كما فعل R2 للمفاتيح الأخرى).
 
 ### 5.2 العميل (service worker + اشتراك)
@@ -190,19 +190,19 @@ notification_outbox ──claim_push_notifications──▶ push-dispatch ──
 | 8 | إعادة نشر `driver-register` فقط إن اخترنا W6 (اشتراك قبل الحساب) | Edge | **نعم** (مع 6) |
 | 9 | مشروع **Cloudflare Pages جديد** للسائق (ربط الـ repo، أمر البناء `pnpm --filter @mukhdar/driver run export:web`، مجلد `apps/driver/dist`، متغيرات `EXPO_PUBLIC_*` + `EXPO_PUBLIC_VAPID_PUBLIC_KEY`) | Cloudflare | **نعم** |
 | 10 | متغير `EXPO_PUBLIC_VAPID_PUBLIC_KEY` بمشروع الزبون الحالي + إعادة نشر | Cloudflare | **نعم** |
-| 11 | النطاق النهائي (Pages الافتراضي للمعاينة؛ نطاق خاص للإنتاج) وقواعد الكاش لـ `sw.js` (`no-cache`) عبر `_headers` | Cloudflare/DNS | **نعم** (Q1) |
+| 11 | النطاق: **`mukhdar-driver.pages.dev` نهائي للسائق** (قرار المالك؛ لا نطاق خاص مخطط) وقواعد الكاش لـ `sw.js` (`no-cache`) عبر `_headers` | Cloudflare | بند 9 يغطيه |
 | 12 | CI: خطوة `export:web` للسائق، Playwright (Chromium + WebKit) للـ manifest والـ SW وبوابة التثبيت وآلة حالات الإذن بمحاكاة، وفحص أن الـ bundle بلا المفتاح الخاص | repo | لا |
 | 13 | تحديث `PREVIEW.md` (تثبيت سائق iPhone)، RUNBOOK (VAPID، النشر)، SPEC-driver/SPEC-customer/SPEC-backend بنفس PR المهمة | docs | لا |
 | 14 | **لا** تغيير بـ Supabase Auth ولا Storage ولا Realtime، **لا** migration على الإنتاج (غير موجود بعد) | — | — |
 
 **ترتيب آمن:** 1←2 (dev) ← 5 ← 6/7 (dev) ← 9/10 ← فحص أجهزة. الإنتاج مع T24 فقط.
 
-## 9. أسئلة مفتوحة للمالك
-- **Q1: النطاق.** هل تثبّت نطاقاً خاصاً (مثلاً `driver.<نطاقك>` و`app.<نطاقك>`) قبل أول تثبيت حقيقي؟ تغيير الأصل لاحقاً = سائقون يعيدون التثبيت والاشتراك. (التوصية: نعم قبل الإنتاج؛ المعاينة تبقى `*.pages.dev`.)
-- **Q2: بريد `VAPID_SUBJECT`** (يراه Apple/Google): بريد المحل لا الشخصي.
-- **Q3: إشعار "تمت الموافقة" قبل الحساب** (W6): ندعمه بتغيير DB/دالة إضافي صغير، أم نكتفي بالـ polling كل 30 ثانية للـ PWA؟ (التوصية: نؤجله؛ الـ polling كافٍ وأرخص.)
-- **Q4: جهاز iPhone/iPad للفحص:** نحتاج جهازاً حقيقياً (iOS 16.4+) على الأقل لـ W7؛ المحاكاة لا تثبت Push.
-- **Q5: مدة عرض إلحاح السائق:** هل "طلب جاهز" بـ TTL ساعة مقبول؟ (افتراضي).
+## 9. قرارات المالك (أُجيبت 2026-11-21)
+- **Q1: النطاق ← `mukhdar-driver.pages.dev` هو الأصل النهائي لـ PWA السائق** (يُثبَّت قبل أي تثبيت حقيقي)؛ الزبون يبقى على `mukhdar-app.pages.dev`. مستند إلى هذين الأصلين: `ALLOWED_ORIGINS`، `aud` بـ VAPID لا يتأثر (أصل خدمة الدفع)، `manifest` و`scope`.
+- **Q2: `VAPID_SUBJECT`** = `mailto:` لبريد المالك، **محفوظ كسر Edge فقط**، لا يُكتب بالـ repo ولا الوثائق ولا السجلات.
+- **Q3: W6 مؤجَّلة.** إشعار الموافقة قبل الحساب يعتمد على الـ polling كل 30 ثانية. (تُفتح لاحقاً بقرار جديد.)
+- **Q4: جهاز الفحص:** آيفون 11 بـ iOS 16.4 أو أحدث متوفر لـ W7. (لا نفحص iOS إلا عليه؛ المحاكاة لا تثبت Push.)
+- **Q5 (افتراضي، لم يُعترض):** TTL ساعة لإشعار "جاهز" مقبول.
 
 ## 10. معايير النجاح
 1. على iPhone (iOS 16.4+) مثبَّتاً: تسجيل سائق ← موافقة ← دخول ← قبول طلب ← "بالطريق" ← "تم التوصيل" ← سجل اليوم، وكل شاشة RTL سليمة بلا قص (المناطق الآمنة).
@@ -237,7 +237,7 @@ notification_outbox ──claim_push_notifications──▶ push-dispatch ──
 | W3 | **DB**: migration A (enum) + migration B (`keys`، قيود، قائمة المضيفين، `register_web_push`، `claim_push_notifications`) + pgTAP بأدوار حقيقية + types | W2 (شكل المستلم) | **Opus** (RLS/أمان) | **نعم**: `db push` على dev | M |
 | W4 | **تطبيق السائق PWA**: تصدير الويب، ملفات `*.web.ts`، manifest/أيقونات/postexport، `_headers` وCSP بالهاش، بوابة التثبيت (آلة حالات نقية + نصوص عربية)، Playwright (Chromium + WebKit)، `export:web` بالـ CI | W1 | **Sonnet** | مشروع Pages (بند 9) **بموافقة** | L |
 | W5 | **Web Push بالعميل** (`push.web.ts` للسائق، `sw.js`، آلة حالات الإذن وبطاقات التمهيد بالعربي، تسجيل/خروج موحَّد بالحذف المؤجَّل، توجيه النقر + اختبار تطابق مع `routeForNotification`) ثم الزبون (بعد أول طلب) | W3، W4 | **Sonnet** | نشر `push-dispatch` وأسرار VAPID (بند 6، 7) و`ALLOWED_ORIGINS` **بموافقة** | L |
-| W6 | *(اختياري، Q3)* اشتراك قبل الحساب لإشعار الموافقة (`driver_requests.push_subscription`، `submit_driver_request`، `driver-register`) | W3، W5 | Opus | migration + إعادة نشر دالة **بموافقة** | S |
+| W6 | *(⏸ مؤجَّلة، Q3)* اشتراك قبل الحساب لإشعار الموافقة (`driver_requests.push_subscription`، `submit_driver_request`، `driver-register`) | W3، W5 | Opus | migration + إعادة نشر دالة **بموافقة** | S |
 | W7 | **فحص أجهزة حقيقية** (iPhone iOS 16.4+ وAndroid Chrome): التثبيت، الإذن، وصول الإشعار والتطبيق مقفول، النقر، الخروج، الإخلاء/إعادة التثبيت، RTL؛ تقرير `docs/reviews/pwa-webpush-W7.md` وتحديث `PREVIEW.md` | W5 | Sonnet | لا (أجهزتك) | S |
 | R3 | **مراجعة** (`/review`) لـ W1–W7: SSRF، حمولة الإشعار، RLS الجديدة، التخزين، CSP، عدم كسر Expo | W1–W7 | **Opus** | لا | M |
 
