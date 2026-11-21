@@ -439,7 +439,7 @@ pnpm sb functions deploy admin-create-user --remote=<ref> --use-api --no-verify-
 ```
 `SUPABASE_URL` و`SUPABASE_SERVICE_ROLE_KEY` تحقنهما Supabase. **سر واحد (T23 H1):** `ALLOWED_ORIGINS` = أصول اللوحة المسموحة لـ CORS، مفصولة بفواصل، **بلا `*`** وبلا `/` أخيرة. Supabase المستضاف لا يضيف CORS للدوال، فالدالة ترد على الـ preflight بنفسها (`_shared/cors.ts`)؛ بدون السر لا يستطيع أي متصفح استدعاءها (الـ preflight ← 403):
 ```sh
-pnpm sb secrets set ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 --project-ref <ref>   # التطوير
+pnpm sb secrets set ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 --project-ref <ref>   # التطوير (الحد الأدنى؛ القيمة الحالية بالأصول المنشورة: §16f)
 pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain> --project-ref <prod-ref>                    # الإنتاج (§17)
 ```
 اللوحة تستدعي الدالتين بجلسة الأدمن (`functions.invoke`)، **بجلسة aal2** (T23 C1؛ وإلا `MFA_REQUIRED` 403). فحص سريع بعد النشر: `curl -i -X OPTIONS -H "Origin: <أصل اللوحة>" -H "Access-Control-Request-Method: POST" https://<ref>.supabase.co/functions/v1/admin-reset-pin` ← 204 و`access-control-allow-origin: <أصل اللوحة>`؛ وبأصل آخر ← 403 بلا الترويسة.
@@ -529,6 +529,18 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 - الخطوات (مرة واحدة): `eas login` ← `eas init` داخل `apps/driver` (يكتب projectId؛ ضعه بـ `EAS_PROJECT_ID`) ← Firebase: تطبيق Android بحزمة `com.mukhdar.driver` وتنزيل `google-services.json` ← `eas env:create` كمتغير **ملف** باسم `GOOGLE_SERVICES_JSON` ← مفتاح حساب خدمة FCM V1 يُرفع بـ `eas credentials` (Android ← Google Service Account ← FCM V1) ← `eas build --profile development --platform android`.
 - **بيئات EAS (R2 M1):** كل profile بـ `eas.json` يسمّي بيئته صراحةً (`development` ← development، `preview` ← preview، `production` ← production)، وإلا لا تصل المتغيرات للبناء السحابي (`apps/driver/.env` لا يصله). `EAS_PROJECT_ID` ثابت بـ `app.config.ts` (عام). متغيرات `preview` (2026-11-21): `EXPO_PUBLIC_SUPABASE_URL` و`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (mukhdar-dev فقط) و`GOOGLE_SERVICES_JSON` و`EAS_PROJECT_ID`؛ **لا قيم production بعد**. قبل كل بناء: `eas env:list preview` و`eas config --profile preview --platform android` (قراءة فقط).
 - القناة `orders` (أهمية عالية). الإذن يُسأل مرة بعد أول دخول؛ الرفض ← شريط "الإشعارات مطفية" بالجاهزة. الخروج يحذف صف `push_tokens` للجهاز قبل `signOut`.
+
+## 16f) تطبيق السائق PWA: مشروع Cloudflare Pages الثاني (T37)
+
+- **المشروع:** `mukhdar-driver` ← **أصل ثابت** `https://mukhdar-driver.pages.dev` (قرار المالك، SPEC-webpush Q1؛ لا يتغيّر بعد أول تثبيت حقيقي لأن التثبيت والتخزين وإشعارات الويب مربوطة بالأصل). أنشأه المالك 2026-11-21، مربوط بالـ repo على `main`.
+- **إعدادات البناء:** framework None، الجذر فارغ، أمر البناء `pnpm --filter @mukhdar/driver run export:web`، الإخراج `apps/driver/dist`. المتغيرات (Production وPreview): `NODE_VERSION=24`، `EXPO_PUBLIC_SUPABASE_URL` و`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (**mukhdar-dev**)؛ `EXPO_PUBLIC_SHOP_PHONE`/`EXPO_PUBLIC_SHOP_WHATSAPP` غير مضبوطين بعد (الزران مخفيان). pnpm من `packageManager` بـ `package.json` الجذر.
+- **البناء نفسه يفشل** إن وُجد سر بالـ bundle أو `unsafe-inline` بـ `script-src` أو تغيّر قالب Expo (`scripts/web-postexport.mjs`)؛ لا نشر لصفحة نصف معدَّلة. `public/_headers` يُنسخ لـ `dist/_headers` بعد حساب هاش CSP.
+- **`ALLOWED_ORIGINS` على mukhdar-dev** (2026-11-21، بموافقة المالك): `http://localhost:3000,http://127.0.0.1:3000,https://mukhdar-app.pages.dev,https://mukhdar-admin.jambaz4a11.workers.dev,https://mukhdar-driver.pages.dev`، ثم أُعيد نشر `driver-register` و`driver-complete-registration` و`delete-account` (§16b، §12). القيمة لا تُقرأ من Supabase؛ للتأكد قارن SHA-256 للقيمة المتوقعة بعمود القيمة بـ `pnpm sb secrets list`. **عند أي تعديل لاحق احتفظ بكل الأصول** (الزبون واللوحة يعتمدان عليها). الفحص:
+  ```sh
+  curl -i -X OPTIONS -H "Origin: https://mukhdar-driver.pages.dev" -H "Access-Control-Request-Method: POST" https://<ref>.supabase.co/functions/v1/driver-register   # 204 والأصل نفسه
+  ```
+- **الاختبار:** `pnpm --filter @mukhdar/driver test:e2e` (يبني ويخدم `dist` مع `_headers` على `127.0.0.1:3100`؛ `E2E_SKIP_BUILD=1` لـ dist الحالي؛ `E2E_BASE_URL=https://mukhdar-driver.pages.dev` ضد المنشور). `login.spec.ts` يدخل بالسائق التجريبي `07000000011` (رمز `DRIVER_DEMO_PIN`) ولا يكتب شيئاً.
+- **الإنتاج لاحقاً:** مشروع Pages منفصل بمتغيرات الإنتاج، و`ALLOWED_ORIGINS` الإنتاج = أصل لوحة الإنتاج + أصل PWA السائق فقط (§17).
 
 ## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسات E1 وE2 وF، 2026-11-17)
 

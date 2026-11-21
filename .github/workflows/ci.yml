@@ -41,7 +41,7 @@ jobs:
   # معاينة المالك على Cloudflare: يبني الهدفين على Linux (البناء على ويندوز لا يعمل لـ OpenNext). بلا نشر وبلا أسرار.
   web-builds:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       # قيم عامة وهمية لتجاوز فحص الإعداد وقت البناء (المفاتيح الحقيقية تُضبط بـ Cloudflare)
       EXPO_PUBLIC_SUPABASE_URL: https://ghcohlrzvehtcettaaiu.supabase.co
@@ -61,6 +61,25 @@ jobs:
       # R1 L7: خطأ تجميع Metro أو app.config.ts بتطبيق السائق يظهر هنا لا ببناء EAS (T32/T33). بلا EAS ولا أسرار.
       - name: Driver app (expo export -p android, bundle check only)
         run: pnpm --filter @mukhdar/driver run export:android
+      # T37: PWA السائق (نفس أمر بناء Cloudflare Pages mukhdar-driver). postexport يحسب هاش CSP ويفشل إن وجد بالـ bundle
+      # service_role أو sb_secret_ أو مفتاحاً خاصاً (scripts/check-web-bundle.mjs).
+      - name: Driver PWA (expo export -p web + CSP hash + secret scan)
+        run: pnpm --filter @mukhdar/driver run export:web
+      - name: Driver PWA Playwright browsers
+        working-directory: apps/driver
+        run: pnpm exec playwright install --with-deps chromium webkit
+      # بلا خادم: manifest، الرؤوس، RTL، بوابة التثبيت، لا أخطاء CSP (login.spec.ts يتخطّى بالمفتاح الوهمي)
+      - name: Driver PWA Playwright (WebKit iPhone + Chromium Android)
+        working-directory: apps/driver
+        env:
+          E2E_SKIP_BUILD: '1'
+        run: pnpm exec playwright test
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: driver-pwa-playwright
+          path: apps/driver/test-results
+          retention-days: 7
       - name: Admin on Cloudflare (OpenNext build)
         run: pnpm --filter @mukhdar/admin run build:cf
 

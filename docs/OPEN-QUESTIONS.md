@@ -28,7 +28,9 @@ The deployed admin panel (`mukhdar-admin.jambaz4a11.workers.dev`) intermittently
   denied. A real missing/invalid/expired/idle session (4xx, no session) still goes to the login page.
   Tests: `apps/admin/src/lib/panelUser.test.ts`, `access.test.ts`.
 
-## 4. Web Push sender: in-house WebCrypto instead of `npm:web-push` (T35, 2026-11-21) — open, not blocking
+## 4. Web Push sender: in-house WebCrypto instead of `npm:web-push` (T35, 2026-11-21) — ✅ decided (2026-11-21)
+**Decision (owner, 2026-11-21):** keep the in-house RFC 8291 implementation; do **not** switch to `npm:web-push`.
+SPEC-webpush §5.4 records it.
 **What I found:** `npm:web-push@3.6.7` **does run on local Deno 2.9.6**. The Supabase Edge Runtime itself could not be
 tried (no Docker on this machine, and no deploys in T35), and the library depends on Deno's Node compatibility
 layer (`crypto.createECDH`, `https`, proxy agents), which is exactly where the Edge Runtime can differ.
