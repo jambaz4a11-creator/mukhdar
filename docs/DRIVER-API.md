@@ -579,3 +579,6 @@ pending ──► preparing ──► ready ──► out_for_delivery ──►
    and `fcm` is reserved (section 6). Tell us if the app needs `fcm`.
 2. ~~Account deletion rules for a driver holding an unfinished order~~ resolved in T08: refused with
    `409 ACTIVE_ORDER` (section 8).
+
+### 6b) الويب (T38)
+على PWA يُستعمل `register_web_push(p_endpoint, p_p256dh, p_auth)` بدل `register_push_token`؛ الحذف عند الخروج `delete from push_tokens where token = <endpoint>` (endpoint من `pushManager.getSubscription()`، لا يُخزَّن إلا للحذف المؤجَّل). رسائل الـ SW: `mukhdar:notification-click` و`-received` و`mukhdar:subscription-change`.
