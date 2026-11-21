@@ -49,6 +49,21 @@
 | R2 | **مراجعة نهائية** (`/review`) لـ T27–T32 قبل بناء الـ APK: كل مسار SPEC-driver §9 مغطى، لا سر أو رمز بالسجلات، `migration list` مطابق | 27–32 | Opus | - | ✅ 2026-11-21 ([التقرير](../reviews/review-R2-driver.md): 1 Critical (C1: اشتراك Realtime مشترك يُسقط شاشة الطلب)، 0 High، 2 Medium (M1 بيئة EAS `preview`، M2 رمز الإشعار عند الخروج من شاشات أخرى)، 6 Low؛ `migration list` مطابق 39 = 39). **الإصلاحات قبل T33: منجزة 2026-11-21** (C1 وM1 وM2 وL1–L4 وL6؛ L5 بقائمة T33؛ متغيرات EAS `preview` أُنشئت بموافقة المالك، URL ومفتاح dev فقط) |
 | 33 | [APK السائق والفحص على أجهزة حقيقية](33-driver-app-apk.md) | 32، R2 | Sonnet | EAS APK build | ⬜ |
 
+### PWA السائق + Web Push ([SPEC-webpush](../SPEC-webpush.md)، معتمدة 2026-11-21)
+
+للسائقين على iPhone بلا حساب Apple Developer، وإشعارات الويب للزبون والسائق. أصل السائق النهائي `https://mukhdar-driver.pages.dev`. لا تعتمد على T33 (تُنفَّذ بعدها أو بالتوازي). "على dev" = بموافقتك.
+
+| # | المهمة | تعتمد على | النموذج | على dev | الحالة |
+|---|---|---|---|---|---|
+| 34 | [التخزين المشفَّر للويب (W1)](34-web-secure-storage.md) | - | Opus | - | ⬜ |
+| 35 | [مرسِل Web Push بـ push-dispatch (W2)](35-webpush-sender.md) | - | Opus | - (كود محلي؛ النشر بـ 38) | ⬜ |
+| 36 | [قاعدة بيانات Web Push (W3)](36-webpush-db.md) | 35 | Opus | **migrations (2)** | ⬜ |
+| 37 | [تطبيق السائق PWA (W4)](37-driver-pwa.md) | 34 | Sonnet | **Cloudflare Pages `mukhdar-driver`** + `ALLOWED_ORIGINS` + إعادة نشر 3 دوال | ⬜ |
+| 38 | [Web Push بالعميل: السائق والزبون (W5)](38-webpush-client.md) | 35، 36، 37 | Sonnet | **أسرار VAPID** + نشر `push-dispatch` + متغير VAPID العام بمشروعي Pages | ⬜ |
+| W6 | اشتراك قبل الحساب لإشعار الموافقة | 36، 38 | Opus | migration + إعادة نشر `driver-register` | ⏸ مؤجَّلة (قرار المالك Q3: الـ polling كافٍ) |
+| 39 | [فحص PWA والإشعارات على أجهزة حقيقية (W7)](39-pwa-device-check.md) | 38 | Sonnet | - (آيفون 11 iOS 16.4+ متوفر) | ⬜ |
+| R3 | [**مراجعة** PWA وWeb Push](R3-pwa-webpush-review.md) | 34–39 | Opus | - | ⬜ |
+
 "على dev" = ما يحتاج **موافقة صاحب المشروع** قبل التنفيذ (migration بـ `pnpm sb db push`، نشر Edge Function، أو EAS/Firebase). الإنتاج خارج هذه الخطة. 29 مستقلة عن 28 (تُنفَّذ قبلها أو بعدها). iOS Ad Hoc لاحقاً، خارج T33.
 
 المهمتان 25 و26 أُضيفتا بقرار المالك 2026-11-15 (لوحة مماثلة بوظائفها لمشروع سابق): رقمهما بعد 24 حتى لا يتغير ترقيم 21–24، لكن مكانهما بالتنفيذ بعد 20 وقبل 22. شاشات الرئيسية والتقييمات وهدر اليوم تُضاف للتصميم المعتمد قبلهما (وقبل شاشة هدر اليوم بـ T18).
