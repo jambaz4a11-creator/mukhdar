@@ -16,6 +16,7 @@ import { AppText } from '../components/AppText';
 import { config } from '../config';
 import { AuthGuard } from '../features/auth/AuthGuard';
 import { initAuth } from '../features/auth/store';
+import { InstallGateHost } from '../features/install/InstallGate';
 import { NotificationsBridge } from '../features/notifications/NotificationsBridge';
 import { ar } from '../i18n/ar';
 import { configureNotificationHandler } from '../lib/push';
@@ -68,6 +69,8 @@ function RootLayout() {
       </Stack>
       <AuthGuard />
       <NotificationsBridge />
+      {/* T37: على الويب فقط (الأصلي = standalone ← لا شيء). iOS خارج الـ PWA المثبَّت: شاشة كاملة فوق كل شيء */}
+      <InstallGateHost />
     </SafeAreaProvider>
   );
 }

@@ -250,7 +250,17 @@ pnpm sb db push --dry-run && pnpm sb db push   # dev فقط، ثم: pnpm sb migr
 pnpm it:driver-register                        # تكامل جديد على dev (§7)
 pnpm --filter @mukhdar/admin test:e2e          # Playwright للوحة
 eas build -p android --profile preview         # APK داخلي (بموافقة المالك)
+pnpm --filter @mukhdar/driver run export:web   # PWA (T37): dist + CSP بهاش + فحص الأسرار
+pnpm --filter @mukhdar/driver test:e2e         # Playwright WebKit + Chromium على dist (login.spec.ts على dev)
 ```
+
+### الويب (PWA، T37، SPEC-webpush §3)
+- **الأصل:** `https://mukhdar-driver.pages.dev` (مشروع Cloudflare Pages `mukhdar-driver`، أمر البناء `pnpm --filter @mukhdar/driver run export:web`، الإخراج `apps/driver/dist`؛ RUNBOOK §16f). نفس الكود ونفس المنطق للـ APK والويب.
+- **فصل المنصات بملفات `*.web.ts(x)`** بنفس أسماء التصدير (`web-platform.test.ts` يفرض ذلك ويمنع استيراد `expo-notifications`/`expo-device`/`expo-updates`/`expo-secure-store` بنسخ الويب): `secureStorage`/`secureStore` (T34، IndexedDB مشفّر)، `rtl.web.ts` (`<html dir="rtl" lang="ar">` بلا إعادة تحميل)، `push.web.ts` بديل يرجع `unsupported` حتى T38، `NotificationsBridge.web.tsx` بلا عمل. `BackHandler` بـ react-native-web لا-عملية.
+- **بوابة التثبيت** (`features/install/`): `installState()` دالة نقية ← `standalone | ios-browser | android-installable | other-browser | unsupported-ios`. على iOS خارج التطبيق المثبَّت (وتحت 16.4 حتى لو مثبَّت) شاشة كاملة تحجب الدخول والتسجيل (تخزين الـ PWA المثبَّت منفصل عن Safari، والإشعارات للمثبَّت فقط). Android: شريط "ثبّت التطبيق" اختياري من `beforeinstallprompt`. الأصلي = `standalone` دائماً. iPadOS بوكيل سطح المكتب يُكشف بشاشة اللمس.
+- **الرؤوس:** `public/_headers` بـ CSP **بلا `unsafe-inline` للسكربت** (`scripts/web-postexport.mjs` يحسب هاش أي `<script>` داخلي ويرفض `unsafe-inline`/`unsafe-eval`؛ اليوم لا يوجد ← `'self'` وحدها)، `worker-src 'self'`، `object-src 'none'`، `frame-ancestors 'none'`، و`no-cache` لـ `/` و`index.html` و`sw.js`. نفس التشديد لتطبيق الزبون.
+- **CI:** `export:web` + فحص الأسرار (`scripts/check-web-bundle.mjs`: مفتاح `sb_secret_`، JWT بدور `service_role`، مفتاح PEM خاص، `VAPID_PRIVATE_KEY`) + Playwright بلا خادم (manifest، الرؤوس، RTL، البوابة، لا أخطاء CSP).
+- **افتراض (T37):** الأيقونات نفس أيقونات الزبون مؤقتاً (افتراض A3)، ورقم/واتساب المحل فارغان على Pages (الزران مخفيان) حتى يقرّر المالك.
 
 ### هيكل المشروع
 ```
