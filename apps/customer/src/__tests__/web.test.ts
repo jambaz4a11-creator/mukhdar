@@ -1,4 +1,6 @@
 // طبقة الويب (PWA): تخزين الجلسة، نوافذ التأكيد، RTL، وبدائل الإشعارات (ملفات *.web.ts تُختبر مباشرة).
+import { MessageChannel, receiveMessageOnPort } from 'node:worker_threads';
+import { IDBFactory } from 'fake-indexeddb';
 import { webAlert } from '../lib/webShims.web';
 import { secureStorage } from '../lib/secureStorage.web';
 import { ensureRTL } from '../lib/rtl.web';
@@ -15,23 +17,82 @@ function fakeStorage() {
   };
 }
 
-describe('web secureStorage (localStorage)', () => {
+// T34: IndexedDB مشفَّر (createWebSecureStorage من @mukhdar/shared) بدل localStorage الصريح، مع ترحيل لمرة واحدة.
+describe('web secureStorage (encrypted IndexedDB, T34)', () => {
+  const KEY = 'sb-ghcohlrzvehtcettaaiu-auth-token';
+  const SESSION = JSON.stringify({ access_token: 'a.b.c', refresh_token: 'refresh-plain-xyz' });
+
+  /** تحميل جديد للوحدة = إعادة تحميل الصفحة (نفس IndexedDB ونفس localStorage). */
+  function loadPage(): typeof import('../lib/secureStorage.web') {
+    let mod!: typeof import('../lib/secureStorage.web');
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      mod = require('../lib/secureStorage.web');
+    });
+    return mod;
+  }
+
+  // jest-expo يضع structuredClone بديلاً (serialize/deserialize) يحوّل CryptoKey إلى {}؛ المتصفح وNode ينسخانه.
+  // fake-indexeddb ينسخ بـ structuredClone العام، فنعطيه نسخ Node الحقيقي (MessagePort متزامن).
+  const envClone = g.structuredClone;
+  function nodeStructuredClone(value: unknown) {
+    const { port1, port2 } = new MessageChannel();
+    try {
+      port1.postMessage(value);
+      return receiveMessageOnPort(port2)?.message;
+    } finally {
+      port1.close();
+      port2.close();
+    }
+  }
+
+  beforeEach(() => {
+    g.structuredClone = nodeStructuredClone;
+    g.indexedDB = new IDBFactory();
+  });
   afterEach(() => {
+    g.structuredClone = envClone;
     delete g.localStorage;
+    delete g.indexedDB;
   });
 
-  it('round-trips a big session value without chunking', async () => {
-    g.localStorage = fakeStorage();
-    const big = 'x'.repeat(10_000);
-    await secureStorage.setItem('sb-x-auth-token', big);
-    expect(await secureStorage.getItem('sb-x-auth-token')).toBe(big);
-    await secureStorage.removeItem('sb-x-auth-token');
-    expect(await secureStorage.getItem('sb-x-auth-token')).toBeNull();
+  it('round-trips a big session; nothing lands in localStorage; survives a reload', async () => {
+    const ls = fakeStorage();
+    g.localStorage = ls;
+    const big = SESSION + 'x'.repeat(10_000);
+    await secureStorage.setItem(KEY, big);
+    expect(await secureStorage.getItem(KEY)).toBe(big);
+    expect(ls.getItem(KEY)).toBeNull();
+    expect(await loadPage().secureStorage.getItem(KEY)).toBe(big);
+    await secureStorage.removeItem(KEY);
+    expect(await loadPage().secureStorage.getItem(KEY)).toBeNull();
   });
 
-  it('does not crash when storage is missing or throws', async () => {
-    await expect(secureStorage.getItem('k')).resolves.toBeNull();
-    await expect(secureStorage.setItem('k', 'v')).resolves.toBeUndefined();
+  it('migrates an existing plain localStorage session once, then no plain copy remains', async () => {
+    const ls = fakeStorage();
+    ls.setItem(KEY, SESSION);
+    g.localStorage = ls;
+    const page = loadPage();
+    expect(await page.secureStorage.getItem(KEY)).toBe(SESSION);
+    expect(ls.getItem(KEY)).toBeNull();
+    expect(await loadPage().secureStorage.getItem(KEY)).toBe(SESSION); // من IndexedDB بعد الترحيل
+    expect(page.isSessionStorageDegraded()).toBe(false);
+  });
+
+  it('no IndexedDB (private mode): memory only, flagged degraded, plain copy still removed', async () => {
+    delete g.indexedDB;
+    const ls = fakeStorage();
+    ls.setItem(KEY, SESSION);
+    g.localStorage = ls;
+    const page = loadPage();
+    expect(await page.secureStorage.getItem(KEY)).toBe(SESSION);
+    expect(ls.getItem(KEY)).toBeNull();
+    expect(page.isSessionStorageDegraded()).toBe(true);
+  });
+
+  it('does not crash when localStorage is missing or throws', async () => {
+    const page = loadPage();
+    await expect(page.secureStorage.getItem('k')).resolves.toBeNull();
     g.localStorage = {
       getItem: () => {
         throw new Error('denied');
@@ -43,9 +104,10 @@ describe('web secureStorage (localStorage)', () => {
         throw new Error('denied');
       },
     };
-    await expect(secureStorage.getItem('k')).resolves.toBeNull();
-    await expect(secureStorage.setItem('k', 'v')).resolves.toBeUndefined();
-    await expect(secureStorage.removeItem('k')).resolves.toBeUndefined();
+    await expect(page.secureStorage.getItem('k2')).resolves.toBeNull();
+    await expect(page.secureStorage.setItem('k', 'v')).resolves.toBeUndefined();
+    await expect(page.secureStorage.getItem('k')).resolves.toBe('v');
+    await expect(page.secureStorage.removeItem('k')).resolves.toBeUndefined();
   });
 });
 

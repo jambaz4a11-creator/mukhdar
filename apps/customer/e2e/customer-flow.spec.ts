@@ -53,6 +53,49 @@ test('customer: sign up → name → address → order → cancel → delete acc
     await expectNoError(page);
   });
 
+  await test.step('session encrypted at rest, key not exportable, reload keeps it (T34)', async () => {
+    const atRest = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((res, rej) => {
+        const r = indexedDB.open('mukhdar-secure');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      const all = <T>(store: string, op: 'getAll' | 'getAllKeys') =>
+        new Promise<T[]>((res, rej) => {
+          const r = db.transaction(store).objectStore(store)[op]();
+          r.onsuccess = () => res(r.result as T[]);
+          r.onerror = () => rej(r.error);
+        });
+      const names = await all<string>('items', 'getAllKeys');
+      const records = await all<{ iv: Uint8Array; ct: ArrayBuffer }>('items', 'getAll');
+      const [key] = await all<CryptoKey>('keys', 'getAll');
+      let exportable = true;
+      try {
+        await crypto.subtle.exportKey('raw', key as CryptoKey);
+      } catch {
+        exportable = false;
+      }
+      db.close();
+      const latin1 = (b: ArrayBuffer) => String.fromCharCode(...new Uint8Array(b));
+      return {
+        names,
+        shapes: records.map((r) => Object.keys(r).sort().join(',')),
+        plainInCt: records.some((r) => /refresh_token|access_token/.test(latin1(r.ct))),
+        extractable: key?.extractable,
+        exportable,
+        plainInLocalStorage: Object.keys(localStorage).filter((k) => k.startsWith('sb-')),
+      };
+    });
+    expect(atRest.names.some((n) => /^sb-.+-auth-token$/.test(n))).toBe(true);
+    expect(new Set(atRest.shapes)).toEqual(new Set(['ct,iv']));
+    expect(atRest.plainInCt).toBe(false);
+    expect(atRest.extractable).toBe(false);
+    expect(atRest.exportable).toBe(false);
+    expect(atRest.plainInLocalStorage).toEqual([]);
+    await page.reload();
+    await expect(page.getByTestId('block-select')).toBeVisible({ timeout: 30_000 });
+  });
+
   await test.step('first address: block → building → floor → apartment, all dropdowns (+ label)', async () => {
     await page.getByTestId('block-select').click();
     await shot(page, 'address-blocks');
