@@ -938,6 +938,7 @@ export type Database = {
         Row: {
           created_at: string;
           id: number;
+          keys: Json | null;
           last_seen_at: string;
           platform: Database['public']['Enums']['push_platform'];
           provider: Database['public']['Enums']['push_provider'];
@@ -949,6 +950,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           id?: never;
+          keys?: Json | null;
           last_seen_at?: string;
           platform: Database['public']['Enums']['push_platform'];
           provider?: Database['public']['Enums']['push_provider'];
@@ -959,6 +961,7 @@ export type Database = {
         Update: {
           created_at?: string;
           id?: never;
+          keys?: Json | null;
           last_seen_at?: string;
           platform?: Database['public']['Enums']['push_platform'];
           provider?: Database['public']['Enums']['push_provider'];
@@ -1453,6 +1456,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      register_web_push: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string };
+        Returns: undefined;
+      };
       reorder_categories: { Args: { p_ids: number[] }; Returns: undefined };
       reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
       report_daily: {
@@ -1604,8 +1611,8 @@ export type Database = {
       movement_type: 'purchase' | 'sale' | 'waste' | 'adjust' | 'cancel_return';
       order_status:
         'pending' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
-      push_platform: 'ios' | 'android';
-      push_provider: 'expo' | 'fcm';
+      push_platform: 'ios' | 'android' | 'web';
+      push_provider: 'expo' | 'fcm' | 'webpush';
       user_role: 'customer' | 'driver' | 'staff' | 'admin';
     };
     CompositeTypes: {
@@ -1723,8 +1730,8 @@ export const Constants = {
     Enums: {
       movement_type: ['purchase', 'sale', 'waste', 'adjust', 'cancel_return'],
       order_status: ['pending', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'],
-      push_platform: ['ios', 'android'],
-      push_provider: ['expo', 'fcm'],
+      push_platform: ['ios', 'android', 'web'],
+      push_provider: ['expo', 'fcm', 'webpush'],
       user_role: ['customer', 'driver', 'staff', 'admin'],
     },
   },
