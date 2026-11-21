@@ -17,3 +17,4 @@ export * from './contact';
 export * from './baghdadDay';
 export * from './chunkedStorage';
 export * from './pinChange';
+export * from './webSecureStorage';

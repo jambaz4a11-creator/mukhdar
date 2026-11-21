@@ -1,4 +1,4 @@
-# 34: التخزين المشفَّر للويب (W1) ⬜
+# 34: التخزين المشفَّر للويب (W1) ✅
 
 **الهدف:** SPEC-webpush §6. بديل `localStorage`/SecureStore على الويب: IndexedDB + مفتاح WebCrypto غير قابل للتصدير، لجلسة Supabase وسر جهاز السائق وبيانات التسجيل، بوحدة واحدة مشتركة.
 **يعتمد على:** - (مستقلة عن T33 وعن W2).
@@ -24,3 +24,9 @@
 - Jest (محاكاة IndexedDB وWebCrypto): تشفير/فك، IV مختلف لكل كتابة، تلف البيانات، غياب IDB، الترحيل، الحذف.
 - Playwright الزبون الحالي على Chromium وWebKit (`apps/customer/e2e`).
 - CI كامل أخضر؛ اختبارات كل حزمة محلياً على حدة.
+
+## النتيجة (2026-11-21، PR #26)
+- ✅ Jest: shared 316 (25 جديدة)، customer 241، driver 235، admin 365؛ typecheck لكل الحزم.
+- ✅ Playwright الزبون على Chromium وWebKit: خطوة جديدة تفحص عدم وجود جلسة بـ `localStorage`، سجلات IndexedDB `{iv, ct}` بلا نص الرمز، المفتاح `extractable: false` و`exportKey` يفشل بالمتصفح، وإعادة التحميل تُبقي الجلسة.
+- افتراض: شريط تنبيه وضع الذاكرة (`isSessionStorageDegraded()`) غير مضاف بعد (SPEC-customer #56).
+- تطبيق السائق: `secureStorage.web.ts` و`secureStore.web.ts` جاهزان، يُربطان بتصدير الويب بـ T37.
