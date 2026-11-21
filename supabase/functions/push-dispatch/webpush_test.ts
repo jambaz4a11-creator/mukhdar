@@ -660,7 +660,8 @@ Deno.test('VAPID JWT is reused per audience within one sender', async () => {
   const f = fakeFetch();
   const send = sender(f.fn);
   await send([msg(`${FCM}1`), msg(`${FCM}2`), msg(MOZ)]);
-  const auth = f.calls.map((c) => c.headers.get('authorization'));
-  assert.equal(auth[0], auth[1]);
-  assert.notEqual(auth[0], auth[2]);
+  // الطلبات متزامنة فترتيب calls غير مضمون: البحث بالعنوان
+  const auth = (url: string) => f.calls.find((c) => c.url === url)!.headers.get('authorization');
+  assert.equal(auth(`${FCM}1`), auth(`${FCM}2`));
+  assert.notEqual(auth(`${FCM}1`), auth(MOZ));
 });

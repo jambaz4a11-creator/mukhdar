@@ -1,4 +1,4 @@
-# 35: مرسِل Web Push في `push-dispatch` (W2) ⬜
+# 35: مرسِل Web Push في `push-dispatch` (W2) ✅
 
 **الهدف:** SPEC-webpush §5.4. مرسِل `webpush` (تشفير `aes128gcm` RFC 8291 + VAPID RFC 8292) داخل `push-dispatch`، بلا لمس مسار Expo.
 **يعتمد على:** - (مستقلة عن W1؛ تسبق W3 لتحديد شكل المستلم).
