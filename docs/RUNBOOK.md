@@ -717,3 +717,4 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 - **Cloudflare:** `EXPO_PUBLIC_VAPID_PUBLIC_KEY` (العام فقط) بمشروعي `mukhdar-app` و`mukhdar-driver` (Production وPreview) ثم إعادة بناء.
 - **ما لا يُغيَّر:** المفتاح العام بعد أول اشتراك حقيقي (يُبطل كل الاشتراكات)؛ مفاتيح dev لا تُستعمل بالإنتاج أبداً. CI يبني بمفتاح عام وهمي (مثال web-push) لا علاقة له بمفتاح dev.
 - 2026-11-21: ضُبطت الأسرار ونُشرت الدالة على mukhdar-dev بموافقة المالك؛ لا migrations بـ T38.
+- 2026-11-21 (المالك): `EXPO_PUBLIC_VAPID_PUBLIC_KEY` أُضيف لمشروعي Pages بيئة **Production فقط** (لا Preview: معاينات الفروع بلا Web Push عمداً). تغيير متغير بناء لا يعيد البناء وحده: إعادة النشر من `main` أو "Retry deployment".
