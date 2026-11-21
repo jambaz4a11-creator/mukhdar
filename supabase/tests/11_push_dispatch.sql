@@ -1,5 +1,5 @@
 -- 11: push-dispatch (T07): المزوّد لكل رمز، حجز الصندوق، إنهاء الإرسال، السر المشترك، والمُشغِّل
-select plan(60);
+select plan(61);
 
 -- الصندوق يبدأ فارغاً من منظور الاختبار (يُلغى مع المعاملة)
 update public.notification_outbox set sent_at = now() where sent_at is null;
@@ -172,6 +172,21 @@ select is((select recipients from claimed where title = 'T-req-101'),
   'driver_request audience: an approved request resolves to its own token');
 select is((select array_agg(recipients::text order by title) from claimed where title in ('T-req-102', 'T-req-103')),
   array['[]', '[]'], 'driver_request audience: rejected or completed requests resolve to nothing');
+
+-- ---------------------------------------------------------------- مستلم webpush (T36): نفس الشكل + keys
+select tests.as_postgres();
+select tests.remember('web', tests.new_user('customer'));
+insert into public.push_tokens (user_id, token, platform, provider, keys) values
+  (tests.id('web'), 'https://fcm.googleapis.com/fcm/send/t11-web', 'web', 'webpush',
+   jsonb_build_object('p256dh', 'B' || repeat('A', 86), 'auth', repeat('a', 22)));
+insert into public.notification_outbox (audience, user_id, title, body) values ('user', tests.id('web'), 'T-web', 'b');
+select tests.as_service();
+insert into claimed select * from public.claim_push_notifications(50);
+select is((select recipients from claimed where title = 'T-web'),
+  jsonb_build_array(jsonb_build_object('token', 'https://fcm.googleapis.com/fcm/send/t11-web', 'provider', 'webpush',
+                                       'platform', 'web',
+                                       'keys', jsonb_build_object('p256dh', 'B' || repeat('A', 86), 'auth', repeat('a', 22)))),
+  'webpush recipient: same fields plus its subscription keys');
 
 -- ---------------------------------------------------------------- السر المشترك
 select tests.as_postgres();
