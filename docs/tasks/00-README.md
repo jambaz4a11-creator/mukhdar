@@ -62,7 +62,7 @@
 | 38 | [Web Push بالعميل: السائق والزبون (W5)](38-webpush-client.md) | 35، 36، 37 | Sonnet | **أسرار VAPID** + نشر `push-dispatch` + متغير VAPID العام بمشروعي Pages | 🟡 الكود والأسرار والنشر منجزة 2026-11-21؛ فحص المتصفح (سطح مكتب ثم Android) بانتظار متغير Cloudflare |
 | W6 | اشتراك قبل الحساب لإشعار الموافقة | 36، 38 | Opus | migration + إعادة نشر `driver-register` | ⏸ مؤجَّلة (قرار المالك Q3: الـ polling كافٍ) |
 | 39 | [فحص PWA والإشعارات على أجهزة حقيقية (W7)](39-pwa-device-check.md) | 38 | Sonnet | - (آيفون 11 iOS 16.4+ متوفر) | ⬜ |
-| R3 | [**مراجعة** PWA وWeb Push](R3-pwa-webpush-review.md) | 34–39 | Opus | - | ⬜ |
+| R3 | [**مراجعة** PWA وWeb Push](R3-pwa-webpush-review.md) | 34–39 | Opus | - | ✅ 2026-11-22 لـ T34–T38 ([التقرير](../reviews/review-R3-pwa-webpush.md): 0 Critical، 0 High، 4 Medium، 9 Low؛ `migration list` مطابق 41 = 41). الإصلاحات بـ PR منفصل |
 
 "على dev" = ما يحتاج **موافقة صاحب المشروع** قبل التنفيذ (migration بـ `pnpm sb db push`، نشر Edge Function، أو EAS/Firebase). الإنتاج خارج هذه الخطة. 29 مستقلة عن 28 (تُنفَّذ قبلها أو بعدها). iOS Ad Hoc لاحقاً، خارج T33.
 
