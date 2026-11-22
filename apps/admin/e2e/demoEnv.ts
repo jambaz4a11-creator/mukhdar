@@ -1,10 +1,11 @@
 // بيانات دخول العرض لاختبارات e2e (تجهيز الـ repo ليصير عاماً، 2026-11-22): البيئة أولاً، ثم .env.local بجذر
 // المستودع (مُتجاهل بـ git؛ نفس ملف seed:demo وdemo:rotate، RUNBOOK §6). بلا قيمة ← undefined، والمستدعي يقرر
+// يُستورد من حزمتين إحداهما ESM (admin) والأخرى CJS (driver)، فلا __dirname ولا import.meta؛ Playwright يعمل من مجلد التطبيق (apps/<x>) فالجذر ../..
 // (الافتراضي العام صالح للمكدس المحلي/CI فقط، لا على mukhdar-dev).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOT_ENV = join(__dirname, '..', '..', '..', '.env.local');
+const ROOT_ENV = join(process.cwd(), '..', '..', '.env.local');
 
 export function demoEnv(...names: string[]): string | undefined {
   for (const name of names) {
