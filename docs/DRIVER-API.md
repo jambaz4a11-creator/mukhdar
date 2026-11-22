@@ -501,7 +501,7 @@ minute). Nothing is sent to an account whose `must_change_pin` is true. Notifica
 | staff/admin marks `ready` an order already assigned to you | that driver | `الطلب #<number> جاهز للاستلام` | `{ "order_id": "uuid", "type": "ready" }` → open the order |
 | staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>`; if the order is already on the way (moved from another driver): `نُقل لك طلب بالطريق #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order (check its status) |
 | staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
-| an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = reason if given) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
+| an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = `بلوك X - بناية Y` only; since R3 M1, 2026-11-22, the free-text reason is never sent in the push) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
 
 Delivery is chosen **per token** by its provider (`push_tokens.provider`, set by `register_push_token`):
 

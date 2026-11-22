@@ -1,6 +1,8 @@
 import {
   createWebPush,
   PROMPT_SNOOZE_MS,
+  SILENT_REREGISTER_MS,
+  subscriptionMatchesKey,
   urlBase64ToUint8Array,
   webPushState,
   type WebPushBrowser,
@@ -62,11 +64,15 @@ class FakeStorage {
   };
 }
 
-function makeSub(endpoint = 'https://fcm.googleapis.com/fcm/send/abc'): WebPushSubscription & {
+function makeSub(
+  endpoint = 'https://fcm.googleapis.com/fcm/send/abc',
+  applicationServerKey?: ArrayBuffer,
+): WebPushSubscription & {
   unsubscribe: jest.Mock;
 } {
   return {
     endpoint,
+    options: applicationServerKey ? { applicationServerKey } : undefined,
     toJSON: () => ({ endpoint, keys: { p256dh: 'P256DH', auth: 'AUTH' } }),
     unsubscribe: jest.fn().mockResolvedValue(true),
   };
@@ -81,7 +87,7 @@ function makeBrowser(opts: {
   let permission = opts.permission ?? 'default';
   let sub = opts.sub ?? null;
   const subscribe = jest.fn().mockImplementation(() => {
-    sub = makeSub();
+    sub = makeSub('https://fcm.googleapis.com/fcm/send/new');
     return Promise.resolve(sub);
   });
   const reg: WebPushRegistration = {
@@ -164,7 +170,7 @@ describe('register', () => {
       applicationServerKey: expect.any(Uint8Array),
     });
     expect(c.rpc).toHaveBeenCalledWith('register_web_push', {
-      p_endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+      p_endpoint: 'https://fcm.googleapis.com/fcm/send/new',
       p_p256dh: 'P256DH',
       p_auth: 'AUTH',
     });
@@ -255,6 +261,14 @@ describe('remove (sign out order)', () => {
     expect(await s.storage.getItem('pending')).toBe(sub.endpoint);
   });
 
+  it('R3 L9: storage failing for the deferred delete still unsubscribes', async () => {
+    const sub = makeSub();
+    const s = make({ permission: 'granted', sub });
+    s.storage.setItem = () => Promise.reject(new Error('quota'));
+    await s.wp.remove(makeClient({ deleteError: 'throw' }).client);
+    expect(sub.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it('never throws even when unsubscribe and storage fail', async () => {
     const sub = makeSub();
     sub.unsubscribe.mockRejectedValue(new Error('x'));
@@ -336,5 +350,103 @@ describe('snooze (7 days)', () => {
     const s = make({});
     await s.storage.setItem('snooze', 'abc');
     expect(await s.wp.isSnoozed()).toBe(false);
+  });
+});
+
+const keyBytes = (k: string) => {
+  const b = urlBase64ToUint8Array(k);
+  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+};
+const OTHER_KEY =
+  'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';
+
+describe('R3 M2: subscription made with another VAPID key', () => {
+  it('subscriptionMatchesKey: same key, other key, unknown key', () => {
+    expect(subscriptionMatchesKey(makeSub('x', keyBytes(KEY)), KEY)).toBe(true);
+    expect(subscriptionMatchesKey(makeSub('x', keyBytes(OTHER_KEY)), KEY)).toBe(false);
+    expect(subscriptionMatchesKey(makeSub('x'), KEY)).toBe(true); // options غائب: لا نعرف ← يبقى
+    const view = new Uint8Array(keyBytes(KEY));
+    expect(
+      subscriptionMatchesKey({ ...makeSub('x'), options: { applicationServerKey: view } }, KEY),
+    ).toBe(true);
+  });
+
+  it('other key: unsubscribes the old one, subscribes with ours, registers the new endpoint', async () => {
+    const old = makeSub('https://fcm.googleapis.com/fcm/send/old', keyBytes(OTHER_KEY));
+    const s = make({ permission: 'granted', sub: old });
+    const c = makeClient();
+    expect(await s.wp.register(c.client, { ask: false })).toBe('registered');
+    expect(old.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(s.subscribe).toHaveBeenCalledTimes(1);
+    expect(c.rpc).toHaveBeenCalledWith(
+      'register_web_push',
+      expect.objectContaining({ p_endpoint: 'https://fcm.googleapis.com/fcm/send/new' }),
+    );
+  });
+
+  it('same key: keeps the subscription (no unsubscribe, no subscribe)', async () => {
+    const cur = makeSub('https://fcm.googleapis.com/fcm/send/abc', keyBytes(KEY));
+    const s = make({ permission: 'granted', sub: cur });
+    expect(await s.wp.register(makeClient().client, { ask: false })).toBe('registered');
+    expect(cur.unsubscribe).not.toHaveBeenCalled();
+    expect(s.subscribe).not.toHaveBeenCalled();
+  });
+});
+
+describe('R3 L1: unsubscribeLocal (session lost without sign-out)', () => {
+  it('unsubscribes locally, no request to the server, and resets registered', async () => {
+    const sub = makeSub();
+    const s = make({ permission: 'granted', sub });
+    const c = makeClient();
+    await s.wp.register(c.client, { ask: false });
+    await s.wp.unsubscribeLocal();
+    expect(sub.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(c.from).not.toHaveBeenCalled();
+    expect(await s.wp.getState(false)).not.toBe('registered');
+  });
+
+  it('never throws (no subscription, or unsubscribe rejects)', async () => {
+    await expect(
+      make({ permission: 'granted', sub: null }).wp.unsubscribeLocal(),
+    ).resolves.toBeUndefined();
+    const bad = makeSub();
+    bad.unsubscribe.mockRejectedValue(new Error('x'));
+    await expect(
+      make({ permission: 'granted', sub: bad }).wp.unsubscribeLocal(),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('R3 L4: silent re-register throttle', () => {
+  it('same account + same endpoint within an hour: no second RPC; after an hour: RPC again', async () => {
+    let t = 1_000_000;
+    const s = make({ permission: 'granted', sub: makeSub() }, () => t);
+    const c = makeClient();
+    await s.wp.register(c.client, { ask: false, userId: 'u1' });
+    t += SILENT_REREGISTER_MS - 1;
+    expect(await s.wp.register(c.client, { ask: false, userId: 'u1' })).toBe('registered');
+    expect(c.rpc).toHaveBeenCalledTimes(1);
+    t += 2;
+    await s.wp.register(c.client, { ask: false, userId: 'u1' });
+    expect(c.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('another account, a user tap, or no userId always calls the RPC', async () => {
+    const s = make({ permission: 'granted', sub: makeSub() });
+    const c = makeClient();
+    await s.wp.register(c.client, { ask: false, userId: 'u1' });
+    await s.wp.register(c.client, { ask: false, userId: 'u2' });
+    await s.wp.register(c.client, { ask: true, userId: 'u2' });
+    await s.wp.register(c.client, { ask: false });
+    expect(c.rpc).toHaveBeenCalledTimes(4);
+  });
+
+  it('after remove() the next silent run registers again', async () => {
+    const s = make({ permission: 'granted', sub: makeSub() });
+    const c = makeClient();
+    await s.wp.register(c.client, { ask: false, userId: 'u1' });
+    await s.wp.remove(c.client);
+    await s.wp.register(c.client, { ask: false, userId: 'u1' });
+    expect(c.rpc).toHaveBeenCalledTimes(2);
   });
 });

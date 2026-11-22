@@ -1,6 +1,10 @@
 // بوابة التثبيت (T37، SPEC-webpush §3.2–3.3). دالة نقية تُختبر بلا متصفح.
 // على iOS تخزين الـ PWA المثبَّت منفصل عن Safari، وإشعارات الويب تعمل فقط للمثبَّت (16.4+)، لذلك التسجيل والدخول
 // لا يجريان إلا داخل التطبيق المثبَّت: ios-browser وunsupported-ios تحجبان التطبيق.
+// كشف iOS ونسخته من @mukhdar/shared (iosInstall.ts، R3 L6: نفس الكشف بتطبيق الزبون).
+import { iosVersion, isIosDevice } from '@mukhdar/shared';
+
+export { iosVersion };
 
 export type InstallState =
   'standalone' | 'ios-browser' | 'android-installable' | 'other-browser' | 'unsupported-ios';
@@ -21,15 +25,7 @@ export interface InstallEnv {
 const MIN_IOS: [number, number] = [16, 4];
 
 function isIOS(env: InstallEnv): boolean {
-  if (/iPhone|iPad|iPod/.test(env.userAgent)) return true;
-  // iPadOS 13+ يقدّم نفسه كـ Mac سطح مكتب؛ الفرق شاشة اللمس
-  return /Macintosh/.test(env.userAgent) && env.maxTouchPoints > 1;
-}
-
-/** [major, minor] من "OS 17_5" (iPhone) أو "Version/17.4" (iPadOS بوكيل سطح المكتب)، وإلا null. */
-export function iosVersion(userAgent: string): [number, number] | null {
-  const m = /OS (\d+)_(\d+)/.exec(userAgent) ?? /Version\/(\d+)\.(\d+)/.exec(userAgent);
-  return m ? [Number(m[1]), Number(m[2])] : null;
+  return isIosDevice(env.userAgent, env.maxTouchPoints);
 }
 
 function below(v: [number, number], min: [number, number]): boolean {

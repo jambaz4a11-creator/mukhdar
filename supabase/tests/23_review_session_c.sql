@@ -43,7 +43,8 @@ select tests.as_postgres();
 select is((select jsonb_path_query_array(recipients, '$[*].token') from claimed where title = 'C-admins'),
   '["ExponentPushToken[c-admin]", "ExponentPushToken[c-staff]"]'::jsonb,
   'admins audience: flagged staff2 gets nothing');
-select is((select jsonb_path_query_array(recipients, '$[*].token') from claimed where title = 'C-drivers'),
+-- رموز هذا الملف فقط (Expo): mukhdar-dev قد يحوي اشتراك ويب حقيقياً لسائق تجريبي (R3)
+select is((select jsonb_path_query_array(recipients, '$[*] ? (@.token starts with "Expo").token') from claimed where title = 'C-drivers'),
   '["ExponentPushToken[c-d1]"]'::jsonb, 'drivers audience: flagged driver d2 gets nothing');
 select is((select recipients from claimed where title = 'C-cust'), '[]'::jsonb,
   'user audience: a flagged customer gets nothing');

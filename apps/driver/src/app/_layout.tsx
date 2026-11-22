@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppText } from '../components/AppText';
+import { StorageWarning } from '../components/StorageWarning';
 import { config } from '../config';
 import { AuthGuard } from '../features/auth/AuthGuard';
 import { initAuth } from '../features/auth/store';
@@ -57,6 +58,8 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      {/* R3 M4: الويب فقط، عند التخزين بالذاكرة (وضع خاص) */}
+      <StorageWarning />
       <Stack
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}
       >

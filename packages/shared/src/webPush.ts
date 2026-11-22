@@ -42,6 +42,8 @@ export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
 
 export interface WebPushSubscription {
   endpoint: string;
+  /** المفتاح الذي اشترك به (R3 M2). قد يغيب بمتصفحات قديمة/بالاختبارات: يُعامل كـ "غير معروف" (يبقى الاشتراك). */
+  options?: { applicationServerKey?: ArrayBuffer | ArrayBufferView | null } | null;
   toJSON(): { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   unsubscribe(): Promise<boolean>;
 }
@@ -77,6 +79,28 @@ export type WebPushRegisterResult =
 
 /** "مو هسه" يخفي بطاقة التمهيد 7 أيام. */
 export const PROMPT_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** R3 L4: التسجيل الصامت لنفس الـ endpoint ونفس الحساب لا يُعاد أكثر من مرة بالساعة (كل رجوع للتطبيق كان RPC). */
+export const SILENT_REREGISTER_MS = 60 * 60 * 1000;
+
+function toBytes(v: ArrayBuffer | ArrayBufferView): Uint8Array {
+  return v instanceof Uint8Array
+    ? v
+    : ArrayBuffer.isView(v)
+      ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+      : new Uint8Array(v);
+}
+
+/** R3 M2: false فقط إن عرفنا مفتاح الاشتراك وكان غير المفتاح المضبوط (اشتراك من مفتاح VAPID آخر ← 403 للأبد). */
+export function subscriptionMatchesKey(sub: WebPushSubscription, vapidPublicKey: string): boolean {
+  const raw = sub.options?.applicationServerKey;
+  if (!raw) return true;
+  const have = toBytes(raw);
+  const want = urlBase64ToUint8Array(vapidPublicKey);
+  if (have.length !== want.length) return false;
+  for (let i = 0; i < want.length; i += 1) if (have[i] !== want[i]) return false;
+  return true;
+}
 
 interface BrowserGlobals {
   navigator?: {
@@ -133,9 +157,21 @@ export interface WebPushConfig {
 
 export interface WebPushController {
   getState(needsInstall: boolean): Promise<WebPushState>;
-  register(client: MukhdarClient, opts: { ask: boolean }): Promise<WebPushRegisterResult>;
+  /**
+   * `ask` = من لمسة مستخدم (وحدها تطلب الإذن). `userId` (اختياري): التسجيل الصامت المتكرر لنفس الحساب ونفس الـ endpoint
+   * يُتخطى خلال ساعة (R3 L4)؛ `ask` لا يُتخطى أبداً.
+   */
+  register(
+    client: MukhdarClient,
+    opts: { ask: boolean; userId?: string | null },
+  ): Promise<WebPushRegisterResult>;
   /** للخروج: حذف الصف ← unsubscribe. لا يرمي أبداً. */
   remove(client: MukhdarClient): Promise<void>;
+  /**
+   * R3 L1: الجلسة ضاعت بلا خروج (رمز التحديث أُبطل/انتهى، حذف الحساب): لا جلسة لحذف الصف، فنبطل الاشتراك محلياً
+   * فترجع خدمة الدفع 410 ويحذف المرسِل الصف. لا يرمي أبداً.
+   */
+  unsubscribeLocal(): Promise<void>;
   retryPending(client: MukhdarClient): Promise<void>;
   isSnoozed(): Promise<boolean>;
   snooze(): Promise<void>;
@@ -146,6 +182,7 @@ export function createWebPush(config: WebPushConfig): WebPushController {
   const now = config.now ?? (() => Date.now());
   const { storage, pendingKey, snoozeKey } = config;
   let registered = false;
+  let last: { endpoint: string; userId: string; at: number } | null = null;
 
   async function currentSubscription(
     existingOnly: boolean,
@@ -186,8 +223,9 @@ export function createWebPush(config: WebPushConfig): WebPushController {
       });
     },
 
-    async register(client, { ask }) {
-      if (!config.vapidPublicKey || !browser.isSupported()) return 'unsupported';
+    async register(client, { ask, userId }) {
+      const vapidKey = config.vapidPublicKey;
+      if (!vapidKey || !browser.isSupported()) return 'unsupported';
       try {
         let permission = browser.permission();
         // الطلب فقط من لمسة مستخدم (ask)، ولا يُعاد عند الرفض (المتصفح لا يسمح)
@@ -195,11 +233,35 @@ export function createWebPush(config: WebPushConfig): WebPushController {
         if (permission !== 'granted') return 'denied';
         const found = await currentSubscription(false);
         if (!found) return 'failed';
+        let existing = found.sub;
+        // اشتراك من مفتاح VAPID آخر (تغيّر المفتاح، بناء تجريبي): كل إرسال 403 دائم. نبطله ونشترك من جديد
+        if (existing && !subscriptionMatchesKey(existing, vapidKey)) {
+          try {
+            await existing.unsubscribe();
+          } catch {
+            // subscribe أدناه يفشل إن بقي القديم، فيرجع failed
+          }
+          existing = null;
+          registered = false;
+          last = null;
+        }
+        if (
+          existing &&
+          !ask &&
+          userId &&
+          registered &&
+          last &&
+          last.endpoint === existing.endpoint &&
+          last.userId === userId &&
+          now() - last.at < SILENT_REREGISTER_MS
+        ) {
+          return 'registered';
+        }
         const sub =
-          found.sub ??
+          existing ??
           (await found.reg.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey),
+            applicationServerKey: urlBase64ToUint8Array(vapidKey),
           }));
         const json = sub.toJSON();
         const p256dh = json.keys?.p256dh;
@@ -214,6 +276,7 @@ export function createWebPush(config: WebPushConfig): WebPushController {
           return /PIN_CHANGE_REQUIRED/.test(String(error.message)) ? 'pin-required' : 'failed';
         }
         registered = true;
+        last = userId ? { endpoint: sub.endpoint, userId, at: now() } : null;
         // سُجّل من جديد: حذفه المؤجَّل القديم صار خطأً (يحذف صفاً حياً)
         if ((await storage.getItem(pendingKey)) === sub.endpoint)
           await storage.removeItem(pendingKey);
@@ -225,6 +288,7 @@ export function createWebPush(config: WebPushConfig): WebPushController {
 
     async remove(client) {
       registered = false;
+      last = null;
       try {
         const found = await currentSubscription(true);
         const sub = found?.sub;
@@ -242,6 +306,17 @@ export function createWebPush(config: WebPushConfig): WebPushController {
         } catch {
           // لا شيء: الخروج لا يتعطل بسبب الإشعارات
         }
+      } catch {
+        // لا يرمي أبداً
+      }
+    },
+
+    async unsubscribeLocal() {
+      registered = false;
+      last = null;
+      try {
+        const sub = (await currentSubscription(true))?.sub;
+        if (sub) await sub.unsubscribe();
       } catch {
         // لا يرمي أبداً
       }

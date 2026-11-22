@@ -157,3 +157,9 @@ customer: in the app shell). Test both states.
 
 Redeploying `push-dispatch` is **not** needed for any item (M1 changes the text in the database; L5 is test-only).
 No VAPID key change. No Cloudflare setting change: the Pages sites rebuild from `main` as usual.
+
+## Fixes (2026-11-22, PR #34)
+All 13 items are done, in the order above. Migration `20261211000001_r3_cancel_push_privacy.sql` was applied to
+mukhdar-dev with `pnpm sb db push --remote` after the dry run and green CI; `migration list` is 42 = 42. No Edge
+Function redeploy. No VAPID or Cloudflare change. Tests: shared 389, driver 332, customer 287, Deno 179, scripts 93,
+pgTAP 38/38 files on dev, and the customer static Playwright now runs in CI (8/8).

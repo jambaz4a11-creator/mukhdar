@@ -25,6 +25,9 @@ const CASES: unknown[] = [
   [],
 ];
 
+const CLICK_DATA = { type: 'ready', order_id: ID };
+const CLICK_PATH = `/order/${ID}`;
+
 function windowAt(url: string) {
   return { url, focus: jest.fn().mockResolvedValue(undefined), postMessage: jest.fn() };
 }
@@ -55,6 +58,18 @@ describe('sw.js notificationclick == routeForNotification', () => {
       data: { type: 'ready', order_id: ID },
     });
     expect(sw.opened).toEqual([]);
+  });
+
+  it('R3 L3: focus refused -> the click still opens the route in a window', async () => {
+    const sw = loadSw('sw.js');
+    const win = windowAt('https://app.test/');
+    win.focus.mockRejectedValue(new Error('not allowed'));
+    sw.windows.push(win);
+    await sw.fire('notificationclick', {
+      notification: { close: jest.fn(), data: CLICK_DATA },
+    });
+    expect(win.postMessage).not.toHaveBeenCalled();
+    expect(sw.opened).toEqual([CLICK_PATH]);
   });
 
   it('ignores windows of another origin', async () => {

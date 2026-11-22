@@ -88,7 +88,9 @@ select is((select recipients from claimed where title = 'T-user'),
 select is((select recipients from claimed where title = 'T-inactive'), '[]'::jsonb,
   'inactive user gets nothing');
 select is((select recipients from claimed where title = 'T-none'), '[]'::jsonb, 'user without tokens → empty');
-select is((select array_agg(r ->> 'token') from claimed, jsonb_array_elements(recipients) r where title = 'T-drivers'),
+-- رموز هذا الملف فقط (Expo): db:test:remote على mukhdar-dev قد يجد اشتراك ويب حقيقياً لسائق تجريبي (R3)
+select is((select array_agg(r ->> 'token') from claimed, jsonb_array_elements(recipients) r
+            where title = 'T-drivers' and r ->> 'token' like 'Expo%'),
   array['ExponentPushToken[t11-drv]'], 'drivers audience → active drivers only');
 select is((select array_agg(r ->> 'token' order by r ->> 'token') from claimed, jsonb_array_elements(recipients) r
            where title = 'T-admins'),

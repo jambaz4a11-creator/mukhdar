@@ -7,9 +7,10 @@ import { useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
 import { useAuth } from '../auth/store';
 import { orderKeys } from '../orders/api';
-import { canUseRemotePush, registerPushToken } from './push';
+import { canUseRemotePush } from './push';
 import { retryPendingPushUnregister } from './push.web';
 import { routeForNotification } from './routing';
+import { getWebPush } from './webPushController';
 
 const CLICK = 'mukhdar:notification-click';
 const RECEIVED = 'mukhdar:notification-received';
@@ -30,7 +31,8 @@ export function NotificationsBridge() {
     const client = getSupabase();
     if (!userId || mustChangePin || !client || !canUseRemotePush()) return undefined;
     void retryPendingPushUnregister(client);
-    const silent = () => void registerPushToken(client, { ask: false });
+    // userId: نفس الحساب ونفس الـ endpoint خلال ساعة ← بلا RPC (R3 L4)
+    const silent = () => void getWebPush().register(client, { ask: false, userId });
     silent();
     const onVisible = () => {
       if (document.visibilityState === 'visible') silent();
@@ -46,6 +48,16 @@ export function NotificationsBridge() {
       sw.removeEventListener('message', onChanged);
     };
   }, [userId, mustChangePin]);
+
+  // R3 L1: الجلسة ضاعت بلا خروج (رمز التحديث أُبطل، حذف الحساب): نبطل الاشتراك محلياً (410 ← المرسِل يحذف الصف)
+  useEffect(() => {
+    const client = getSupabase();
+    if (!client || !canUseRemotePush()) return undefined;
+    const { data } = client.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') setTimeout(() => void getWebPush().unsubscribeLocal(), 0);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!ready || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {

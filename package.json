@@ -22,7 +22,7 @@
     "seed:reset": "node scripts/seed-reset.mjs",
     "dev:cancel-stale-orders": "node scripts/dev-cancel-stale-orders.mjs",
     "supabase": "supabase",
-    "test:functions": "deno check --config supabase/functions/deno.json supabase/functions/push-dispatch/index.ts supabase/functions/delete-account/index.ts supabase/functions/signup/index.ts supabase/functions/admin-reset-pin/index.ts supabase/functions/admin-create-user/index.ts supabase/functions/driver-register/index.ts supabase/functions/driver-complete-registration/index.ts && deno test --no-prompt --allow-read=supabase/functions --config supabase/functions/deno.json supabase/functions",
+    "test:functions": "deno check --config supabase/functions/deno.json supabase/functions/push-dispatch/index.ts supabase/functions/delete-account/index.ts supabase/functions/signup/index.ts supabase/functions/admin-reset-pin/index.ts supabase/functions/admin-create-user/index.ts supabase/functions/driver-register/index.ts supabase/functions/driver-complete-registration/index.ts && deno test --no-prompt --allow-read=supabase/functions,supabase/migrations --config supabase/functions/deno.json supabase/functions",
     "it:delete-account": "node scripts/delete-account-it.mjs",
     "it:signup": "node scripts/signup-it.mjs",
     "it:driver-register": "node scripts/driver-register-it.mjs",

@@ -304,3 +304,52 @@ describe('one-time migration from plain localStorage', () => {
     await expect(s.removeItem(KEY)).resolves.toBeUndefined();
   });
 });
+
+describe('R3 M3: a closed or lost IndexedDB connection is reopened', () => {
+  /** factory يسجّل كل اتصال يفتحه التخزين، حتى يغلقه الاختبار كما يفعل المتصفح. */
+  function recordingFactory() {
+    const opened: IDBDatabase[] = [];
+    const factory = {
+      open: (name: string, version?: number) => {
+        const r = idb.open(name, version);
+        r.addEventListener('success', () => opened.push(r.result));
+        return r;
+      },
+      deleteDatabase: (name: string) => idb.deleteDatabase(name),
+      cmp: (a: unknown, b: unknown) => idb.cmp(a, b),
+      databases: () => idb.databases(),
+    } as unknown as IDBFactory;
+    return { factory, opened };
+  }
+
+  it('connection closed under us (WebKit "server lost"): read/write still work, same key, nothing cleared', async () => {
+    const { factory, opened } = recordingFactory();
+    const s = make({ indexedDB: factory });
+    await s.setItem(KEY, SESSION);
+    expect(opened).toHaveLength(1);
+    opened[0]?.close(); // أي معاملة بعدها ترمي InvalidStateError
+    expect(await s.getItem(KEY)).toBe(SESSION);
+    expect(opened).toHaveLength(2);
+    expect(s.isDegraded()).toBe(false);
+    opened[1]?.close();
+    await s.setItem(KEY, 'v2');
+    expect(await s.getItem(KEY)).toBe('v2');
+    opened.at(-1)?.close();
+    await s.removeItem(KEY);
+    expect(await s.getItem(KEY)).toBeNull();
+  });
+
+  it('isIdbConnectionError: connection errors yes, data errors no', async () => {
+    const { isIdbConnectionError } = await import('../webSecureStorage');
+    expect(isIdbConnectionError({ name: 'InvalidStateError', message: '' })).toBe(true);
+    expect(isIdbConnectionError({ name: 'UnknownError', message: '' })).toBe(true);
+    expect(
+      isIdbConnectionError(
+        new Error('Connection to Indexed Database server lost. Refresh the page'),
+      ),
+    ).toBe(true);
+    expect(isIdbConnectionError({ name: 'OperationError', message: 'decrypt failed' })).toBe(false);
+    expect(isIdbConnectionError({ name: 'QuotaExceededError', message: '' })).toBe(false);
+    expect(isIdbConnectionError(null)).toBe(false);
+  });
+});

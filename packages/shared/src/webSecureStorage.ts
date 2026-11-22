@@ -8,6 +8,8 @@
 // - لا IndexedDB أو WebCrypto (وضع خاص، سياق غير آمن، open معلّق) ← ذاكرة فقط، وisDegraded() = true لشريط تنبيه.
 // - navigator.storage.persist() عند البدء (أفضل جهد).
 // - legacy (localStorage القديم): ترحيل لمرة واحدة لكل مدخل (قراءة ← تشفير ← حذف)، وأي كتابة/حذف يمسح النسخة الصريحة.
+// - R3 M3: اتصال IndexedDB أُغلق أو ضاع (onversionchange، حدث close، خلل WebKit "Connection to Indexed Database server
+//   lost" بعد بقاء الـ PWA بالخلفية) ← يُفتح من جديد وتُعاد العملية مرة واحدة (نفس المفتاح المحفوظ، لا مسح).
 //
 // ما لا يحميه (SPEC-webpush §6.2): XSS على نفس الأصل يقدر يطلب decrypt بنفس المفتاح. الدفاع الأول هو CSP.
 
@@ -66,6 +68,18 @@ function request<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
+/** خطأ اتصال لا خطأ بيانات: يستحق إعادة الفتح. */
+export function isIdbConnectionError(e: unknown): boolean {
+  const err = e as { name?: unknown; message?: unknown } | null;
+  const name = typeof err?.name === 'string' ? err.name : '';
+  const message = typeof err?.message === 'string' ? err.message : '';
+  return (
+    name === 'InvalidStateError' ||
+    name === 'UnknownError' ||
+    /connection|closing|closed/i.test(message)
+  );
+}
+
 function openDb(factory: IDBFactory, name: string, timeoutMs: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const r = factory.open(name, DB_VERSION); // قد يرمي (SecurityError) ← يرفض الوعد
@@ -77,9 +91,7 @@ function openDb(factory: IDBFactory, name: string, timeoutMs: number): Promise<I
     };
     r.onsuccess = () => {
       clearTimeout(timer);
-      const db = r.result;
-      db.onversionchange = () => db.close(); // لا نعرقل ترقية من تبويب أحدث
-      resolve(db);
+      resolve(r.result);
     };
     r.onerror = () => {
       clearTimeout(timer);
@@ -155,6 +167,15 @@ export function createWebSecureStorage(opts: WebSecureStorageOptions = {}): WebS
     try {
       if (!factory || !crypto?.subtle) throw new Error('unavailable');
       const db = await openDb(factory, dbName, opts.openTimeoutMs ?? 5000);
+      const self = backend;
+      const forget = () => {
+        if (backend === self) backend = null; // الاستعمال التالي يفتح اتصالاً جديداً
+      };
+      db.onversionchange = () => {
+        db.close(); // لا نعرقل ترقية من تبويب أحدث
+        forget();
+      };
+      db.onclose = forget; // أغلقه المتصفح (مسح بيانات الموقع، خلل الخادم)
       const key = await loadKey(db, crypto);
       try {
         const persist =
@@ -171,6 +192,24 @@ export function createWebSecureStorage(opts: WebSecureStorageOptions = {}): WebS
   }
 
   const ready = () => (backend ??= init());
+
+  /** العملية على الاتصال الحالي؛ خطأ اتصال ← اتصال جديد ومحاولة ثانية واحدة. */
+  async function run<T>(op: (b: Backend) => Promise<T>): Promise<T> {
+    const current = ready();
+    const b = await current;
+    try {
+      return await op(b);
+    } catch (e) {
+      if (b.kind !== 'idb' || !isIdbConnectionError(e)) throw e;
+      if (backend === current) backend = null;
+      try {
+        b.db.close();
+      } catch {
+        /* مغلق أصلاً */
+      }
+      return op(await ready());
+    }
+  }
 
   function dropLegacy(key: string) {
     try {
@@ -238,8 +277,7 @@ export function createWebSecureStorage(opts: WebSecureStorageOptions = {}): WebS
 
     async getItem(key) {
       try {
-        const b = await ready();
-        const value = await read(b, key);
+        const value = await run((b) => read(b, key));
         if (value !== null || !legacy) return value;
         let old: string | null = null;
         try {
@@ -257,19 +295,17 @@ export function createWebSecureStorage(opts: WebSecureStorageOptions = {}): WebS
 
     async setItem(key, value) {
       try {
-        await write(await ready(), key, value);
+        await run((b) => write(b, key, value));
       } catch {
         // الكتابة فشلت (امتلاء…): لا نترك قيمة أقدم قد تكون رمزاً مُدوَّراً
-        await ready()
-          .then((b) => del(b, key))
-          .catch(() => undefined);
+        await run((b) => del(b, key)).catch(() => undefined);
       }
       dropLegacy(key);
     },
 
     async removeItem(key) {
       try {
-        await del(await ready(), key);
+        await run((b) => del(b, key));
       } catch {
         /* لا شيء نفعله */
       }
