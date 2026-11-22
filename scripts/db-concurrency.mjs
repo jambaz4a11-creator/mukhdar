@@ -8,7 +8,8 @@
 //      الباقي INSUFFICIENT_STOCK، صفر deadlocks.
 //   2) 8 سائقين يقبلون نفس الطلب بنفس اللحظة: واحد ينجح، الباقي ORDER_NOT_AVAILABLE.
 //   2b) سائق يُخفَّض أثناء accept_order: يُرفض بعد القفل (الدور يُفحص تحت القفل).
-//   5) تسليم الكاش (T40): مسجِّلان معاً، توصيلات أثناء التسليم، نفس المفتاح بالتوازي، تغيير إعداد الأجرة أثناء التسليم.
+//   5) تسليم الكاش (T40): مسجِّلان معاً، توصيلات أثناء التسليم، نفس المفتاح بالتوازي، تغيير إعداد الأجرة أثناء التسليم،
+//      (R4) حذف الحساب بالتوازي مع التسليم بلا deadlock، ونفس المفتاح لسائقين بنفس اللحظة.
 //   4) حد قيمة الطلب (T23 F M3): حساب جديد 50,000 وطلب مفتوح واحد، الحد العام 200,000، أول تسليم يتسابق
 //      مع طلبات كبيرة، والأدمن يخفض الحد أثناء الطلبات (مُدقَّق).
 // "نفس اللحظة": كل عامل ينتظر قفلاً استشارياً يمسكه المنسّق، ثم يُطلق الجميع معاً.
@@ -50,6 +51,8 @@ const ids = {
   capProduct: null,
   settings: null,
   cashDriver: null,
+  /** كل سواق سيناريوهات الكاش (تُحذف تسليماتهم بالتنظيف) */
+  cashDrivers: [],
 };
 
 async function createUsers(role, count, offset) {
@@ -72,17 +75,19 @@ async function createUsers(role, count, offset) {
   return userIds;
 }
 
-/** يشغّل fn لكل عامل باتصال مستقل، ويطلقهم جميعاً بنفس اللحظة. يرجع 'OK' أو رمز الخطأ لكل عامل. */
+/** يشغّل fn لكل عامل باتصال مستقل، ويطلقهم جميعاً بنفس اللحظة. يرجع 'OK' أو رمز الخطأ لكل عامل.
+ *  role: دور واحد للكل، أو دالة (i) => دور العامل i (مثلاً service_role لحذف الحساب). */
 async function race(actors, fn, role = 'authenticated') {
+  const roleOf = typeof role === 'function' ? role : () => role;
   const clients = await Promise.all(actors.map(() => newClient()));
   await q('select pg_advisory_lock($1)', [BARRIER]);
   const runs = clients.map(async (c, i) => {
     try {
       await c.query('begin');
       await c.query(`select set_config('request.jwt.claims', $1, true)`, [
-        JSON.stringify({ sub: actors[i], role, aal: 'aal2' }), // T23: الأدمن/الموظف بـ aal2
+        JSON.stringify({ sub: actors[i], role: roleOf(i), aal: 'aal2' }), // T23: الأدمن/الموظف بـ aal2
       ]);
-      await c.query(`set local role ${role}`);
+      await c.query(`set local role ${roleOf(i)}`);
       await c.query('select pg_advisory_xact_lock_shared($1)', [BARRIER]);
       await fn(c, i);
       await c.query('commit');
@@ -441,6 +446,7 @@ try {
   );
   const [cashDriver] = await createUsers('driver', 1, 4001);
   ids.cashDriver = cashDriver;
+  ids.cashDrivers.push(cashDriver);
   const staffers = await createUsers('staff', 4, 4101);
   const cashCustomers = await createUsers('customer', 6, 4201);
   const { rows: cashAddr } = await q(
@@ -450,13 +456,13 @@ try {
   );
   for (const r of cashAddr) capAddrOf.set(r.customer_id, r.id);
   let nextCust = 0;
-  /** طلب جديد لزبون (بالتناوب) يصل لـ upTo بسائق الكاش، بالمسار الحقيقي. */
-  const cashOrder = async (upTo = 'delivered') => {
+  /** طلب جديد لزبون (بالتناوب) يصل لـ upTo بسائق الكاش (أو driver)، بالمسار الحقيقي. */
+  const cashOrder = async (upTo = 'delivered', driver = cashDriver) => {
     const id = await smallOrder(cashCustomers[nextCust++ % cashCustomers.length]);
     const c = await session(adminId);
     await c.query(`select public.set_order_status($1, 'preparing')`, [id]);
     await c.query(`select public.set_order_status($1, 'ready')`, [id]);
-    await c.query(`select public.assign_driver($1, $2)`, [id, cashDriver]);
+    await c.query(`select public.assign_driver($1, $2)`, [id, driver]);
     await c.query(`select public.set_order_status($1, 'out_for_delivery')`, [id]);
     if (upTo === 'delivered')
       await c.query(`select public.set_order_status($1, 'delivered')`, [id]);
@@ -465,7 +471,7 @@ try {
     return id;
   };
   /** الرصيد كما تعرضه اللوحة (subtotal + الأجرة إن كانت للمحل). */
-  const balance = async () =>
+  const balance = async (driver = cashDriver) =>
     (
       await q(
         `select coalesce(sum(o.subtotal_iqd + case when s.cash_handover_includes_delivery_fee
@@ -474,7 +480,7 @@ try {
            from public.app_settings s
            left join public.orders o on o.driver_id = $1 and o.status = 'delivered' and o.cash_handover_id is null
           where s.id = 1`,
-        [cashDriver],
+        [driver],
       )
     ).rows[0];
   const recordSql = `select public.record_cash_handover($1, $2::bigint, $3::int, $2::bigint, null, $4::uuid)`;
@@ -593,6 +599,75 @@ try {
     'cash 5d: a successful handover stores the setting it was computed with',
   );
   await q(`update public.app_settings set cash_handover_includes_delivery_fee = true where id = 1`);
+
+  // 5e) (R4 L1/T1) حذف حساب السائق بالتوازي مع تسجيل تسليمه، 10 مرات (سائق جديد كل مرة): لا deadlock.
+  //     التسليم ينجح دائماً؛ الحذف إما CASH_OUTSTANDING (سبق التسليم) أو ينجح (بعده، والرصيد صار 0).
+  const delDrivers = await createUsers('driver', 10, 4301);
+  ids.cashDrivers.push(...delDrivers);
+  const t5e = [];
+  for (const d of delDrivers) {
+    await cashOrder('delivered', d);
+    const b = await balance(d);
+    const key = await newKey();
+    t5e.push(
+      await race(
+        [staffers[3], d],
+        (c, i) =>
+          i === 0
+            ? c.query(recordSql, [d, b.amt, b.n, key])
+            : c.query(`select public.begin_account_deletion($1)`, [d]),
+        (i) => (i === 0 ? 'authenticated' : 'service_role'),
+      ),
+    );
+  }
+  console.log('account deletion vs handover:', tally(t5e.map(([r, del]) => `${r}/${del}`)));
+  check(
+    !t5e.flat().includes('DEADLOCK'),
+    'cash 5e: deletion racing a handover (10 rounds): no deadlock',
+  );
+  check(
+    t5e.every(([r, del]) => r === 'OK' && (del === 'OK' || del === 'CASH_OUTSTANDING')),
+    'cash 5e: the handover always succeeds; deletion is OK or CASH_OUTSTANDING',
+  );
+  const { rows: left5e } = await q(
+    `select count(*)::int as n from public.orders
+      where driver_id = any ($1) and status = 'delivered' and cash_handover_id is null`,
+    [delDrivers],
+  );
+  check(left5e[0].n === 0, 'cash 5e: no cash left unlinked for the deleted drivers');
+
+  // 5f) (R4 L3) نفس المفتاح لسائقين مختلفين بنفس اللحظة (خلل عميل): واحد ينجح، الآخر INVALID_REQUEST لا 23505
+  const pair = await createUsers('driver', 2, 4401);
+  ids.cashDrivers.push(...pair);
+  let sameKeyOk = true;
+  for (let round = 0; round < 5; round++) {
+    for (const d of pair) await cashOrder('delivered', d);
+    const bs = [await balance(pair[0]), await balance(pair[1])];
+    const key = await newKey();
+    const t = tally(
+      await race(staffers.slice(0, 2), (c, i) =>
+        c.query(recordSql, [pair[i], bs[i].amt, bs[i].n, key]),
+      ),
+    );
+    if (t.OK !== 1 || t.INVALID_REQUEST !== 1) {
+      console.log('same key, two drivers:', t);
+      sameKeyOk = false;
+    }
+    // الخاسر يبقى برصيده: يُسلَّم بمفتاح جديد قبل الجولة التالية
+    for (const d of pair) {
+      const b = await balance(d);
+      if (b.n > 0) {
+        const c = await session(staffers[0]);
+        await c.query(recordSql, [d, b.amt, b.n, await newKey()]);
+        await c.query('commit');
+        await c.end();
+      }
+    }
+  }
+  check(
+    sameKeyOk,
+    'cash 5f: same key for two drivers at once (5 rounds): one OK, the other INVALID_REQUEST',
+  );
 } catch (err) {
   console.error(`error: ${err.message}`);
   failures++;
@@ -621,10 +696,10 @@ try {
     await q(`delete from public.orders where id = any ($1::uuid[])`, [capIds]);
     await q(`delete from public.products where id = $1`, [ids.capProduct]);
     // 5) تسليمات الكاش (بعد حذف طلباتها: الربط restrict) وإشعاراتها وتدقيقها
-    if (ids.cashDriver) {
+    if (ids.cashDrivers.length) {
       const { rows: hs } = await q(
-        `delete from public.cash_handovers where driver_id = $1 returning id::text as id`,
-        [ids.cashDriver],
+        `delete from public.cash_handovers where driver_id = any ($1) returning id::text as id`,
+        [ids.cashDrivers],
       );
       const hIds = hs.map((r) => r.id);
       await q(

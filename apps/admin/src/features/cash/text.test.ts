@@ -41,6 +41,11 @@ describe('lastHandoverLine', () => {
     expect(lastHandoverLine('2026-11-22T09:00:00Z', 50_000, 0)).not.toContain('نقص');
     expect(lastHandoverLine('2026-11-22T09:00:00Z', 51_000, 1_000)).toContain('زيادة 1,000');
   });
+  it('R4 L5: staff and a handover older than 7 days (amount null): the time only, never "no handover"', () => {
+    const l = lastHandoverLine('2026-11-01T09:00:00Z', null, null);
+    expect(l).toMatch(/^آخر تسليم /);
+    expect(l).not.toContain('د.ع');
+  });
 });
 
 describe('staff history note', () => {

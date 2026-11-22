@@ -67,7 +67,7 @@ select is(
                     'public.cash_handover_history(uuid, date, date, integer, timestamptz, uuid)'::regprocedure,
                     'public.driver_cash_summary()'::regprocedure,
                     'public.my_cash_handovers(integer, timestamptz, uuid)'::regprocedure,
-                    'public.correct_cash_handover(uuid, bigint, text)'::regprocedure,
+                    'public.correct_cash_handover(uuid, bigint, text, bigint)'::regprocedure,
                     'public.report_cash(date, date)'::regprocedure)
       and p.prosecdef and p.proconfig = array['search_path=""']
       and has_function_privilege('authenticated', p.oid, 'execute')

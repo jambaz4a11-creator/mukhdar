@@ -45,6 +45,14 @@ export function CashReportSection({ range }: { range: DayRange }) {
           note: 'مجموع الزيادات (لا يلغي النقص)',
           tone: 'text-warning-text',
         },
+        {
+          // R4 M1: أجور توصيل ما انطلبت من السواق (تسليمات بإعداد "أجرة التوصيل تبقى عند السائق")
+          id: 'fees-kept',
+          label: 'أجرة التوصيل عند السواق',
+          value: formatIQD(data.totals.fees_kept_iqd),
+          note: 'أجور ما انطلبت بالتسليم (الإعداد: تبقى عند السائق)',
+          tone: 'text-text',
+        },
       ]
     : [];
 
@@ -109,6 +117,7 @@ export function CashReportSection({ range }: { range: DayRange }) {
                       'المستلم',
                       'النقص',
                       'الزيادة',
+                      'أجرة التوصيل عنده',
                       'بيده الآن',
                     ].map((h) => (
                       <th key={h} scope="col" className="px-3 py-2.5 font-semibold">
@@ -130,6 +139,7 @@ export function CashReportSection({ range }: { range: DayRange }) {
                       <td className="num px-3">{formatIQD(d.received_iqd)}</td>
                       <td className="num px-3 text-danger">{formatIQD(d.shortage_iqd)}</td>
                       <td className="num px-3 text-warning-text">{formatIQD(d.overage_iqd)}</td>
+                      <td className="num px-3">{formatIQD(d.fees_kept_iqd)}</td>
                       <td className="num px-3 font-semibold">{formatIQD(d.held_now_iqd)}</td>
                     </tr>
                   ))}

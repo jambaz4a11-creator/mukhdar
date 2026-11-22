@@ -1,7 +1,8 @@
 'use client';
 // "تصحيح" تسليم (أدمن فقط، SPEC-cash K12، C9): المبلغ المستلم والملاحظة فقط. الملاحظة إلزامية دائماً هنا،
 // ويُدقَّق بـ admin_audit ويُبلَّغ السائق (من الدالة نفسها). الطلبات المربوطة لا تتغير.
-import { errorMessage, formatIQD } from '@mukhdar/shared';
+// R4 L6: يُرسل المبلغ الذي رآه الأدمن؛ إن صحّحه أدمن آخر بعدها ترفض الدالة (HANDOVER_CHANGED) ولا يُكتب فوقه.
+import { formatIQD, parseBackendError } from '@mukhdar/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
@@ -10,6 +11,7 @@ import { cashKeys, correctHandover, type HandoverRow } from './api';
 import { NOTE_MAX, parseReceived, validateNote } from './amount';
 import { DiffBadge } from './DiffBadge';
 import { cashDifference } from './difference';
+import { correctionFailureMessage } from './errors';
 
 export function CorrectDialog({
   row,
@@ -36,7 +38,14 @@ export function CorrectDialog({
         id: row.id,
         receivedIqd: parsed.value,
         note: note.value,
+        expectedReceived: row.received_iqd,
       });
+    },
+    onError: async (e) => {
+      // السجل تحت النافذة يتحدّث بالمبلغ الجديد؛ النافذة تبقى مع رسالة واضحة
+      if (parseBackendError(e).code === 'HANDOVER_CHANGED') {
+        await qc.invalidateQueries({ queryKey: cashKeys.all });
+      }
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: cashKeys.all });
@@ -89,9 +98,10 @@ export function CorrectDialog({
       {save.error && (
         <p
           role="alert"
+          data-testid="correct-error"
           className="m-0 rounded-control bg-danger-soft px-3 py-2 text-sm text-danger"
         >
-          {errorMessage(save.error)}
+          {correctionFailureMessage(save.error)}
         </p>
       )}
       <div className="flex gap-2">

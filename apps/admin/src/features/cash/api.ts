@@ -1,5 +1,5 @@
 // تسليم الكاش (T41): قراءة وكتابة بجلسة الأدمن/الموظف عبر دوال T40 فقط (cash_outstanding، record_cash_handover،
-// cash_handover_history، correct_cash_handover، report_cash)؛ لا قراءة مباشرة لجدول cash_handovers ولا مفتاح خادم.
+// cash_handover_history، correct_cash_handover، report_cash، و R4: cash_fee_setting_impact)؛ لا قراءة مباشرة لجدول cash_handovers ولا مفتاح خادم.
 // كل رقم من قاعدة البيانات؛ المتصفح يعرض فقط.
 import type { MukhdarClient } from '@mukhdar/shared';
 import { feePayload } from './feeSetting';
@@ -12,7 +12,16 @@ export const cashKeys = {
   history: (f: HistoryFilters) => ['cash', 'history', f.driverId, f.from, f.to] as const,
   report: (from: string, to: string) => ['cash', 'report', from, to] as const,
   feeSetting: ['cash', 'fee-setting'] as const,
+  latest: (driverId: string) => ['cash', 'latest', driverId] as const,
 };
+
+/** أجرة التوصيل على الكاش اللي بيد السواق الآن (R4 M1، K20؛ أدمن فقط). */
+export interface FeeImpact {
+  driver_count: number;
+  order_count: number;
+  fees_iqd: number;
+  includes_delivery_fee: boolean;
+}
 
 export interface OutstandingRow {
   driver_id: string;
@@ -143,6 +152,17 @@ export async function fetchHistory(
   return rows ?? [];
 }
 
+/** آخر تسليم مسجّل للسائق (R4 M2: بعد "انسجل قبل شوية" يُعرض مبلغه وملاحظته)؛ null إن لم يوجد. */
+export async function fetchLatestHandover(
+  supabase: MukhdarClient,
+  driverId: string,
+): Promise<HandoverRow | null> {
+  const rows = await unwrap<HandoverRow[] | null>(
+    supabase.rpc('cash_handover_history', { p_driver_id: driverId, p_limit: 1 }),
+  );
+  return rows?.[0] ?? null;
+}
+
 /** المؤشر التالي من آخر صف؛ undefined = لا صفحة أخرى (أقل من 50). */
 export function nextCursor(rows: readonly HandoverRow[]): HistoryCursor | undefined {
   const last = rows[rows.length - 1];
@@ -151,13 +171,15 @@ export function nextCursor(rows: readonly HandoverRow[]): HistoryCursor | undefi
 
 export function correctHandover(
   supabase: MukhdarClient,
-  a: { id: string; receivedIqd: number; note: string },
+  a: { id: string; receivedIqd: number; note: string; expectedReceived: number },
 ): Promise<unknown> {
   return unwrap(
     supabase.rpc('correct_cash_handover', {
       p_id: a.id,
       p_received_iqd: a.receivedIqd,
       p_note: a.note,
+      // R4 L6: المبلغ الذي رآه الأدمن؛ تغيّر بعدها ← HANDOVER_CHANGED (لا كتابة فوق تصحيح أدمن آخر)
+      p_expected_received: a.expectedReceived,
     }),
   );
 }
@@ -180,6 +202,12 @@ export async function fetchFeeSetting(supabase: MukhdarClient): Promise<boolean>
       .single(),
   );
   return row.cash_handover_includes_delivery_fee;
+}
+
+/** قبل تغيير إعداد الأجرة (R4 M1): كم أجرة توصيل بيد السواق الآن تتأثر بالتغيير. */
+export async function fetchFeeImpact(supabase: MukhdarClient): Promise<FeeImpact> {
+  const rows = await unwrap<FeeImpact[] | null>(supabase.rpc('cash_fee_setting_impact'));
+  return rows?.[0] ?? { driver_count: 0, order_count: 0, fees_iqd: 0, includes_delivery_fee: true };
 }
 
 /** التغيير عبر update_app_settings فقط (أدمن aal2، مُدقَّق)، بمفتاحه وحده. */

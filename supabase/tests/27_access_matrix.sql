@@ -6,7 +6,7 @@
 --   والمسموح يجب أن ينجح (حتى لا تكون المصفوفة فارغة المعنى).
 --   دالة جديدة بهذه الأسماء لا تُضاف هنا ← الفحص الأخير يُفشل الاختبار حتى تُدرج.
 --   (فحص search_path الثابت لكل دالة SECURITY DEFINER بـ public/private موجود بـ 01_schema.sql؛ يُعاد هنا بالتحديد.)
-select plan(12);
+select plan(15);
 
 -- ================================================================ المصفوفة
 create function tests.matrix_try(p_sql text) returns text language plpgsql as $$
@@ -29,6 +29,11 @@ create function tests.unexpected(p_scope text, p_expect text) returns text langu
       ('staff', $q$ select * from public.cash_outstanding() $q$),
       ('staff', $q$ select * from public.cash_handover_history() $q$),
       ('admin', $q$ select public.report_cash(current_date - 7, current_date) $q$),
+      -- R4 T4: بقية دوال الكاش. الكتابة ('staffw'/'adminw'): للمسموح خطأ عمل بعد بوابة الدور (P0001)، لا 'ok'
+      ('staff', format($q$ select * from public.cash_outstanding_orders(%L) $q$, gen_random_uuid())),
+      ('staffw', $q$ select public.record_cash_handover(gen_random_uuid(), 1000, 1, 1000, null, gen_random_uuid()) $q$),
+      ('adminw', $q$ select public.correct_cash_handover(gen_random_uuid(), 1000, 'x', 1000) $q$),
+      ('admin', $q$ select * from public.cash_fee_setting_impact() $q$),
       ('admin', $q$ select public.report_summary(current_date - 7, current_date) $q$),
       ('admin', $q$ select * from public.report_daily(current_date - 7, current_date) $q$),
       ('admin', $q$ select * from public.report_orders_placed(current_date - 7, current_date) $q$),
@@ -72,9 +77,13 @@ select is(tests.unexpected('all', '42501'), '', 'deactivated staff: every RPC re
 -- ================================================================ الفعّالون
 select tests.as_user(tests.id('staff'));
 select is(tests.unexpected('staff', 'ok'), '', 'active staff: dashboard and ratings work');
+select is(tests.unexpected('staffw', 'P0001'), '', 'active staff: record_cash_handover passes the role gate (business error)');
 select is(tests.unexpected('admin', '42501'), '', 'active staff: reports and stuck notifications refused (42501)');
+select is(tests.unexpected('adminw', '42501'), '', 'active staff: correct_cash_handover refused (42501)');
 select tests.as_user(tests.id('admin'));
-select is(tests.unexpected('all', 'ok'), '', 'active admin: every RPC works');
+select is(tests.unexpected('staff', 'ok') || tests.unexpected('admin', 'ok'), '', 'active admin: every read RPC works');
+select is(tests.unexpected('staffw', 'P0001') || tests.unexpected('adminw', 'P0001'), '',
+  'active admin: the cash writes pass the role gate (business error)');
 
 -- ================================================================ الكتالوج
 select tests.as_postgres();

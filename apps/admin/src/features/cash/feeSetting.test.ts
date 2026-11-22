@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { FEE_OPTIONS, FEE_SECTION_TITLE, FEE_WARNING, feePayload } from './feeSetting';
+import {
+  FEE_OPTIONS,
+  FEE_SECTION_TITLE,
+  FEE_WARNING,
+  feeChangeWarning,
+  feePayload,
+} from './feeSetting';
 
 describe('delivery-fee handover setting (SPEC-cash K19, §4)', () => {
   it('has exactly the two options, the shop-keeps-the-fee one first (the default)', () => {
@@ -30,5 +36,23 @@ describe('delivery-fee handover setting (SPEC-cash K19, §4)', () => {
   it('saves through update_app_settings with only the one key (booleans, never other settings)', () => {
     expect(feePayload(true)).toEqual({ cash_handover_includes_delivery_fee: true });
     expect(feePayload(false)).toEqual({ cash_handover_includes_delivery_fee: false });
+  });
+
+  it('R4 M1: no confirmation when no driver holds delivery fees', () => {
+    expect(feeChangeWarning({ driver_count: 0, order_count: 0, fees_iqd: 0 }, false)).toBeNull();
+  });
+
+  it('R4 M1: switching to "fee stays with the driver" names the drivers, orders and total that stop being collected', () => {
+    const w = feeChangeWarning({ driver_count: 2, order_count: 10, fees_iqd: 10_000 }, false);
+    expect(w).toContain('2 سائق');
+    expect(w).toContain('10,000 د.ع');
+    expect(w).toContain('10 طلب');
+    expect(w).toContain('ما تنطلب منهم');
+  });
+
+  it('R4 M1: switching back to the shop says the fees are added to what they owe', () => {
+    const w = feeChangeWarning({ driver_count: 1, order_count: 3, fees_iqd: 3_000 }, true);
+    expect(w).toContain('3,000 د.ع');
+    expect(w).toContain('تنضاف');
   });
 });

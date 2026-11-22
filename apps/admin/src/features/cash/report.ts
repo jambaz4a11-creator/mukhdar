@@ -9,6 +9,8 @@ export interface CashReportTotals {
   shortage_iqd: number;
   overage_iqd: number;
   net_difference_iqd: number;
+  /** R4 M1: أجور توصيل بقت عند السواق (تسليمات سُجّلت بإعداد "تبقى عند السائق") بالمدى */
+  fees_kept_iqd: number;
 }
 
 export interface CashReportDriver extends CashReportTotals {
@@ -34,6 +36,7 @@ const TOTAL_FIELDS = [
   'shortage_iqd',
   'overage_iqd',
   'net_difference_iqd',
+  'fees_kept_iqd',
 ] as const;
 
 function checkTotals(v: unknown, extra: readonly string[] = []): void {
@@ -64,6 +67,7 @@ export const CASH_HEADER = [
   'المستلم',
   'النقص',
   'الزيادة',
+  'أجرة التوصيل عنده',
   'بيده الآن',
 ] as const;
 
@@ -78,6 +82,7 @@ export function cashCsv(report: CashReport): string {
       d.received_iqd,
       d.shortage_iqd,
       d.overage_iqd,
+      d.fees_kept_iqd,
       d.held_now_iqd,
     ]),
     [
@@ -87,6 +92,7 @@ export function cashCsv(report: CashReport): string {
       report.totals.received_iqd,
       report.totals.shortage_iqd,
       report.totals.overage_iqd,
+      report.totals.fees_kept_iqd,
       report.held_now_iqd,
     ],
   ]);

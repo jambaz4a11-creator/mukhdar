@@ -210,6 +210,59 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       expect((await outstandingFor(admin, driverId))?.outstanding_iqd ?? 0).toBe(0);
     });
 
+    test('R4 M2/T8: a lost response, then a changed amount: the dialog shows the stored amount and warns', async () => {
+      await deliverOne(admin);
+      const expected = (await outstandingFor(admin, driverId))?.outstanding_iqd ?? 0;
+      expect(expected).toBeGreaterThanOrEqual(250);
+      await openCash(staff);
+      await driverRow(staff, driverName).getByTestId('receive-cash').click();
+      const dialog = staff.getByTestId('handover-dialog');
+      await expect(dialog.getByTestId('handover-expected')).toHaveText(formatIQD(expected));
+
+      // the balance poll waits until the end, so the dialog stays on the form between the two attempts
+      let release = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      const pollUrl = '**/rest/v1/rpc/cash_outstanding';
+      await staff.route(pollUrl, async (route) => {
+        await gate;
+        await route.continue();
+      });
+      // the first record call reaches the server (and commits), then its response is lost
+      const recordUrl = '**/rest/v1/rpc/record_cash_handover';
+      let lost = false;
+      await staff.route(recordUrl, async (route) => {
+        if (lost) return route.continue();
+        lost = true;
+        await route.fetch();
+        await route.abort('failed');
+      });
+
+      await dialog.getByTestId('handover-same').click();
+      await dialog.getByTestId('handover-confirm').click();
+      await expect(dialog.getByTestId('handover-error')).toContainText('حاول مرة ثانية');
+      expect((await outstandingFor(admin, driverId))?.outstanding_iqd ?? 0).toBe(0); // it was recorded
+
+      // they recount, type 250 less with a note, and confirm again
+      await dialog.locator('#handover-received').fill(String(expected - 250));
+      await dialog.getByLabel(/ملاحظة/).fill('عدّيت مرة ثانية');
+      await dialog.getByTestId('handover-confirm').click();
+
+      await expect(dialog.getByTestId('handover-recorded')).toContainText(
+        'انسجل الاستلام قبل شوية',
+      );
+      await expect(dialog.getByTestId('handover-recorded-amount')).toHaveText(formatIQD(expected));
+      await expect(dialog.getByTestId('handover-recorded-note')).toHaveText('بلا ملاحظة');
+      const warning = dialog.getByTestId('handover-recorded-warning');
+      await expect(warning).toContainText(formatIQD(expected));
+      await expect(warning).toContainText(formatIQD(expected - 250));
+
+      release();
+      await staff.unroute(pollUrl);
+      await staff.unroute(recordUrl);
+      await dialog.getByTestId('handover-recorded-ok').click();
+      await expect(dialog).toHaveCount(0);
+    });
+
     test('admin corrects a handover (note required), the row shows "مُصحَّح" with the original amount', async () => {
       await openCash(adminPage);
       await openHistory(adminPage);
@@ -244,7 +297,7 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       if (error) throw error;
       const r = data as {
         held_now_iqd: number;
-        totals: { shortage_iqd: number; overage_iqd: number };
+        totals: { shortage_iqd: number; overage_iqd: number; fees_kept_iqd: number };
       };
       await adminPage.goto('/reports');
       const section = adminPage.getByTestId('cash-report');
@@ -257,6 +310,10 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       );
       await expect(section.getByTestId('cash-kpi-overage-value')).toHaveText(
         formatIQD(r.totals.overage_iqd),
+      );
+      // R4 M1: delivery fees kept by drivers
+      await expect(section.getByTestId('cash-kpi-fees-kept-value')).toHaveText(
+        formatIQD(r.totals.fees_kept_iqd),
       );
       await expect(
         section.getByTestId('cash-report-table').locator(`[data-driver-name="${driverName}"]`),
@@ -276,8 +333,24 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       const before = await outstandingFor(admin, driverId);
       expect(before?.includes_delivery_fee).toBe(true);
 
+      // R4 M1: drivers hold delivery fees, so saving asks for a confirmation with the total from the database
+      const impact = async () => {
+        const { data, error } = await admin.rpc('cash_fee_setting_impact');
+        if (error) throw error;
+        return (data as { fees_iqd: number }[])[0]?.fees_iqd ?? 0;
+      };
+      const fees = await impact();
+      expect(fees).toBeGreaterThan(0);
       await card.getByRole('radio', { name: /أجرة التوصيل تبقى عند السائق/ }).check();
       await card.getByTestId('fee-save').click();
+      const confirm = card.getByTestId('fee-confirm');
+      await expect(confirm).toContainText(formatIQD(fees));
+      await expect(confirm).toContainText('ما تنطلب منهم');
+      await confirm.getByTestId('fee-confirm-no').click(); // back: nothing saved
+      await expect(confirm).toHaveCount(0);
+      expect((await outstandingFor(admin, driverId))?.includes_delivery_fee).toBe(true);
+      await card.getByTestId('fee-save').click();
+      await card.getByTestId('fee-confirm-yes').click();
       await expect(card.getByTestId('fee-saved')).toBeVisible();
 
       const after = await outstandingFor(admin, driverId);
@@ -304,6 +377,8 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       const again = adminPage.getByTestId('fee-setting');
       await again.getByRole('radio', { name: /أجرة التوصيل للمحل/ }).check();
       await again.getByTestId('fee-save').click();
+      await expect(again.getByTestId('fee-confirm')).toContainText('تنضاف');
+      await again.getByTestId('fee-confirm-yes').click();
       await expect(again.getByTestId('fee-saved')).toBeVisible();
       expect((await outstandingFor(admin, driverId))?.includes_delivery_fee).toBe(true);
     });

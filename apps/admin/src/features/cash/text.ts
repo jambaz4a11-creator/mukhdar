@@ -24,13 +24,15 @@ export function oldestLine(oldestIso: string | null, now: number = Date.now()): 
   return elapsed ? `أقدم توصيل من ${elapsed}` : 'أقدم توصيل: هسه';
 }
 
-/** آخر تسليم للسائق بصف الأرصدة: الوقت والمبلغ وشارة الفرق إن وُجد. */
+/** آخر تسليم للسائق بصف الأرصدة: الوقت والمبلغ وشارة الفرق إن وُجد. المبلغ null مع وقت = تسليم أقدم من 7 أيام
+ *  والقارئ موظف (R4 L5: الدالة تخفي المبلغ)، فيُعرض الوقت وحده. */
 export function lastHandoverLine(
   atIso: string | null,
   receivedIqd: number | null,
   differenceIqd: number | null,
 ): string {
-  if (!atIso || receivedIqd === null) return 'ما سلّم كاش بعد';
+  if (!atIso) return 'ما سلّم كاش بعد';
+  if (receivedIqd === null) return `آخر تسليم ${formatDateTime(atIso)}`;
   const parts = [`آخر تسليم ${formatDateTime(atIso)}`, formatIQD(receivedIqd)];
   if (differenceIqd) parts.push(differenceLabel(diffFromSigned(differenceIqd)));
   return parts.join(' · ');
