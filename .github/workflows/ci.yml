@@ -102,6 +102,12 @@ jobs:
           retention-days: 7
       - name: Admin on Cloudflare (OpenNext build)
         run: pnpm --filter @mukhdar/admin run build:cf
+      - name: MEASURE ONLY admin worker size (wrangler dry run, no deploy)
+        working-directory: apps/admin
+        run: |
+          pnpm exec wrangler deploy --dry-run --outdir /tmp/wdry 2>&1 | tail -20
+          ls -la .open-next/worker.js /tmp/wdry | head -20
+          du -sk .open-next/assets .open-next/server-functions .open-next/middleware 2>/dev/null
 
   # اختبارات pgTAP على Supabase محلي (Docker على الـ runner). لا اتصال بالسحابة ولا كلمة سر.
   db-tests:
