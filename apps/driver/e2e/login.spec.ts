@@ -1,9 +1,10 @@
 // دخول بحساب سائق تجريبي على PWA (T37): الآيفون المثبَّت (WebKit + standalone) وأندرويد (Chromium).
 // على mukhdar-dev فقط، ولا يكتب شيئاً بقاعدة البيانات (دخول ← الطلبات المتاحة ← خروج). يتخطّى بلا إعداد dev.
-// الحساب: 07000000011 (seed:demo) والرمز DRIVER_DEMO_PIN (scripts/lib/demo.mjs؛ E2E_DRIVER_PHONE/PIN لتغييره).
+// الحساب: 07000000011 (seed:demo) والرمز DRIVER_DEMO_PIN (.env.local بالجذر؛ E2E_DRIVER_PHONE/PIN لتغييره).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { demoEnv } from '../../admin/e2e/demoEnv';
 import { collectErrors, simulateInstalled } from './helpers';
 
 function readEnv(name: string): string | undefined {
@@ -18,7 +19,8 @@ function readEnv(name: string): string | undefined {
 
 const DEV_URL = 'https://ghcohlrzvehtcettaaiu.';
 const PHONE = process.env.E2E_DRIVER_PHONE ?? '07000000011';
-const PIN = process.env.E2E_DRIVER_PIN ?? process.env.DRIVER_DEMO_PIN ?? '739164';
+// رمز سائقي العرض على mukhdar-dev: من البيئة أو .env.local بالجذر فقط (لا قيمة عامة؛ RUNBOOK §6)
+const PIN = demoEnv('E2E_DRIVER_PIN', 'DRIVER_DEMO_PIN');
 const SECURE_KEYS = /access_token|refresh_token|eyJ[A-Za-z0-9_-]{10,}\./;
 
 test('demo driver signs in on the PWA, session is not stored in clear text', async ({
@@ -27,15 +29,16 @@ test('demo driver signs in on the PWA, session is not stored in clear text', asy
   const url = readEnv('EXPO_PUBLIC_SUPABASE_URL');
   const key = readEnv('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY') ?? '';
   test.skip(
-    !process.env.E2E_BASE_URL && (!url?.startsWith(DEV_URL) || key.includes('placeholder')),
-    'needs apps/driver/.env pointing at mukhdar-dev',
+    !PIN ||
+      (!process.env.E2E_BASE_URL && (!url?.startsWith(DEV_URL) || key.includes('placeholder'))),
+    'needs apps/driver/.env pointing at mukhdar-dev and DRIVER_DEMO_PIN in the root .env.local',
   );
   const errors = collectErrors(page);
   if (info.project.name === 'webkit-iphone') await simulateInstalled(page);
 
   await page.goto('/');
   await page.getByTestId('phone-input').fill(PHONE);
-  await page.getByTestId('pin-input').fill(PIN);
+  await page.getByTestId('pin-input').fill(PIN ?? '');
   await page.getByTestId('login-submit').click();
 
   // الطلبات المتاحة (التبويب الأول) بعد الدخول

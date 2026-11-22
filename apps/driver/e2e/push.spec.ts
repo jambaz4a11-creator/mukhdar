@@ -132,7 +132,7 @@ async function simulatePush(page: Page, permission: 'default' | 'granted' | 'den
 async function login(page: Page) {
   await page.goto('/');
   await page.getByTestId('phone-input').fill('07000000011');
-  await page.getByTestId('pin-input').fill('739164');
+  await page.getByTestId('pin-input').fill('258147'); // أي رمز: Supabase مُعترَض
   await page.getByTestId('login-submit').click();
   await expect(page.getByTestId('ready-list')).toBeVisible({ timeout: 30_000 });
 }

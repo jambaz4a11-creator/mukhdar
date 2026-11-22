@@ -1,8 +1,11 @@
 // TOTP (RFC 6238: SHA1، 6 أرقام، 30 ثانية) لاختبارات e2e (T23 C1). نسخة TS من scripts/lib/totp.mjs.
 // حسابا العرض (أدمن وموظف) لهما عامل بالسر التجريبي (seed:demo)؛ dev والمكدس المحلي فقط، أبداً الإنتاج.
 import { createHmac } from 'node:crypto';
+import { demoEnv } from './demoEnv';
 
-export const DEV_TOTP_SECRET = process.env.E2E_TOTP_SECRET || 'MUKHDARDEVONLYTOTPSECRETNOTPROD2';
+// الافتراضي = السر العام للمكدس المحلي فقط (CI)؛ ضد mukhdar-dev: E2E_TOTP_SECRET أو DEMO_TOTP_SECRET (RUNBOOK §6).
+export const DEV_TOTP_SECRET =
+  demoEnv('E2E_TOTP_SECRET', 'DEMO_TOTP_SECRET') ?? 'MUKHDARDEVONLYTOTPSECRETNOTPROD2';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 

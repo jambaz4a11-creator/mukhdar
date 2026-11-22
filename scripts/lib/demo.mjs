@@ -7,18 +7,68 @@ export const DEMO_PHONE_PREFIX = '9647000';
 export const LOAD_PHONE_PREFIX = '9647001';
 export const DEMO_PHONE_LIKE = [`${DEMO_PHONE_PREFIX}%`, `${LOAD_PHONE_PREFIX}%`];
 
-// رمز PIN لكل مستخدمي العرض والحمل (تطوير فقط، ADR 0001). ليس سهل التخمين حسب validatePin،
-// لكنه منشور بالـ repo: لا يُستخدم أبداً بمشروع الإنتاج (seed:demo يرفض غير التطوير أصلاً).
-export const DEMO_PIN = '482915';
+// بيانات دخول العرض (قرار المالك 2026-11-22، تجهيز الـ repo ليصير عاماً): لا قيم حقيقية بالـ repo.
+// - LOCAL_*: قيم **عامة معروفة** صالحة فقط للمكدس المحلي المؤقت (supabase start وCI). لا تُكتب أبداً على مشروع سحابي.
+// - mukhdar-dev (--remote): القيم من البيئة أو .env.local (مُتجاهل بـ git): DEMO_PIN وDRIVER_DEMO_PIN وDEMO_TOTP_SECRET.
+//   ناقصة أو تساوي القيم المحلية العامة ← خطأ يوقف السكربت (RUNBOOK §6).
+// السائقون التجريبيون 07000000011..13 برمز خاص (T23 L6): هو ما يُسلَّم لمطوّر تطبيق السائق، فلا يدخل بحساب أدمن العرض.
+export const LOCAL_DEMO_PIN = '482915';
+export const LOCAL_DRIVER_DEMO_PIN = '739164';
+export const LOCAL_TOTP_SECRET = 'MUKHDARDEVONLYTOTPSECRETNOTPROD2';
 
-// رمز حسابات السائقين التجريبية 07000000011..13 فقط (T23 L6). هذا الرمز (لا DEMO_PIN) هو ما يُسلَّم لمطوّر تطبيق
-// السائق الخارجي، فلا يستطيع الدخول بحساب أدمن أو موظف العرض. تطوير فقط مثل DEMO_PIN. يمكن تدويره بلا commit:
-// DRIVER_DEMO_PIN=<6 أرقام> قبل seed:demo (يُعاد تعيينه للسائقين الثلاثة عند كل تشغيل).
-const FROM_ENV = process.env.DRIVER_DEMO_PIN;
-if (FROM_ENV !== undefined && !/^\d{6}$/.test(FROM_ENV)) {
-  throw new Error('DRIVER_DEMO_PIN must be exactly 6 digits');
+const BASE32_160 = /^[A-Z2-7]{32}$/;
+
+function checkPin(name, value) {
+  if (!/^\d{6}$/.test(value)) throw new Error(`${name} must be exactly 6 digits`);
+  if (/^(\d)\1{5}$/.test(value) || '0123456789'.includes(value) || '9876543210'.includes(value)) {
+    throw new Error(`${name} is too easy to guess`);
+  }
 }
-export const DRIVER_DEMO_PIN = FROM_ENV ?? '739164';
+
+/**
+ * بيانات دخول العرض للهدف. local: البيئة أو القيم المحلية العامة. remote: البيئة/.env.local إلزامياً،
+ * ومختلفة عن القيم العامة (القيم القديمة المنشورة لا تُكتب على mukhdar-dev من جديد).
+ * @param {{kind: 'local' | 'remote'}} target
+ * @param {(name: string) => string | undefined} read قارئ المتغيرات (البيئة ثم .env.local)
+ */
+export function demoCredentials(target, read = (n) => process.env[n]) {
+  const remote = target.kind === 'remote';
+  const get = (name, local) => {
+    const v = read(name)?.trim();
+    if (v) return v;
+    if (remote) {
+      throw new Error(
+        `Refusing: ${name} is not set. For mukhdar-dev put DEMO_PIN, DRIVER_DEMO_PIN and DEMO_TOTP_SECRET ` +
+          'in .env.local (never in git; RUNBOOK §6).',
+      );
+    }
+    return local;
+  };
+  const pin = get('DEMO_PIN', LOCAL_DEMO_PIN);
+  const driverPin = get('DRIVER_DEMO_PIN', LOCAL_DRIVER_DEMO_PIN);
+  const totpSecret = get('DEMO_TOTP_SECRET', LOCAL_TOTP_SECRET).toUpperCase();
+  checkPin('DEMO_PIN', pin);
+  checkPin('DRIVER_DEMO_PIN', driverPin);
+  if (pin === driverPin) throw new Error('DRIVER_DEMO_PIN must differ from DEMO_PIN');
+  if (!BASE32_160.test(totpSecret)) {
+    throw new Error('DEMO_TOTP_SECRET must be 32 base32 characters (A-Z, 2-7)');
+  }
+  if (remote) {
+    const leaked = [
+      ['DEMO_PIN', pin, LOCAL_DEMO_PIN],
+      ['DRIVER_DEMO_PIN', driverPin, LOCAL_DRIVER_DEMO_PIN],
+      ['DEMO_TOTP_SECRET', totpSecret, LOCAL_TOTP_SECRET],
+    ].filter(
+      ([, v]) => v === LOCAL_DEMO_PIN || v === LOCAL_DRIVER_DEMO_PIN || v === LOCAL_TOTP_SECRET,
+    );
+    if (leaked.length) {
+      throw new Error(
+        `Refusing: ${leaked.map(([n]) => n).join(', ')} equals a public local-only value (it is in the repo).`,
+      );
+    }
+  }
+  return { pin, driverPin, totpSecret };
+}
 
 export const phone = (prefix, n) => `${prefix}${String(n).padStart(6, '0')}`;
 

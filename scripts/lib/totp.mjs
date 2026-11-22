@@ -5,8 +5,7 @@
 // - السكربتات التي تنشئ أدمن/موظف مؤقت (الحمل، اختبارات التكامل) تسجّل عاملاً بسر عشوائي وتولّد الرمز هنا.
 import { createHmac, randomBytes } from 'node:crypto';
 
-/** السر التجريبي لحسابات العرض (base32، 32 حرفاً = 160 بت). dev والمحلي فقط؛ يمكن تجاوزه بـ E2E_TOTP_SECRET. */
-export const DEV_TOTP_SECRET = 'MUKHDARDEVONLYTOTPSECRETNOTPROD2';
+// سر حسابات العرض: demoCredentials بـ scripts/lib/demo.mjs (المحلي عام، mukhdar-dev من .env.local).
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 

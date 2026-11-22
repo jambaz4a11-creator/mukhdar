@@ -9,27 +9,31 @@
 //
 // ينشئ: أدمن، موظف، 3 سائقين، 20 زبوناً بعناوين، و500 طلب موزعة على 30 يوماً.
 // الدخول: رقم المستخدم + DEMO_PIN (scripts/lib/demo.mjs، للتطوير فقط؛ RUNBOOK §6).
-// T23 C1: الأدمن والموظف يحتاجان رمز TOTP؛ لهما عامل مُفعَّل بالسر التجريبي DEV_TOTP_SECRET
-// (scripts/lib/totp.mjs، أو E2E_TOTP_SECRET) حتى تدخل e2e بـ aal2. للتطوير فقط: هذا السكربت يرفض الإنتاج.
+// T23 C1: الأدمن والموظف يحتاجان رمز TOTP؛ لهما عامل مُفعَّل بالسر التجريبي DEMO_TOTP_SECRET
+// (المحلي: القيمة العامة بـ scripts/lib/demo.mjs؛ mukhdar-dev: .env.local) حتى تدخل e2e بـ aal2. للتطوير فقط: هذا السكربت يرفض الإنتاج.
 // الطلبات وتحويلاتها تمر حصراً عبر place_order / set_order_status / accept_order /
 // assign_driver / rate_order (لا إدخال مباشر)، لذلك daily_stats محسوبة بنفس منطق الإنتاج.
 // بعدها تُرجَع الطوابع الزمنية لليوم المقصود، وتُنقل مساهمة اليوم من daily_stats لذلك اليوم.
 // الافتراض: المنتجات والعناوين من supabase/seed.sql موجودة.
-import { assertSafeTarget, connectDev, describe, resolveTarget } from './lib/db.mjs';
+import { assertSafeTarget, connectDev, describe, readEnvLocal, resolveTarget } from './lib/db.mjs';
 import {
   DEMO_PHONE_PREFIX,
-  DEMO_PIN,
-  DRIVER_DEMO_PIN,
   LOAD_PHONE_PREFIX,
+  demoCredentials,
   STATS_MISMATCH_SQL,
   phone,
 } from './lib/demo.mjs';
-import { DEV_TOTP_SECRET } from './lib/totp.mjs';
 import { uploadProductImages } from './lib/images.mjs';
 
 const args = process.argv.slice(2);
 const target = resolveTarget(args);
 assertSafeTarget(target);
+// المحلي: القيم العامة المحلية؛ mukhdar-dev: من .env.local إلزامياً (scripts/lib/demo.mjs)
+const {
+  pin: DEMO_PIN,
+  driverPin: DRIVER_DEMO_PIN,
+  totpSecret: DEMO_TOTP_SECRET,
+} = demoCredentials(target, readEnvLocal);
 const LOAD = args.includes('--scale=load');
 const IMAGES = !args.includes('--no-images');
 const IMAGES_ONLY = args.includes('--images-only');
@@ -293,7 +297,7 @@ async function seedDemo() {
   const admin = people.find((p) => p.role === 'admin');
   const staff = people.find((p) => p.role === 'staff');
   // عامل TOTP مُفعَّل (كما يكتبه GoTrue بعد التحقق) بالسر التجريبي: dev والمحلي فقط
-  await q(DEMO_MFA_SQL, [[admin.id, staff.id], process.env.E2E_TOTP_SECRET || DEV_TOTP_SECRET]);
+  await q(DEMO_MFA_SQL, [[admin.id, staff.id], DEMO_TOTP_SECRET]);
   const drivers = people.filter((p) => p.role === 'driver');
   const customers = people.filter((p) => p.role === 'customer');
 
@@ -325,8 +329,8 @@ async function seedDemo() {
   );
   console.log(
     `sign in (dev only): admin 0${people[0].phone.slice(3)}, staff 0${people[1].phone.slice(3)}, ` +
-      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with PIN ${DEMO_PIN} (demo drivers 0${drivers[0].phone.slice(3)}.. with ${DRIVER_DEMO_PIN}); ` +
-      `admin/staff 2FA: the dev-only TOTP secret (scripts/lib/totp.mjs)`,
+      `drivers 0${drivers[0].phone.slice(3)}.., customers 0${customers[0].phone.slice(3)}.. with DEMO_PIN (demo drivers 0${drivers[0].phone.slice(3)}.. with DRIVER_DEMO_PIN); ` +
+      `admin/staff 2FA: DEMO_TOTP_SECRET (local: public values in scripts/lib/demo.mjs; dev: .env.local)`,
   );
 
   const { rows: products } = await q('select id, price_iqd from public.products where is_active');

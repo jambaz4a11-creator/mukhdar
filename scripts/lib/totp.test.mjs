@@ -1,14 +1,8 @@
 // node --test: TOTP مقابل متجهات RFC 6238 (الملحق B، SHA1).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  DEV_TOTP_SECRET,
-  base32Decode,
-  base32Encode,
-  hotp,
-  randomTotpSecret,
-  totp,
-} from './totp.mjs';
+import { LOCAL_TOTP_SECRET as DEV_TOTP_SECRET } from './demo.mjs';
+import { base32Decode, base32Encode, hotp, randomTotpSecret, totp } from './totp.mjs';
 
 const RFC_KEY = Buffer.from('12345678901234567890', 'ascii');
 const RFC_SECRET = base32Encode(RFC_KEY);
