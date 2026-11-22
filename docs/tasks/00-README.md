@@ -47,7 +47,7 @@
 | 31 | [الطلبات الجاهزة وطلباتي والتفاصيل](31-driver-app-delivery.md) | 30، R1 | Sonnet | إعادة نشر `driver-complete-registration` فقط | ✅ 2026-11-20 (فحص الشاشات على جهاز يدوي ← T33) |
 | 32 | [سجل اليوم وحسابي والإشعارات](32-driver-app-today-account-push.md) | 31 | Sonnet | EAS + Firebase (development build) | 🟡 الكود منجز 2026-11-21 (مشروع EAS وFirebase وdevelopment build جاهزة؛ فحص الإشعارات على جهاز ← T33) |
 | R2 | **مراجعة نهائية** (`/review`) لـ T27–T32 قبل بناء الـ APK: كل مسار SPEC-driver §9 مغطى، لا سر أو رمز بالسجلات، `migration list` مطابق | 27–32 | Opus | - | ✅ 2026-11-21 ([التقرير](../reviews/review-R2-driver.md): 1 Critical (C1: اشتراك Realtime مشترك يُسقط شاشة الطلب)، 0 High، 2 Medium (M1 بيئة EAS `preview`، M2 رمز الإشعار عند الخروج من شاشات أخرى)، 6 Low؛ `migration list` مطابق 39 = 39). **الإصلاحات قبل T33: منجزة 2026-11-21** (C1 وM1 وM2 وL1–L4 وL6؛ L5 بقائمة T33؛ متغيرات EAS `preview` أُنشئت بموافقة المالك، URL ومفتاح dev فقط) |
-| 33 | [APK السائق والفحص على أجهزة حقيقية](33-driver-app-apk.md) | 32، R2 | Sonnet | EAS APK build | ⬜ |
+| 33 | [APK السائق والفحص على أجهزة حقيقية](33-driver-app-apk.md) | 32، R2 | Sonnet | EAS APK build | 🟡 الـ APK مبني 2026-11-23 (profile `preview`، من `main` عند `4b118e0`، يشير لـ mukhdar-dev؛ الرابط: https://expo.dev/accounts/jafar_sadiq20/projects/mukhdar-driver/builds/0a4f6b23-3931-4ba1-9e79-88760130db11)؛ **باقٍ:** الفحص اليدوي على جهازين وتقرير `driver-apk-T33.md`؛ ملاحظة: `EXPO_PUBLIC_SHOP_PHONE` و`EXPO_PUBLIC_SHOP_WHATSAPP` غير مضبوطين بمتغيرات EAS `preview` فأزرار الاتصال والواتساب مخفية بهذا الـ APK |
 
 ### PWA السائق + Web Push ([SPEC-webpush](../SPEC-webpush.md)، معتمدة 2026-11-21)
 
@@ -73,7 +73,7 @@
 | 40 | [DB: `cash_handovers` والدوال والرصيد الافتتاحي وإعداد الأجرة + pgTAP بالدور الحقيقي + التزامن](40-cash-handover-db.md) | Q1 ✅ | Opus | **migration** | ✅ 2026-11-22 (PR #37، CI أخضر؛ `20261212000001` على mukhdar-dev بـ `db push --remote` بعد dry-run، 43 = 43، `db:test:remote` 39/39؛ إعادة نشر `delete-account` مع T42) |
 | 41 | [اللوحة: "تسليم الكاش" + قسم التقارير + إعداد الأجرة بـ `/settings` + Playwright](41-admin-cash.md) | 40 | Sonnet | - | ✅ 2026-11-22 (PR بالفرع `feat/t41-admin-cash`؛ بلا migration ولا Edge Function؛ نشر اللوحة بعد الدمج) |
 | 42 | [تطبيق السائق: الكاش منذ آخر تسليم، سجل التسليمات، الإشعار](42-driver-cash.md) | 40 | Sonnet | إعادة نشر `delete-account` فقط | ✅ 2026-11-22 (PR #39 مدموج، CI أخضر؛ بلا migration؛ `delete-account` أُعيد نشرها على mukhdar-dev فقط؛ بناء Cloudflare `mukhdar-driver` على main `770119a` ناجح) |
-| R4 | [**مراجعة** (`/review`) لـ T40–T42: السباقات، تصنيف المبالغ، الأدوار، الثابت المحاسبي](R4-cash-review.md) | 40–42 | Opus | - | ⬜ (التقرير [`docs/reviews/R4-cash-review.md`](../reviews/R4-cash-review.md) 2026-11-22: 0 Critical، 0 High، 2 Medium، 10 Low). **الإصلاحات منجزة (PR #44، 2026-11-22):** M1 (القاعدة باقية: الأجرة للمحل افتراضياً؛ "أجرة التوصيل عند السواق" بالتقرير + تأكيد بالمبلغ عند تغيير الإعداد)، M2، L1–L9، والاختبارات الثمانية T1–T8؛ L10 مؤجَّل (SPEC-cash §12.13). migration `20261213000001` على mukhdar-dev بـ `db push --remote` بعد dry-run، `migration list` مطابق 44 = 44، `db:test:remote` 40/40. **باقٍ: الفحص اليدوي على dev** (SPEC-cash §14 البندان 3 و4، بجهاز سائق وموافقتك) |
+| R4 | [**مراجعة** (`/review`) لـ T40–T42: السباقات، تصنيف المبالغ، الأدوار، الثابت المحاسبي](R4-cash-review.md) | 40–42 | Opus | - | ⬜ (التقرير [`docs/reviews/R4-cash-review.md`](../reviews/R4-cash-review.md) 2026-11-22: 0 Critical، 0 High، 2 Medium، 10 Low). **الإصلاحات منجزة (PR #44، 2026-11-22):** M1 (القاعدة باقية: الأجرة للمحل افتراضياً؛ "أجرة التوصيل عند السواق" بالتقرير + تأكيد بالمبلغ عند تغيير الإعداد)، M2، L1–L9، والاختبارات الثمانية T1–T8؛ L10 منجز 2026-11-23 (PR #46: migration `20261214000001` = `search_path = ''` على الدوال الثلاث بـ `alter function` فقط، اختبار `41_search_path_l10.sql` بـ 29 فحصاً بالأدوار الحقيقية؛ طُبّقت على mukhdar-dev بعد dry-run، `migration list` مطابق 45 = 45، `db:test:remote` 41/41 و1814 فحصاً). migration `20261213000001` على mukhdar-dev بـ `db push --remote` بعد dry-run، `migration list` مطابق 44 = 44، `db:test:remote` 40/40. **باقٍ: الفحص اليدوي على dev** (SPEC-cash §14 البندان 3 و4، بجهاز سائق وموافقتك) |
 
 "على dev" = ما يحتاج **موافقة صاحب المشروع** قبل التنفيذ (migration بـ `pnpm sb db push`، نشر Edge Function، أو EAS/Firebase). الإنتاج خارج هذه الخطة. 29 مستقلة عن 28 (تُنفَّذ قبلها أو بعدها). iOS Ad Hoc لاحقاً، خارج T33.
 
@@ -82,3 +82,9 @@
 المهمة 21 **أُلغيت** (قرار المالك 2026-11-19): تطبيق السائق `apps/driver` يُبنى داخل هذا الـ repo بالمهام T27–T33 ([SPEC-driver](../SPEC-driver.md)). عقد دوال السائق: [DRIVER-API.md](../DRIVER-API.md) (مرجع داخلي). المهمة 22 تحاكي السائق عبر نفس الدوال.
 
 المهمة 04 **لم تعد مبكرة ولا مانعة** (قرار المالك 2026-11-14): لا SMS ولا OTP؛ الدخول برقم الهاتف + PIN من 6 أرقام بلا رسائل ([ADR 0001](../ADR/0001-phone-pin-auth.md)). T04 صارت "التحقق عبر واتساب"، لاحقاً واختيارية.
+
+
+### صحة ما قبل الإطلاق (2026-11-23)
+
+- [`docs/reviews/pre-launch-health.md`](../reviews/pre-launch-health.md): audit، أحجام الحزم، Lighthouse، العربية/RTL، مرتَّبة بالخطورة مع قائمة المتابعة (أبرزها: خط MaterialCommunityIcons بحجم 1.28 MB لأيقونة واحدة بتطبيق السائق، وثقل التحميل الأول للزبون). أُصلح منها: `robots.txt` للتطبيقين وalt الصور الزخرفية.
+- اختبار `addresses.test.tsx` المتقطع أُصلح (PR #45): سباق قراءة القيم المعبّأة بشاشة التعديل ومهلة Jest الافتراضية 5 ثوانٍ على CI البطيء؛ `testTimeout: 20000` بـ `apps/customer`.
