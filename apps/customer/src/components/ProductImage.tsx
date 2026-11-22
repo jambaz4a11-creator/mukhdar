@@ -51,6 +51,8 @@ export function ProductImage({
       {uri ? (
         <Image
           source={{ uri }}
+          // الصورة زخرفية: الاسم والسعر نص بجانبها، والغلاف أعلاه يحمل التسمية عند الحاجة. expo-image على الويب يكتب alt من accessibilityLabel، وفارغ = زخرفية (Lighthouse image-alt)
+          accessibilityLabel=""
           style={[StyleSheet.absoluteFill, dimmed && styles.dimmed]}
           contentFit={fit}
           contentPosition="center"
