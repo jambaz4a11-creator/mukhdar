@@ -4,6 +4,27 @@ import { customerTelUrl, customerWhatsappUrl } from '../features/orders/contact'
 import { removedOrders } from '../features/orders/mine';
 import { formatBaghdadClock, minutesSince } from '../features/orders/time';
 import { nextAction, statusLabel } from '../features/orders/transitions';
+import { ar } from '../i18n/ar';
+
+describe('ar.orders.readyAgo (minutes -> hours -> days)', () => {
+  it.each([
+    [0, 'جاهز هسه'],
+    [1, 'جاهز من دقيقة'],
+    [2, 'جاهز من دقيقتين'],
+    [4, 'جاهز من 4 دقائق'],
+    [45, 'جاهز من 45 دقيقة'],
+    [60, 'جاهز من ساعة'],
+    [120, 'جاهز من ساعتين'],
+    [5 * 60, 'جاهز من 5 ساعات'],
+    [23 * 60, 'جاهز من 23 ساعة'],
+    [24 * 60, 'جاهز من يوم'],
+    [48 * 60, 'جاهز من يومين'],
+    [6391, 'جاهز من 4 أيام'],
+    [15 * 24 * 60, 'جاهز من 15 يوم'],
+  ])('%p -> %p', (minutes, expected) => {
+    expect(ar.orders.readyAgo(minutes)).toBe(expected);
+  });
+});
 
 describe('nextAction (SPEC-driver §6)', () => {
   it('ready -> out_for_delivery, no confirmation', () => {

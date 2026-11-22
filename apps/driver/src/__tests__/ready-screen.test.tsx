@@ -76,6 +76,21 @@ describe('ReadyScreen', () => {
     expect(screen.queryByText(/شقة/)).toBeNull();
   });
 
+  it('old orders read in hours/days, not thousands of minutes ("جاهز من 4 أيام")', async () => {
+    setup(() => ({
+      data: [
+        row('o1', 1, { created_at: '2026-11-20T08:00:00Z' }), // 120 دقيقة
+        row('o2', 2, { created_at: new Date(NOW - 6391 * 60_000).toISOString() }),
+      ],
+      error: null,
+    }));
+    await renderScreen(<ReadyScreen />);
+    await screen.findByTestId('ready-card-o2');
+    expect(screen.getByText('جاهز من ساعتين')).toBeTruthy();
+    expect(screen.getByText('جاهز من 4 أيام')).toBeTruthy();
+    expect(screen.queryByText(/6391/)).toBeNull();
+  });
+
   it('header: greeting with the driver name and the count badge', async () => {
     setup(() => ({ data: [row('o1', 1), row('o2', 2), row('o3', 3)], error: null }));
     await renderScreen(<ReadyScreen />);
