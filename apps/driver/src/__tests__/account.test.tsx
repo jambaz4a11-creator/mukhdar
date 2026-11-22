@@ -172,6 +172,37 @@ describe('deleteDriverAccount', () => {
     expect(auth.signOut).not.toHaveBeenCalled();
   });
 
+  it('T42 CASH_OUTSTANDING -> "hand your cash first" with the amount from driver_cash_summary, session untouched', async () => {
+    const auth = makeAuth();
+    const fake = createFakeSupabase((call: Call) => {
+      if (call.table === 'fn:delete-account') {
+        return { data: null, error: functionError(409, { error: 'CASH_OUTSTANDING' }) };
+      }
+      if (call.table === 'rpc:driver_cash_summary') {
+        return { data: [{ outstanding_iqd: 74750, order_count: 2 }], error: null };
+      }
+      return ok;
+    }, auth);
+    const r = await deleteDriverAccount(fake.client as never);
+    expect(r).toEqual({
+      ok: false,
+      message: 'عندك كاش ما سلّمته للمحل (74,750 د.ع). سلّمه أولاً',
+    });
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('T42 CASH_OUTSTANDING but the summary read fails -> the generic message without an amount', async () => {
+    const fake = createFakeSupabase(
+      (call: Call) =>
+        call.table === 'fn:delete-account'
+          ? { data: null, error: functionError(409, { error: 'CASH_OUTSTANDING' }) }
+          : { data: null, error: { message: 'Network request failed' } },
+      makeAuth(),
+    );
+    const r = await deleteDriverAccount(fake.client as never);
+    expect(r).toEqual({ ok: false, message: 'عندك كاش ما سلّمته للمحل. سلّمه أولاً' });
+  });
+
   it('success -> local sign-out', async () => {
     const auth = makeAuth();
     const fake = createFakeSupabase(() => ({ data: { deleted: true }, error: null }), auth);

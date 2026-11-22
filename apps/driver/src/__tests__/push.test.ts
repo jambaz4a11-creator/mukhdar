@@ -28,6 +28,9 @@ describe('routeForNotification (data.type)', () => {
     [{ type: 'unassigned', order_id: UUID }, '/my-orders'],
     [{ type: 'cancelled', order_id: UUID, status: 'cancelled' }, '/my-orders'],
     [{ type: 'driver_request_approved' }, '/auth/pending'],
+    // T42: تسليم الكاش ← سجل اليوم (لا يحتاج order_id)
+    [{ type: 'cash_handover', handover_id: UUID }, '/today'],
+    [{ type: 'cash_handover' }, '/today'],
   ])('%j -> %s', (data, route) => {
     expect(routeForNotification(data)).toBe(route);
   });
