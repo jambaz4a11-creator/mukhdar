@@ -15,6 +15,7 @@ export * from './supabase';
 export * from './projects';
 export * from './contact';
 export * from './baghdadDay';
+export * from './elapsed';
 export * from './chunkedStorage';
 export * from './pinChange';
 export * from './webSecureStorage';

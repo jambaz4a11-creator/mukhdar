@@ -1,6 +1,6 @@
 // كل نصوص تطبيق السائق (SPEC-driver §6: لا نص عربي داخل الشاشات). صياغة التصميم المعتمد (عراقية خفيفة).
 // رسائل أخطاء الخادم ليست هنا: ERROR_MESSAGES / authError / PIN_MESSAGES من @mukhdar/shared.
-import { PIN_CHANGE_MESSAGES } from '@mukhdar/shared';
+import { formatElapsedAr, PIN_CHANGE_MESSAGES } from '@mukhdar/shared';
 
 export const ar = {
   appName: 'المخضر',
@@ -110,16 +110,9 @@ export const ar = {
     readyTitle: 'الطلبات الجاهزة',
     countBadge: (n: number) =>
       n === 1 ? 'طلب واحد' : n === 2 ? 'طلبين' : n <= 10 ? `${n} طلبات` : `${n} طلب`,
+    // فوق 60 دقيقة ساعات ثم أيام ("جاهز من ساعتين"، "جاهز من 4 أيام")، formatElapsedAr المشتركة.
     readyAgo: (minutes: number) =>
-      minutes < 1
-        ? 'جاهز هسه'
-        : minutes === 1
-          ? 'جاهز من دقيقة'
-          : minutes === 2
-            ? 'جاهز من دقيقتين'
-            : minutes <= 10
-              ? `جاهز من ${minutes} دقائق`
-              : `جاهز من ${minutes} دقيقة`,
+      minutes < 1 ? 'جاهز هسه' : `جاهز من ${formatElapsedAr(minutes)}`,
     productsCount: (n: number) =>
       n === 1 ? 'منتج واحد' : n === 2 ? 'منتجين' : n <= 10 ? `${n} منتجات` : `${n} منتج`,
     cashToCollect: 'تستلم كاش:',

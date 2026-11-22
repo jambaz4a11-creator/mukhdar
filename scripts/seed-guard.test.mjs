@@ -51,7 +51,7 @@ const CASES = [
   ],
 ];
 
-for (const script of ['seed-demo.mjs', 'seed-reset.mjs']) {
+for (const script of ['seed-demo.mjs', 'seed-reset.mjs', 'dev-cancel-stale-orders.mjs']) {
   for (const [name, link, why] of CASES) {
     test(`${script} --remote refuses ${name}`, () => {
       const dir = link();
