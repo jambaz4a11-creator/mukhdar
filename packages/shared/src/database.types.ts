@@ -1439,6 +1439,15 @@ export type Database = {
         }[];
       };
       break_glass_reset_mfa: { Args: { p_user_id: string }; Returns: number };
+      cash_fee_setting_impact: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          driver_count: number;
+          fees_iqd: number;
+          includes_delivery_fee: boolean;
+          order_count: number;
+        }[];
+      };
       cash_handover_history: {
         Args: {
           p_before_at?: string;
@@ -1514,7 +1523,12 @@ export type Database = {
         }[];
       };
       correct_cash_handover: {
-        Args: { p_id: string; p_note: string; p_received_iqd: number };
+        Args: {
+          p_expected_received?: number;
+          p_id: string;
+          p_note: string;
+          p_received_iqd: number;
+        };
         Returns: Json;
       };
       current_user_role: {

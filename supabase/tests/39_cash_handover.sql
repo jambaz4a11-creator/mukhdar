@@ -67,7 +67,7 @@ select is(
                     'public.cash_handover_history(uuid, date, date, integer, timestamptz, uuid)'::regprocedure,
                     'public.driver_cash_summary()'::regprocedure,
                     'public.my_cash_handovers(integer, timestamptz, uuid)'::regprocedure,
-                    'public.correct_cash_handover(uuid, bigint, text)'::regprocedure,
+                    'public.correct_cash_handover(uuid, bigint, text, bigint)'::regprocedure,
                     'public.report_cash(date, date)'::regprocedure)
       and p.prosecdef and p.proconfig = array['search_path=""']
       and has_function_privilege('authenticated', p.oid, 'execute')
@@ -284,8 +284,8 @@ select is(
   (select d - 'full_name' - 'driver_id' from jsonb_array_elements(current_setting('t.rep')::jsonb -> 'drivers') d
     where d ->> 'driver_id' = tests.id('drv')::text),
   '{"handover_count": 4, "expected_iqd": 9000, "received_iqd": 9250, "shortage_iqd": 250, "overage_iqd": 500,
-    "net_difference_iqd": 250, "held_now_iqd": 0}'::jsonb,
-  'report_cash per driver: shortage and overage separate, net, held now');
+    "net_difference_iqd": 250, "fees_kept_iqd": 1000, "held_now_iqd": 0}'::jsonb,
+  'report_cash per driver: shortage and overage separate, net, held now, fees kept (R4: h4 was goods-only)');
 select ok((current_setting('t.rep')::jsonb -> 'totals' ->> 'shortage_iqd')::int >= 250
           and (current_setting('t.rep')::jsonb -> 'totals' ->> 'overage_iqd')::int >= 500,
   'report_cash totals include the shortage and the overage separately');

@@ -14,6 +14,7 @@ const raw = {
     shortage_iqd: 2_000,
     overage_iqd: 1_000,
     net_difference_iqd: -1_000,
+    fees_kept_iqd: 3_000,
   },
   drivers: [
     {
@@ -25,6 +26,7 @@ const raw = {
       shortage_iqd: 2_000,
       overage_iqd: 0,
       net_difference_iqd: -2_000,
+      fees_kept_iqd: 2_000,
       held_now_iqd: 75_000,
     },
     {
@@ -36,6 +38,7 @@ const raw = {
       shortage_iqd: 0,
       overage_iqd: 1_000,
       net_difference_iqd: 1_000,
+      fees_kept_iqd: 1_000,
       held_now_iqd: 0,
     },
   ],
@@ -53,6 +56,17 @@ describe('parseCashReport', () => {
       'REPORT_SHAPE',
     );
   });
+  it('R4 M1: requires fees_kept_iqd in the totals and per driver', () => {
+    const totals: Record<string, unknown> = { ...raw.totals };
+    delete totals.fees_kept_iqd;
+    expect(() => parseCashReport({ ...raw, totals })).toThrow('REPORT_SHAPE: fees_kept_iqd');
+    expect(parseCashReport(raw).totals.fees_kept_iqd).toBe(3_000);
+  });
+  it('T6: keeps the deleted driver (driver_id and full_name null) as its own row', () => {
+    const d = parseCashReport(raw).drivers.find((x) => x.driver_id === null);
+    expect(d?.full_name).toBeNull();
+    expect(d?.handover_count).toBe(1);
+  });
   it('rejects a non-object', () => {
     expect(() => parseCashReport(null)).toThrow('REPORT_SHAPE');
   });
@@ -66,11 +80,12 @@ describe('cashCsv', () => {
     expect(csv).toContain('النقص');
     expect(csv).toContain('الزيادة');
     expect(csv).toContain('بيده الآن');
+    expect(csv).toContain('أجرة التوصيل عنده');
   });
   it('writes plain integers (no thousands separators), a deleted driver label, and a total row', () => {
-    expect(csv).toContain('علي,2,150000,148000,2000,0,75000');
-    expect(csv).toContain('سائق محذوف,1,50000,51000,0,1000,0');
-    expect(csv).toContain('المجموع,3,200000,199000,2000,1000,125000');
+    expect(csv).toContain('علي,2,150000,148000,2000,0,2000,75000');
+    expect(csv).toContain('سائق محذوف,1,50000,51000,0,1000,1000,0');
+    expect(csv).toContain('المجموع,3,200000,199000,2000,1000,3000,125000');
   });
   it('file name carries the range', () => {
     expect(cashCsvFileName('2026-11-16', '2026-11-22')).toBe(

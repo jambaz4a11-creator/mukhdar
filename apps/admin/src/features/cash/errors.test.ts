@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { handoverFailure } from './errors';
+import {
+  balanceChangedMessage,
+  compareRecorded,
+  correctionFailureMessage,
+  handoverFailure,
+  recordedMismatchWarning,
+} from './errors';
 
 const pg = (message: string, details?: string) => ({
   message,
@@ -36,11 +42,37 @@ describe('handoverFailure', () => {
     }
   });
 
-  it('NO_CASH_OUTSTANDING closes the dialog and refreshes', () => {
+  it('R4 M2: NO_CASH_OUTSTANDING keeps the dialog open to show what was recorded, and refreshes', () => {
     const f = handoverFailure(pg('NO_CASH_OUTSTANDING'));
-    expect(f.close).toBe(true);
+    expect(f.close).toBe(false);
+    expect(f.lookup).toBe(true);
     expect(f.refresh).toBe(true);
+    expect(f.rotateKey).toBe(true);
     expect(f.message).toContain('قبل شوية');
+  });
+
+  it('R4 L2: INVALID_REQUEST idempotency_key (same key, different request) is "already recorded" too', () => {
+    const f = handoverFailure(pg('INVALID_REQUEST', 'idempotency_key'));
+    expect(f.lookup).toBe(true);
+    expect(f.rotateKey).toBe(true);
+    const other = handoverFailure(pg('INVALID_REQUEST', 'p_note'));
+    expect(other.lookup).toBe(false);
+  });
+
+  it('R4 L8: the same order count with a new amount blames the fee setting, not a new delivery', () => {
+    const f = handoverFailure(
+      pg('CASH_BALANCE_CHANGED', '{"expected_iqd": 40000, "order_count": 4}'),
+      4,
+    );
+    expect(f.message).toContain('تغيّر إعداد أجرة التوصيل');
+    expect(f.message).not.toContain('توصيل جديد');
+    expect(f.message).toContain('40,000');
+    const more = handoverFailure(
+      pg('CASH_BALANCE_CHANGED', '{"expected_iqd": 52000, "order_count": 5}'),
+      4,
+    );
+    expect(more.message).toContain('وصل توصيل جديد');
+    expect(balanceChangedMessage(null)).toContain('عدّ من جديد');
   });
 
   it('NOTE_REQUIRED and CASH_AMOUNT_INVALID keep the dialog and the typed amount', () => {
@@ -62,5 +94,43 @@ describe('handoverFailure', () => {
     const f = handoverFailure(pg('deadlock detected'));
     expect(f.rotateKey).toBe(false);
     expect(f.message).not.toContain('deadlock');
+  });
+});
+
+describe('what was recorded vs what is on screen (R4 M2)', () => {
+  const recorded = { received_iqd: 40_000, note: null };
+  it('matches: no warning', () => {
+    expect(recordedMismatchWarning(recorded, { amount: 40_000, note: '  ' })).toBeNull();
+    expect(compareRecorded(recorded, { amount: 40_000, note: null })).toEqual({
+      amountDiffers: false,
+      noteDiffers: false,
+    });
+  });
+  it('a different amount names both amounts and points to the admin correction', () => {
+    const w = recordedMismatchWarning(recorded, { amount: 39_750, note: 'عدّيت ثاني' });
+    expect(w).toContain('40,000');
+    expect(w).toContain('39,750');
+    expect(w).toContain('المدير يصحّحه');
+  });
+  it('the same amount with a different note still warns', () => {
+    const w = recordedMismatchWarning(
+      { received_iqd: 39_750, note: 'ناقص' },
+      { amount: 39_750, note: 'ناقص ربع' },
+    );
+    expect(w).toContain('الملاحظة');
+  });
+});
+
+describe('correctionFailureMessage (R4 L6)', () => {
+  it('HANDOVER_CHANGED shows the amount stored now', () => {
+    const m = correctionFailureMessage(pg('HANDOVER_CHANGED', '39500'));
+    expect(m).toContain('أدمن ثاني');
+    expect(m).toContain('39,500');
+  });
+  it('HANDOVER_CHANGED without a readable detail still explains', () => {
+    expect(correctionFailureMessage(pg('HANDOVER_CHANGED', 'x'))).toContain('أدمن ثاني');
+  });
+  it('other errors use the shared messages', () => {
+    expect(correctionFailureMessage(pg('NOTE_REQUIRED'))).toContain('ملاحظة');
   });
 });

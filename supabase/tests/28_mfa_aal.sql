@@ -70,8 +70,10 @@ create function tests.gate_calls() returns table (grp text, sql text) language s
     ('staff', format($q$ select * from public.cash_outstanding_orders(%L) $q$, tests.id('drv'))),
     ('staff', format($q$ select public.record_cash_handover(%L, 0, 1, 0, null, gen_random_uuid()) $q$, tests.id('drv'))),
     ('staff', $q$ select * from public.cash_handover_history() $q$),
-    ('admin', format($q$ select public.correct_cash_handover(%L, 1000, 'aal') $q$, gen_random_uuid())),
-    ('admin', $q$ select public.report_cash(current_date - 7, current_date) $q$)
+    ('admin', format($q$ select public.correct_cash_handover(%L, 1000, 'aal', 1000) $q$, gen_random_uuid())),
+    ('admin', $q$ select public.report_cash(current_date - 7, current_date) $q$),
+    -- R4 M1
+    ('admin', $q$ select * from public.cash_fee_setting_impact() $q$)
   ) t(grp, sql)
 $$;
 

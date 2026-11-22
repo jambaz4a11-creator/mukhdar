@@ -2,7 +2,7 @@
 --   يرى: مبالغ البيع اللازمة للإيصال (إجمالي الطلب وأجرته وبنوده، سعر البيع، أجرة التوصيل والحد الأدنى).
 --   لا يرى: الكلفة، الربح، قيمة الهدر، كلفة حركات المخزون، التقارير، الإعدادات (تعديلاً).
 -- أي عمود مبالغ جديد يُفشل الاختبار الأول حتى يُصنَّف هنا (بيع للموظف أو للأدمن فقط).
-select plan(41);
+select plan(42);
 
 -- ---------------------------------------------------------------- 1) قائمة أعمدة المبالغ مثبّتة
 select set_eq(
@@ -86,6 +86,8 @@ select throws_ok($$ select * from public.available_orders() $$, '42501', 'NOT_AL
 select throws_ok($$ select public.report_cash(current_date - 7, current_date) $$, '42501', 'NOT_ALLOWED', 'no report_cash');
 select throws_ok($$ select public.correct_cash_handover(gen_random_uuid(), 1000, 'x') $$, '42501', 'NOT_ALLOWED',
   'no correct_cash_handover');
+-- R4 M1: أجرة التوصيل على الكاش اللي بيد السواق (لتأكيد تغيير إعداد الأجرة) للأدمن فقط
+select throws_ok($$ select * from public.cash_fee_setting_impact() $$, '42501', 'NOT_ALLOWED', 'no cash_fee_setting_impact');
 -- T40: ما يراه الموظف من دوال الكاش مبالغ بيع فقط (لا كلفة ولا ربح)
 select is(
   (select count(*)::int from (select to_jsonb(c) j from public.cash_outstanding() c
@@ -156,7 +158,9 @@ select set_eq(
   $$ values ('accept_order'), ('assign_driver'), ('available_orders'), ('set_order_status'), ('update_app_settings'),
             ('report_daily'), ('report_drivers'), ('report_top_products'), ('report_waste'),
             ('cash_outstanding'), ('cash_outstanding_orders'), ('cash_handover_history'), ('driver_cash_summary'),
-            ('my_cash_handovers') $$,
+            ('my_cash_handovers'),
+            -- R4 M1: أدمن aal2 فقط (أجرة التوصيل على الكاش الحالي، مبلغ بيع)
+            ('cash_fee_setting_impact') $$,
   'RPCs returning money-bearing rows: order rows (sale amounts), settings and reports (admin only, section 4)');
 select set_eq(
   $$ select p.proname::text collate "default" from pg_proc p where p.pronamespace = 'public'::regnamespace
@@ -178,7 +182,9 @@ select set_eq(
             ('report_summary'), ('report_top_products'), ('report_waste'),
             -- T40: دوال الكاش (39_cash_handover يثبّت أدوارها وأعمدتها؛ لا كلفة ولا ربح، القسم 4)
             ('cash_handover_history'), ('cash_outstanding'), ('cash_outstanding_orders'), ('correct_cash_handover'),
-            ('driver_cash_summary'), ('my_cash_handovers'), ('record_cash_handover'), ('report_cash') $$,
+            ('driver_cash_summary'), ('my_cash_handovers'), ('record_cash_handover'), ('report_cash'),
+            -- R4 M1: أدمن aal2 فقط، مجموع أجور التوصيل وعدد السواق والطلبات
+            ('cash_fee_setting_impact') $$,
   'every authenticated RPC returning jsonb / record / TABLE is reviewed (a new one must be classified here)');
 select ok(not has_table_privilege('authenticated', 'public.daily_stats', 'insert, update, delete'),
   'daily_stats is not writable');

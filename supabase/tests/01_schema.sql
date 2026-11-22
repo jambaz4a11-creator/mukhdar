@@ -35,7 +35,7 @@ select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
   array['accept_order', 'add_buildings', 'address_usage', 'adjust_stock', 'adjust_stock_bulk', 'admin_cancel_customer_orders', 'admin_reset_mfa',
-        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'cash_handover_history', 'cash_outstanding',
+        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'cash_fee_setting_impact', 'cash_handover_history', 'cash_outstanding',
         'cash_outstanding_orders', 'correct_cash_handover', 'dashboard_today', 'decide_driver_request', 'delete_category', 'dismiss_failed_notifications',
         'driver_cash_summary', 'driver_request_status', 'failed_notifications_count', 'list_driver_requests',
         'list_drivers', 'my_cash_handovers', 'pending_driver_requests_count', 'place_order', 'rate_order', 'ratings_list', 'ratings_summary', 'recompute_daily_stats',
@@ -43,7 +43,7 @@ select is(
         'reorder_categories', 'reorder_products', 'report_cash', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
         'report_top_products', 'report_waste', 'set_order_status', 'set_product_price', 'set_user_role',
         'stuck_notifications_count', 'touch_panel_session', 'update_app_settings'],
-  'authenticated can execute exactly the 49 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session; T27: driver requests; T36: register_web_push; T40: 8 cash handover RPCs)');
+  'authenticated can execute exactly the 50 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session; T27: driver requests; T36: register_web_push; T40: 8 cash handover RPCs; R4: cash_fee_setting_impact)');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');

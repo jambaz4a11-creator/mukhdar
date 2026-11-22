@@ -1,12 +1,13 @@
 'use client';
 // قسم "أجرة التوصيل وتسليم الكاش" بصفحة الإعدادات (أدمن فقط، SPEC-cash K19 و§4، SPEC-admin §2.10): خياران
 // بشرح عربي وتنبيه ثابت. الحفظ عبر update_app_settings بمفتاحه وحده (مُدقَّق)، وبعده تتحدث أرصدة الكاش.
+// R4 M1: قبل الحفظ يُقرأ cash_fee_setting_impact؛ إن كان بيد السواق أجور توصيل يُطلب تأكيد بالمبلغ.
 import { errorMessage } from '@mukhdar/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
-import { cashKeys, fetchFeeSetting, saveFeeSetting } from './api';
-import { FEE_OPTIONS, FEE_SECTION_TITLE, FEE_WARNING } from './feeSetting';
+import { cashKeys, fetchFeeImpact, fetchFeeSetting, saveFeeSetting } from './api';
+import { FEE_OPTIONS, FEE_SECTION_TITLE, FEE_WARNING, feeChangeWarning } from './feeSetting';
 
 const cardClass = 'flex flex-col gap-3.5 rounded-card border border-border bg-surface p-[18px]';
 
@@ -36,19 +37,31 @@ function FeeForm({ saved }: { saved: boolean }) {
   const qc = useQueryClient();
   const [value, setValue] = useState(saved);
   const [done, setDone] = useState(false);
+  /** نص التأكيد المعروض (R4 M1)، أو null */
+  const [confirm, setConfirm] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: () => saveFeeSetting(supabase, value),
     onSuccess: async () => {
       setDone(true);
+      setConfirm(null);
       await qc.invalidateQueries({ queryKey: cashKeys.all });
     },
   });
+  const check = useMutation({
+    mutationFn: () => fetchFeeImpact(supabase),
+    onSuccess: (impact) => {
+      const w = feeChangeWarning(impact, value);
+      if (w) setConfirm(w);
+      else save.mutate();
+    },
+  });
+  const busy = save.isPending || check.isPending;
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        save.mutate();
+        check.mutate();
       }}
     >
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
@@ -67,6 +80,7 @@ function FeeForm({ saved }: { saved: boolean }) {
               onChange={() => {
                 setValue(o.value);
                 setDone(false);
+                setConfirm(null);
               }}
               className="mt-1 h-5 w-5 shrink-0 accent-primary"
             />
@@ -83,13 +97,44 @@ function FeeForm({ saved }: { saved: boolean }) {
       >
         {FEE_WARNING}
       </p>
-      {save.error && (
+      {(save.error ?? check.error) && (
         <p
           role="alert"
           className="m-0 rounded-control bg-danger-soft px-3 py-2 text-sm text-danger"
         >
-          {errorMessage(save.error)}
+          {errorMessage(save.error ?? check.error)}
         </p>
+      )}
+      {confirm && (
+        <div
+          role="alertdialog"
+          aria-labelledby="fee-confirm-text"
+          data-testid="fee-confirm"
+          className="flex flex-col gap-2 rounded-control border border-warning-text bg-warning-soft px-3 py-3"
+        >
+          <p id="fee-confirm-text" className="m-0 text-sm text-warning-text">
+            {confirm}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              data-testid="fee-confirm-yes"
+              disabled={busy}
+              onClick={() => save.mutate()}
+              className="h-11 flex-1 rounded-control bg-primary px-4 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {save.isPending ? 'جارٍ الحفظ…' : 'نعم، غيّر الإعداد'}
+            </button>
+            <button
+              type="button"
+              data-testid="fee-confirm-no"
+              onClick={() => setConfirm(null)}
+              className="h-11 rounded-control border border-border px-4 text-sm"
+            >
+              رجوع
+            </button>
+          </div>
+        </div>
       )}
       {done && !save.error && (
         <p
@@ -103,10 +148,10 @@ function FeeForm({ saved }: { saved: boolean }) {
       <button
         type="submit"
         data-testid="fee-save"
-        disabled={save.isPending || value === saved}
+        disabled={busy || value === saved || confirm !== null}
         className="h-12 rounded-control bg-primary text-[15px] font-bold text-white disabled:opacity-60"
       >
-        {save.isPending ? 'جارٍ الحفظ…' : 'حفظ الإعداد'}
+        {busy ? 'جارٍ الحفظ…' : 'حفظ الإعداد'}
       </button>
     </form>
   );

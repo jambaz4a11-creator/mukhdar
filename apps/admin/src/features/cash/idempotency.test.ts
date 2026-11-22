@@ -28,6 +28,15 @@ describe('handover idempotency key', () => {
     expect(c.key).not.toBe(b.key);
   });
 
+  it('R4 L2: the key is bound to the note too (an edited note gets a new key; spaces only do not)', () => {
+    const s = newKeyState(gen);
+    const a = keyFor(s, 47_500, gen, 'ناقص');
+    expect(keyFor(a.state, 47_500, gen, '  ناقص ').key).toBe(a.key);
+    const b = keyFor(a.state, 47_500, gen, 'ناقص 2500');
+    expect(b.key).not.toBe(a.key);
+    expect(keyFor(b.state, 47_500, gen, 'ناقص 2500').key).toBe(b.key);
+  });
+
   it('rotateKey (after CASH_BALANCE_CHANGED) always yields a different key even for the same amount', () => {
     const s = newKeyState(gen);
     const a = keyFor(s, 48_750, gen);

@@ -37,6 +37,7 @@ temporary PIN, a deactivated account, or another role):
 - Push after each handover and each correction: title `تسليم الكاش`, body `استلمنا منك 4,000 د.ع`
   (+ ` · نقص 250 د.ع` / ` · زيادة 500 د.ع`) or `تعدّل تسليم الكاش: …`; `data = { "type": "cash_handover",
   "handover_id": "uuid" }` → open the "today" tab and refresh.
+- (R4 L9) No cash push goes to an account whose role is no longer `driver` (demoted while holding cash).
 - Account deletion while holding cash: `begin_account_deletion` raises `CASH_OUTSTANDING` (`detail` =
   amount); `delete-account` maps it to `409 { "error": "CASH_OUTSTANDING" }` (redeployed to
   mukhdar-dev with T42). The 409 body carries **no amount**, so the app reads X from
