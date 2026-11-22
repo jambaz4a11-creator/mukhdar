@@ -8,6 +8,7 @@
 //      الباقي INSUFFICIENT_STOCK، صفر deadlocks.
 //   2) 8 سائقين يقبلون نفس الطلب بنفس اللحظة: واحد ينجح، الباقي ORDER_NOT_AVAILABLE.
 //   2b) سائق يُخفَّض أثناء accept_order: يُرفض بعد القفل (الدور يُفحص تحت القفل).
+//   5) تسليم الكاش (T40): مسجِّلان معاً، توصيلات أثناء التسليم، نفس المفتاح بالتوازي، تغيير إعداد الأجرة أثناء التسليم.
 //   4) حد قيمة الطلب (T23 F M3): حساب جديد 50,000 وطلب مفتوح واحد، الحد العام 200,000، أول تسليم يتسابق
 //      مع طلبات كبيرة، والأدمن يخفض الحد أثناء الطلبات (مُدقَّق).
 // "نفس اللحظة": كل عامل ينتظر قفلاً استشارياً يمسكه المنسّق، ثم يُطلق الجميع معاً.
@@ -48,6 +49,7 @@ const ids = {
   orders: [],
   capProduct: null,
   settings: null,
+  cashDriver: null,
 };
 
 async function createUsers(role, count, offset) {
@@ -300,7 +302,7 @@ try {
   // 4) حد قيمة الطلب (T23 F M3) تحت التزامن. التوصيل 0 هنا (أرقام دقيقة)، والإعدادات تُعاد بالنهاية.
   const { rows: savedSettings } = await q(
     `select delivery_fee_iqd, max_active_orders, new_account_max_active_orders, max_order_iqd,
-            new_account_max_order_iqd, max_line_qty from public.app_settings where id = 1`,
+            new_account_max_order_iqd, max_line_qty, cash_handover_includes_delivery_fee from public.app_settings where id = 1`,
   );
   ids.settings = savedSettings[0];
   await q(
@@ -432,6 +434,165 @@ try {
     [adminId],
   );
   check(auditRows[0].n === 1, 'the cap change is audited');
+
+  // 5) تسليم الكاش (T40، SPEC-cash §3.3 و§9.2). أجرة 1000 (طلب = 10,000 + 1,000)، الأجرة للمحل.
+  await q(
+    `update public.app_settings set delivery_fee_iqd = 1000, cash_handover_includes_delivery_fee = true where id = 1`,
+  );
+  const [cashDriver] = await createUsers('driver', 1, 4001);
+  ids.cashDriver = cashDriver;
+  const staffers = await createUsers('staff', 4, 4101);
+  const cashCustomers = await createUsers('customer', 6, 4201);
+  const { rows: cashAddr } = await q(
+    `insert into public.addresses (customer_id, building_id, apartment)
+     select c, $2::int, '1' from unnest($1::uuid[]) c returning customer_id, id`,
+    [cashCustomers, building],
+  );
+  for (const r of cashAddr) capAddrOf.set(r.customer_id, r.id);
+  let nextCust = 0;
+  /** طلب جديد لزبون (بالتناوب) يصل لـ upTo بسائق الكاش، بالمسار الحقيقي. */
+  const cashOrder = async (upTo = 'delivered') => {
+    const id = await smallOrder(cashCustomers[nextCust++ % cashCustomers.length]);
+    const c = await session(adminId);
+    await c.query(`select public.set_order_status($1, 'preparing')`, [id]);
+    await c.query(`select public.set_order_status($1, 'ready')`, [id]);
+    await c.query(`select public.assign_driver($1, $2)`, [id, cashDriver]);
+    await c.query(`select public.set_order_status($1, 'out_for_delivery')`, [id]);
+    if (upTo === 'delivered')
+      await c.query(`select public.set_order_status($1, 'delivered')`, [id]);
+    await c.query('commit');
+    await c.end();
+    return id;
+  };
+  /** الرصيد كما تعرضه اللوحة (subtotal + الأجرة إن كانت للمحل). */
+  const balance = async () =>
+    (
+      await q(
+        `select coalesce(sum(o.subtotal_iqd + case when s.cash_handover_includes_delivery_fee
+                                                   then o.delivery_fee_iqd else 0 end), 0)::int as amt,
+                count(o.id)::int as n
+           from public.app_settings s
+           left join public.orders o on o.driver_id = $1 and o.status = 'delivered' and o.cash_handover_id is null
+          where s.id = 1`,
+        [cashDriver],
+      )
+    ).rows[0];
+  const recordSql = `select public.record_cash_handover($1, $2::bigint, $3::int, $2::bigint, null, $4::uuid)`;
+  const newKey = async () => (await q('select gen_random_uuid() as k')).rows[0].k;
+
+  // 5a) مسجِّلان لنفس السائق بنفس المبلغ ومفتاحين مختلفين، 10 مرات: تسليم واحد بالضبط كل مرة
+  let exactlyOne = true;
+  let othersRefused = true;
+  for (let round = 0; round < 10; round++) {
+    await cashOrder();
+    const b = await balance();
+    const keys = [await newKey(), await newKey()];
+    const t = tally(
+      await race(staffers.slice(0, 2), (c, i) =>
+        c.query(recordSql, [cashDriver, b.amt, b.n, keys[i]]),
+      ),
+    );
+    if (t.OK !== 1) exactlyOne = false;
+    if ((t.NO_CASH_OUTSTANDING ?? 0) + (t.CASH_BALANCE_CHANGED ?? 0) !== 1) othersRefused = false;
+  }
+  check(exactlyOne, 'cash 5a: two recorders racing (10 rounds): exactly one handover each round');
+  check(othersRefused, 'cash 5a: the other gets NO_CASH_OUTSTANDING or CASH_BALANCE_CHANGED');
+
+  // 5b) 5 توصيلات تكتمل بالتوازي مع 5 محاولات تسليم: لا طلب مفقود ولا مربوط مرتين، ولا deadlock
+  const onTheWay = [];
+  for (let i = 0; i < 5; i++) onTheWay.push(await cashOrder('out_for_delivery'));
+  const mixed = [...Array(5).fill(adminId), ...staffers.slice(0, 4), staffers[0]];
+  const t5b = tally(
+    await race(mixed, (c, i) =>
+      i < 5
+        ? c.query(`select public.set_order_status($1, 'delivered')`, [onTheWay[i]])
+        : c.query(
+            `select public.record_cash_handover(b.driver_id, b.outstanding_iqd, b.order_count, b.outstanding_iqd,
+                                                null, gen_random_uuid())
+               from public.cash_outstanding() b where b.driver_id = $1 and b.order_count > 0`,
+            [cashDriver],
+          ),
+    ),
+  );
+  console.log('deliveries racing handovers:', t5b);
+  check(!t5b.DEADLOCK, 'cash 5b: no deadlock');
+  check(
+    Object.keys(t5b).every((k) =>
+      ['OK', 'NO_CASH_OUTSTANDING', 'CASH_BALANCE_CHANGED'].includes(k),
+    ),
+    'cash 5b: only OK / NO_CASH_OUTSTANDING / CASH_BALANCE_CHANGED',
+  );
+  const rest = await balance();
+  if (rest.n > 0) {
+    const c = await session(staffers[0]);
+    await c.query(recordSql, [cashDriver, rest.amt, rest.n, await newKey()]);
+    await c.query('commit');
+    await c.end();
+  }
+  const { rows: inv } = await q(
+    `select (select count(*)::int from public.orders where driver_id = $1 and status = 'delivered') as delivered,
+            (select count(*)::int from public.orders
+              where driver_id = $1 and status = 'delivered' and cash_handover_id is null) as unlinked,
+            (select coalesce(sum(order_count), 0)::int from public.cash_handovers where driver_id = $1) as linked_count,
+            (select count(*)::int from public.cash_handovers h
+              where h.driver_id = $1
+                and (h.order_count <> (select count(*) from public.orders o where o.cash_handover_id = h.id)
+                     or h.goods_iqd <> (select coalesce(sum(o.subtotal_iqd), 0) from public.orders o
+                                         where o.cash_handover_id = h.id))) as bad`,
+    [cashDriver],
+  );
+  check(inv[0].delivered === 15, `cash 5b: all 15 deliveries completed (${inv[0].delivered})`);
+  check(
+    inv[0].unlinked === 0 && inv[0].linked_count === inv[0].delivered && inv[0].bad === 0,
+    'cash 5b: invariant holds: every delivered order in exactly one handover, counts and goods match',
+  );
+
+  // 5c) نفس المفتاح بالتوازي (ضغطتان/إعادة بعد انقطاع): صف تسليم واحد، والكل ينجح (replayed)
+  await cashOrder();
+  const b5c = await balance();
+  const sameKey = await newKey();
+  const t5c = tally(
+    await race(Array(4).fill(staffers[1]), (c) =>
+      c.query(recordSql, [cashDriver, b5c.amt, b5c.n, sameKey]),
+    ),
+  );
+  const { rows: keyRows } = await q(
+    `select count(*)::int as n from public.cash_handovers where idempotency_key = $1`,
+    [sameKey],
+  );
+  check(
+    t5c.OK === 4 && keyRows[0].n === 1,
+    'cash 5c: same key x4 in parallel: all OK, one handover row',
+  );
+
+  // 5d) الأدمن يغيّر إعداد الأجرة أثناء التسليم: نجاح بالإعداد الذي حُسب به، أو CASH_BALANCE_CHANGED
+  await cashOrder();
+  const b5d = await balance();
+  const key5d = await newKey();
+  const t5d = await race([staffers[2], adminId], (c, i) =>
+    i === 0
+      ? c.query(recordSql, [cashDriver, b5d.amt, b5d.n, key5d])
+      : c.query(
+          `select public.update_app_settings('{"cash_handover_includes_delivery_fee": false}'::jsonb)`,
+        ),
+  );
+  console.log('handover vs fee-setting change:', t5d);
+  const { rows: h5d } = await q(
+    `select includes_delivery_fee, expected_iqd, goods_iqd, fees_iqd from public.cash_handovers where idempotency_key = $1`,
+    [key5d],
+  );
+  check(
+    t5d[1] === 'OK' && (t5d[0] === 'OK' || t5d[0] === 'CASH_BALANCE_CHANGED'),
+    'cash 5d: the handover succeeds or gets CASH_BALANCE_CHANGED (no other error)',
+  );
+  check(
+    t5d[0] !== 'OK' ||
+      (h5d.length === 1 &&
+        h5d[0].includes_delivery_fee === true &&
+        Number(h5d[0].expected_iqd) === b5d.amt),
+    'cash 5d: a successful handover stores the setting it was computed with',
+  );
+  await q(`update public.app_settings set cash_handover_includes_delivery_fee = true where id = 1`);
 } catch (err) {
   console.error(`error: ${err.message}`);
   failures++;
@@ -459,6 +620,22 @@ try {
     await q(`delete from public.inventory_movements where product_id = $1`, [ids.capProduct]);
     await q(`delete from public.orders where id = any ($1::uuid[])`, [capIds]);
     await q(`delete from public.products where id = $1`, [ids.capProduct]);
+    // 5) تسليمات الكاش (بعد حذف طلباتها: الربط restrict) وإشعاراتها وتدقيقها
+    if (ids.cashDriver) {
+      const { rows: hs } = await q(
+        `delete from public.cash_handovers where driver_id = $1 returning id::text as id`,
+        [ids.cashDriver],
+      );
+      const hIds = hs.map((r) => r.id);
+      await q(
+        `delete from public.notification_outbox where data ->> 'handover_id' = any ($1::text[])`,
+        [hIds],
+      );
+      await q(
+        `delete from public.admin_audit where action = 'cash_handover' and target_id = any ($1::uuid[])`,
+        [hIds],
+      );
+    }
     // 4e يسلّم طلبات فتُحسب بـ daily_stats؛ حذفها لا يمسح الإحصاء، فيُعاد بناء أيام التشغيل من المصدر
     // (وإلا يفشل فحص seed:demo بعدها: يوم بإحصاء بلا طلبات).
     await q(
@@ -469,7 +646,8 @@ try {
     const s = ids.settings;
     await q(
       `update public.app_settings set delivery_fee_iqd = $1, max_active_orders = $2, new_account_max_active_orders = $3,
-              max_order_iqd = $4, new_account_max_order_iqd = $5, max_line_qty = $6 where id = 1`,
+              max_order_iqd = $4, new_account_max_order_iqd = $5, max_line_qty = $6,
+              cash_handover_includes_delivery_fee = $7 where id = 1`,
       [
         s.delivery_fee_iqd,
         s.max_active_orders,
@@ -477,6 +655,7 @@ try {
         s.max_order_iqd,
         s.new_account_max_order_iqd,
         s.max_line_qty,
+        s.cash_handover_includes_delivery_fee,
       ],
     );
   }

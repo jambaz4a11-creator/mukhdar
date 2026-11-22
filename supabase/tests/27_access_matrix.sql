@@ -25,6 +25,10 @@ create function tests.unexpected(p_scope text, p_expect text) returns text langu
       ('staff', $q$ select public.dashboard_today() $q$),
       ('staff', $q$ select public.ratings_summary() $q$),
       ('staff', $q$ select * from public.ratings_list() $q$),
+      -- T40: تسليم الكاش (للموظف والأدمن)؛ تقرير الكاش للأدمن فقط
+      ('staff', $q$ select * from public.cash_outstanding() $q$),
+      ('staff', $q$ select * from public.cash_handover_history() $q$),
+      ('admin', $q$ select public.report_cash(current_date - 7, current_date) $q$),
       ('admin', $q$ select public.report_summary(current_date - 7, current_date) $q$),
       ('admin', $q$ select * from public.report_daily(current_date - 7, current_date) $q$),
       ('admin', $q$ select * from public.report_orders_placed(current_date - 7, current_date) $q$),
@@ -82,7 +86,7 @@ select set_eq(
              or p.proname::text like 'dashboard\_%' or p.proname::text like 'stuck\_%') $$,
   $$ values ('report_summary'), ('report_daily'), ('report_orders_placed'), ('report_top_products'),
             ('report_drivers'), ('report_waste'), ('ratings_summary'), ('ratings_list'),
-            ('dashboard_today'), ('stuck_notifications_count') $$,
+            ('dashboard_today'), ('stuck_notifications_count'), ('report_cash') $$,
   'the matrix covers every report_* / ratings_* / dashboard_* / stuck_* RPC (a new one must be added to it)');
 select is(
   (select count(*)::int from pg_proc p

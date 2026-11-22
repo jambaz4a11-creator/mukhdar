@@ -4,7 +4,7 @@
 -- فلم تكشفه. (migration 20261203000001، قاعدة CLAUDE.md "اختبارات الكتابة بالدور الحقيقي".)
 -- التجهيز فقط (مستخدمون، منتج، عمارة) بدور postgres؛ كل كتابة يقوم بها التطبيق أو اللوحة أو السائق بدوره.
 -- بالنهاية فحوص آلية للكتالوج تمنع رجوع نفس الصنف من الأخطاء بأي جدول مستقبلاً.
-select plan(44);
+select plan(46);
 
 -- ================================================================ التجهيز (postgres)
 select tests.remember('cust',  tests.new_user('customer'));
@@ -116,6 +116,20 @@ select lives_ok(format($$ update public.subsections set is_active = false where 
   'admin: hides a unit (audit trigger)');
 select lives_ok(format($$ select public.add_buildings(%s, array['8', '9']) $$, current_setting('t.sub')),
   'admin: adds buildings');
+
+-- ================================================================ تسليم الكاش (T40): موظف aal2 يسجّل، أدمن aal2 يصحّح
+select tests.as_postgres();
+select tests.order_in('delivered', null, tests.id('drv'));
+select tests.as_user(tests.id('staff'));
+select lives_ok(format($$ select set_config('t.h32', (public.record_cash_handover(c.driver_id, c.outstanding_iqd, c.order_count,
+                                  c.outstanding_iqd - 250, 'ناقص ربع', gen_random_uuid()) ->> 'handover_id'), true)
+                            from public.cash_outstanding() c where c.driver_id = %L $$, tests.id('drv')),
+  'staff: records a driver cash handover with a shortage (audit + notification inside)');
+select tests.as_user(tests.id('admin'));
+select lives_ok($$ select public.correct_cash_handover(current_setting('t.h32')::uuid,
+                     (select received_iqd + 250 from public.cash_handover_history() where id = current_setting('t.h32')::uuid),
+                     'عدّيتها غلط') $$,
+  'admin: corrects a cash handover (audit + notification inside)');
 
 -- ================================================================ تسجيل سائق (T27): الجهاز anon، Edge Functions service_role، الأدمن aal2
 select tests.as_postgres();

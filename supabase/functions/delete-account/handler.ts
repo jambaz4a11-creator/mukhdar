@@ -16,6 +16,8 @@ export interface DeleteAccountDeps {
 
 const STATUS_BY_CODE: Record<string, number> = {
   ACTIVE_ORDER: 409,
+  // T40 K9: سائق بذمته كاش لم يُسلَّم للمحل
+  CASH_OUTSTANDING: 409,
   ADMIN_ACCOUNT: 403,
   USER_NOT_FOUND: 404,
 };

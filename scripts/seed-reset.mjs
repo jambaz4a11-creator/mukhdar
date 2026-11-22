@@ -60,6 +60,16 @@ const RESET_SQL = [
     where user_id in (select id from demo_users) or data ->> 'order_id' in (select id::text from demo_orders)`,
   // البنود والتكاليف والتاريخ والتقييمات تُحذف تتابعياً مع الطلب
   `delete from public.orders where id in (select id from demo_orders)`,
+  // T40: تسليمات كاش سواق العرض التي لم يبقَ لها طلب (الربط restrict: تسليم له طلب حقيقي يبقى)، وإشعاراتها
+  `delete from public.notification_outbox
+    where data ->> 'type' = 'cash_handover'
+      and data ->> 'handover_id' in (
+        select h.id::text from public.cash_handovers h
+         where h.driver_id in (select id from demo_users)
+           and not exists (select 1 from public.orders o where o.cash_handover_id = h.id))`,
+  `delete from public.cash_handovers h
+    where h.driver_id in (select id from demo_users)
+      and not exists (select 1 from public.orders o where o.cash_handover_id = h.id)`,
   // الملفات الشخصية والعناوين ورموز الإشعارات والهويات تُحذف تتابعياً مع المستخدم
   `delete from auth.users where id in (select id from demo_users)`,
 ];
