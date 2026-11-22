@@ -101,6 +101,14 @@ export const ERROR_MESSAGES = {
   REQUEST_EXPIRED: 'انتهت مدة الموافقة، سجّل من جديد',
   REQUEST_ALREADY_DECIDED: 'هذا الطلب انحسم قبل، حدّث الصفحة',
   // T23 F M2 + R1 H1: ترقية زبون لسائق، أو زبون/سائق لموظف أو أدمن، تتطلب رمزاً مؤقتاً أولاً
+  // T40: تسليم الكاش (SPEC-cash §3). CASH_BALANCE_CHANGED: التفصيل (detail) = {"expected_iqd", "order_count"} الحاليان؛
+  // CASH_OUTSTANDING (حذف حساب السائق): التفصيل = المبلغ بالدينار
+  NO_CASH_OUTSTANDING: 'انسجل الاستلام قبل شوية، ما بقى كاش عند هذا السائق',
+  CASH_BALANCE_CHANGED: 'تغيّر المبلغ (وصل توصيل جديد أو تغيّر إعداد الأجرة). عدّ من جديد',
+  CASH_AMOUNT_INVALID: 'المبلغ المستلم غير صحيح (من مضاعفات 250)',
+  NOTE_REQUIRED: 'اكتب ملاحظة تشرح الفرق',
+  HANDOVER_NOT_FOUND: 'التسليم غير موجود',
+  CASH_OUTSTANDING: 'عندك كاش ما سلّمته للمحل. سلّمه أولاً',
   PIN_RESET_REQUIRED:
     'لترقية هذا الحساب: أعد ضبط رمزه أولاً (رمز مؤقت يُسلَّم لصاحب الرقم بالمكالمة)، ثم غيّر الدور. يغيّر صاحبه الرمز عند أول دخول (ولموظف أو أدمن يسجّل بعدها تطبيق المصادقة)',
 } as const satisfies Record<string, string>;

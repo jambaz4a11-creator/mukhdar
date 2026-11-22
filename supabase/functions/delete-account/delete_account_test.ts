@@ -5,6 +5,7 @@ import { createDeleteAccountHandler, type DeleteAccountDeps } from './handler.ts
 const USERS: Record<string, string> = {
   'jwt-customer': 'u-customer',
   'jwt-active': 'u-active',
+  'jwt-cash': 'u-cash',
   'jwt-admin': 'u-admin',
   'jwt-broken': 'u-broken',
 };
@@ -17,6 +18,7 @@ function setup(overrides: Partial<DeleteAccountDeps> = {}) {
       calls.push(`begin:${userId}`);
       if (userId === 'u-active') return Promise.reject(new Error('ACTIVE_ORDER'));
       if (userId === 'u-admin') return Promise.reject(new Error('ADMIN_ACCOUNT'));
+      if (userId === 'u-cash') return Promise.reject(new Error('CASH_OUTSTANDING'));
       return Promise.resolve(true);
     },
     deleteUser(userId) {
@@ -68,6 +70,17 @@ Deno.test('delete-account: active order → 409 ACTIVE_ORDER, deleteUser not cal
   await expectResponse(await handler(post('Bearer jwt-active')), 409, { error: 'ACTIVE_ORDER' });
   assert.deepEqual(calls, ['begin:u-active']);
 });
+
+Deno.test(
+  'delete-account: driver holding cash → 409 CASH_OUTSTANDING, deleteUser not called (T40)',
+  async () => {
+    const { handler, calls } = setup();
+    await expectResponse(await handler(post('Bearer jwt-cash')), 409, {
+      error: 'CASH_OUTSTANDING',
+    });
+    assert.deepEqual(calls, ['begin:u-cash']);
+  },
+);
 
 Deno.test('delete-account: admin → 403 ADMIN_ACCOUNT, deleteUser not called', async () => {
   const { handler, calls } = setup();

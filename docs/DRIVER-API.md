@@ -14,6 +14,33 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 > Changes to this contract (function signatures, error codes, policies, push payloads) land as a
 > **new** migration, with `apps/driver` and this document updated in the same PR.
 
+## Cash handover (T40, migration `20261212000001`, SPEC-cash §3 and §5)
+
+The shop records, from the panel, that a driver handed over **all** the cash collected since the last
+handover. Every delivered order stays "in the driver's hands" (`orders.cash_handover_id is null`) until a
+handover links it. Screens: T42 (SPEC-cash §5). Functions for an **active driver** (`NOT_ALLOWED` for a
+temporary PIN, a deactivated account, or another role):
+
+- `supabase.rpc('driver_cash_summary')` → always **one row**: `outstanding_iqd` (bigint), `order_count`,
+  `oldest_delivered_at`, `last_handover_at`, `last_received_iqd`, `last_difference_iqd` (negative =
+  shortage, positive = overage), `includes_delivery_fee`. Show "الكاش اللي بيدك" from `outstanding_iqd`
+  (never sum it in the app). It resets when the shop records a handover, not at midnight.
+- `includes_delivery_fee` is the admin setting `app_settings.cash_handover_includes_delivery_fee`
+  (default `true`: the driver hands over the full total incl. delivery fee). With `false` the fee stays
+  with the driver and `outstanding_iqd` = goods only (Σ `subtotal_iqd`); label it "المطلوب تسليمه للمحل".
+- `supabase.rpc('my_cash_handovers', { p_limit, p_before_at, p_before_id })` → own handovers, newest
+  first (keyset on `recorded_at, id`; `p_limit` 1..100, default 20): `id, recorded_at, order_count,
+  expected_iqd, received_iqd, difference_iqd, includes_delivery_fee, note, recorded_by_name` (first name
+  only), `corrected_at`.
+- Orders still in hand (display only): `from('orders').select(...).eq('driver_id', uid)
+  .eq('status', 'delivered').is('cash_handover_id', null)` (existing RLS).
+- Push after each handover and each correction: title `تسليم الكاش`, body `استلمنا منك 4,000 د.ع`
+  (+ ` · نقص 250 د.ع` / ` · زيادة 500 د.ع`) or `تعدّل تسليم الكاش: …`; `data = { "type": "cash_handover",
+  "handover_id": "uuid" }` → open the "today" tab and refresh.
+- Account deletion while holding cash: `begin_account_deletion` raises `CASH_OUTSTANDING` (`detail` =
+  amount); `delete-account` maps it to `409 { "error": "CASH_OUTSTANDING" }` (needs the function
+  redeployed, with T42). Message: "عندك كاش ما سلّمته للمحل (X د.ع). سلّمه أولاً" (read X from
+  `driver_cash_summary`).
 ## Self-registration (T27, migration `20261208000001`)
 
 A new driver registers from the app with name + phone; **no Auth account exists until an admin
@@ -455,8 +482,8 @@ supabase.from('orders').select('id, order_number, total_iqd, delivered_at, addre
   .eq('driver_id', uid).eq('status', 'delivered')
   .order('delivered_at', { ascending: false }).range(page * 20, page * 20 + 19);
 ```
-"Today's summary" (count and cash collected) is computed in the app from delivered orders whose
-`delivered_at` falls on today in `Asia/Baghdad`.
+"Today's summary" count is computed in the app from delivered orders whose `delivered_at` falls on today in
+`Asia/Baghdad`. **The cash in hand comes from `driver_cash_summary()`** (since T40; see "Cash handover").
 
 ---
 
@@ -501,6 +528,7 @@ minute). Nothing is sent to an account whose `must_change_pin` is true. Notifica
 | staff/admin marks `ready` an order already assigned to you | that driver | `الطلب #<number> جاهز للاستلام` | `{ "order_id": "uuid", "type": "ready" }` → open the order |
 | staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>`; if the order is already on the way (moved from another driver): `نُقل لك طلب بالطريق #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order (check its status) |
 | staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
+| the shop records (or corrects) your cash handover (T40) | that driver | `تسليم الكاش` (body `استلمنا منك X د.ع` [+ ` · نقص/زيادة Y د.ع`], or `تعدّل تسليم الكاش: …`) | `{ "handover_id": "uuid", "type": "cash_handover" }` → open the today tab and refresh |
 | an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = `بلوك X - بناية Y` only; since R3 M1, 2026-11-22, the free-text reason is never sent in the push) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
 
 Delivery is chosen **per token** by its provider (`push_tokens.provider`, set by `register_push_token`):

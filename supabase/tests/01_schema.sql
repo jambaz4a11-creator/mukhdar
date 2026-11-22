@@ -5,7 +5,7 @@ select tables_are('public', array[
   'cities', 'vendors', 'profiles', 'app_settings', 'sectors', 'subsections', 'buildings', 'addresses',
   'categories', 'products', 'product_costs', 'stock', 'inventory_movements', 'orders', 'order_items',
   'order_item_costs', 'order_status_history', 'ratings', 'push_tokens', 'notification_outbox', 'daily_stats',
-  'pin_resets', 'user_creations', 'admin_audit', 'admin_function_hits', 'driver_requests'
+  'pin_resets', 'user_creations', 'admin_audit', 'admin_function_hits', 'driver_requests', 'cash_handovers'
 ], 'public has exactly the expected tables');
 
 select is(
@@ -35,14 +35,15 @@ select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')),
   array['accept_order', 'add_buildings', 'address_usage', 'adjust_stock', 'adjust_stock_bulk', 'admin_cancel_customer_orders', 'admin_reset_mfa',
-        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'dashboard_today', 'decide_driver_request', 'delete_category', 'dismiss_failed_notifications',
-        'driver_request_status', 'failed_notifications_count', 'list_driver_requests',
-        'list_drivers', 'pending_driver_requests_count', 'place_order', 'rate_order', 'ratings_list', 'ratings_summary', 'recompute_daily_stats',
-        'register_push_token', 'register_web_push',
-        'reorder_categories', 'reorder_products', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
+        'admin_save_category', 'admin_save_product', 'assign_driver', 'available_orders', 'cash_handover_history', 'cash_outstanding',
+        'cash_outstanding_orders', 'correct_cash_handover', 'dashboard_today', 'decide_driver_request', 'delete_category', 'dismiss_failed_notifications',
+        'driver_cash_summary', 'driver_request_status', 'failed_notifications_count', 'list_driver_requests',
+        'list_drivers', 'my_cash_handovers', 'pending_driver_requests_count', 'place_order', 'rate_order', 'ratings_list', 'ratings_summary', 'recompute_daily_stats',
+        'record_cash_handover', 'register_push_token', 'register_web_push',
+        'reorder_categories', 'reorder_products', 'report_cash', 'report_daily', 'report_drivers', 'report_orders_placed', 'report_summary',
         'report_top_products', 'report_waste', 'set_order_status', 'set_product_price', 'set_user_role',
         'stuck_notifications_count', 'touch_panel_session', 'update_app_settings'],
-  'authenticated can execute exactly the 41 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session; T27: driver requests; T36: register_web_push)');
+  'authenticated can execute exactly the 49 RPCs among SECURITY DEFINER functions (T23: admin_reset_mfa, admin_cancel_customer_orders, touch_panel_session; T27: driver requests; T36: register_web_push; T40: 8 cash handover RPCs)');
 
 select ok(not has_function_privilege('authenticated', 'public._notify(text, uuid, text, text, jsonb)', 'execute'),
   'internal _notify is not callable by authenticated');

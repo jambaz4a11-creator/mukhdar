@@ -1,5 +1,5 @@
 -- 12: حذف الحساب (T08): begin/abort_account_deletion، وما يبقى بعد حذف المستخدم من auth.users
-select plan(46);
+select plan(48);
 
 select tests.remember('cust', tests.new_user('customer'));
 select tests.remember('busy', tests.new_user('customer'));
@@ -87,6 +87,17 @@ select tests.as_service();
 -- T23 F L7: حساب الموظف مثل الأدمن: يُعطَّل من اللوحة، لا يُحذف ذاتياً
 select throws_ok(format($$ select public.begin_account_deletion(%L) $$, tests.id('stf')), 'ADMIN_ACCOUNT',
   'staff account cannot delete itself (T23 F L7)');
+-- T40 K9: سائق بذمته كاش لم يُسلَّم لا يُحذف؛ بعد التسليم (موظف aal2، بدوره الحقيقي) يُحذف عادياً
+select throws_ok(format($$ select public.begin_account_deletion(%L) $$, tests.id('drv')), 'CASH_OUTSTANDING',
+  'driver still holding cash of a delivered order → CASH_OUTSTANDING (T40 K9)');
+select tests.as_postgres();
+select tests.remember('t12_staff', tests.new_user('staff'));
+select tests.as_user(tests.id('t12_staff'));
+select lives_ok(format($$ select public.record_cash_handover(c.driver_id, c.outstanding_iqd, c.order_count, c.outstanding_iqd,
+                                                             null, gen_random_uuid())
+                            from public.cash_outstanding() c where c.driver_id = %L $$, tests.id('drv')),
+  'staff records the driver''s cash handover');
+select tests.as_service();
 select is(public.begin_account_deletion(tests.id('drv')), true, 'driver whose orders are finished can be deleted');
 
 -- ---------------------------------------------------------------- بعد deleteUser (= حذف auth.users)

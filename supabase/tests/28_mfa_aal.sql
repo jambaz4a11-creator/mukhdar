@@ -64,7 +64,14 @@ create function tests.gate_calls() returns table (grp text, sql text) language s
     ('admin', format($q$ select public.admin_cancel_customer_orders(%L) $q$, gen_random_uuid())),
     ('admin', $q$ select * from public.list_driver_requests() $q$),
     ('admin', $q$ select public.pending_driver_requests_count() $q$),
-    ('admin', format($q$ select public.decide_driver_request(%L, false) $q$, gen_random_uuid()))
+    ('admin', format($q$ select public.decide_driver_request(%L, false) $q$, gen_random_uuid())),
+    -- T40: تسليم الكاش (خطأ عمل بعد بوابة الدور مقبول: NO_CASH_OUTSTANDING، HANDOVER_NOT_FOUND)
+    ('staff', $q$ select * from public.cash_outstanding() $q$),
+    ('staff', format($q$ select * from public.cash_outstanding_orders(%L) $q$, tests.id('drv'))),
+    ('staff', format($q$ select public.record_cash_handover(%L, 0, 1, 0, null, gen_random_uuid()) $q$, tests.id('drv'))),
+    ('staff', $q$ select * from public.cash_handover_history() $q$),
+    ('admin', format($q$ select public.correct_cash_handover(%L, 1000, 'aal') $q$, gen_random_uuid())),
+    ('admin', $q$ select public.report_cash(current_date - 7, current_date) $q$)
   ) t(grp, sql)
 $$;
 
@@ -211,7 +218,9 @@ select set_eq(
         and has_function_privilege('authenticated', p.oid, 'execute')
         -- register_web_push (T36): مثل register_push_token، بوابة MFA خاصة بالأدمن/الموظف (37_webpush_db)
         and p.proname not in ('place_order', 'rate_order', 'register_push_token', 'register_web_push', 'available_orders',
-                            'accept_order', 'touch_panel_session', 'driver_request_status') $$,
+                            'accept_order', 'touch_panel_session', 'driver_request_status',
+                            -- T40: دالتا السائق (سائق فعّال، بلا aal2؛ 39_cash_handover)
+                            'driver_cash_summary', 'my_cash_handovers') $$,
   $$ select distinct (regexp_match(sql, 'public\.(\w+)\('))[1] from tests.gate_calls() $$,
   'the aal matrix covers every admin/staff SECURITY DEFINER RPC (a new one must be added)');
 
