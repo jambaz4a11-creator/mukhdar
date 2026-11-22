@@ -1,6 +1,6 @@
 # SPEC-cash: تسليم الكاش من السائق للمتجر (تسليم الكاش)
 
-> **الحالة:** مكتوبة من قرارات المالك (2026-11-22). المهام T40–T42 وR4 (§10). الأسئلة المفتوحة بـ §11 لها افتراضات مطبّقة، ولا تمنع البدء. **تحتاج تأكيد المالك قبل T40:** Q1 (هل أجرة التوصيل تدخل بالمبلغ المطلوب من السائق).
+> **الحالة: معتمدة (قرار المالك 2026-11-22).** Q1 محسومة كإعداد للأدمن (§3.1 K19، §11)؛ Q2–Q5 وافتراضات §12 معتمدة كما كُتبت. المهام T40–T42 وR4 (§10).
 > **مرتبطة بـ:** SPEC-driver §2.9 (سجل اليوم)، SPEC-admin §2.11 (صفحة جديدة) و§2.5 (التقارير)، SPEC-backend §4 و§5، DRIVER-API (تُحدَّث بـ T40).
 > **مصدر الحقيقة عند التنفيذ:** الـ migration. هذا الملف يشرح **ماذا** و**لماذا**.
 
@@ -46,13 +46,15 @@
 | المصطلح | التعريف (يُحسب بقاعدة البيانات فقط) |
 |---|---|
 | **طلب بذمة السائق** | `orders.status = 'delivered'` و`driver_id = <السائق>` و`cash_handover_id is null` |
-| **الرصيد** (`outstanding_iqd`) | Σ `total_iqd` للطلبات بذمته (افتراض Q1: **يشمل أجرة التوصيل**، لأنه المبلغ الذي استلمه السائق نقداً فعلاً ويعرضه التطبيق اليوم) |
-| **التسليم** | صف بـ `cash_handovers` يربط **كل** الطلبات بذمة السائق لحظة التسجيل. `expected_iqd` = مجموعها، `received_iqd` = ما كتبه المسجِّل |
+| **إعداد الأجرة** (`app_settings.cash_handover_includes_delivery_fee`) | قرار المالك Q1: إعداد للأدمن (K19). `true` (الافتراضي) = "أجرة التوصيل للمحل": السائق يسلّم **المجموع كاملاً** (`total_iqd`). `false` = "أجرة التوصيل تبقى عند السائق": يسلّم **مبلغ البضاعة فقط** (`subtotal_iqd`) |
+| **مبلغ الطلب المطلوب** | `subtotal_iqd + (delivery_fee_iqd إن كان الإعداد true)`؛ للطلبات بذمته يُحسب **بالإعداد الحالي** |
+| **الرصيد** (`outstanding_iqd`) | Σ مبلغ الطلب المطلوب للطلبات بذمته، بالإعداد الحالي |
+| **التسليم** | صف بـ `cash_handovers` يربط **كل** الطلبات بذمة السائق لحظة التسجيل. يحفظ `goods_iqd` (Σ `subtotal_iqd`) و`fees_iqd` (Σ `delivery_fee_iqd`) و`includes_delivery_fee` (قيمة الإعداد **لحظة التسجيل**) و`expected_iqd` = `goods_iqd + (fees_iqd إن كان true)`، و`received_iqd` = ما كتبه المسجِّل. تغيير الإعداد لاحقاً **لا يعيد حساب** أي تسليم مسجّل؛ يؤثر فقط على الرصيد الحالي والتسليمات القادمة |
 | **الفرق** (`difference_iqd`) | `received_iqd − expected_iqd`. سالب = **نقص**، موجب = **زيادة**، صفر = مطابق |
 | **الكاش عند السواق الآن** | Σ الرصيد لكل السواق |
 | **اليوم/المدة بالتقارير** | بتوقيت بغداد حسب `recorded_at` للتسليم (نفس نمط T20) |
 
-**الثابت (invariant) الذي تحرسه الاختبارات:** لكل سائق، Σ `total_iqd` لكل طلباته المسلّمة = Σ `expected_iqd` لتسليماته + رصيده الحالي. كل طلب مسلّم ينتمي لتسليم واحد بالضبط أو للرصيد.
+**الثابت (invariant) الذي تحرسه الاختبارات:** كل طلب مسلّم ينتمي لتسليم واحد بالضبط أو للرصيد. لكل تسليم: `goods_iqd` = Σ `subtotal_iqd` لطلباته، `fees_iqd` = Σ `delivery_fee_iqd`، `order_count` = عددها، و`expected_iqd = goods_iqd + (fees_iqd إن كان includes_delivery_fee)` (قيد CHECK). فلكل سائق: Σ `subtotal_iqd` لكل طلباته المسلّمة = Σ `goods_iqd` لتسليماته + Σ `subtotal_iqd` للطلبات بذمته (ومثله للأجرة)، بغض النظر عن تغييرات الإعداد.
 
 ---
 
@@ -62,17 +64,17 @@
 
 | # | التغيير | التفاصيل |
 |---|---|---|
-| K1 | جدول `public.cash_handovers` | `id uuid pk default gen_random_uuid()`؛ `driver_id uuid null → profiles on delete set null` (حذف حساب سائق برصيد ممنوع، K9؛ بعد الحذف يُعرض "سائق محذوف")؛ `kind text not null default 'handover'` (`handover` \| `opening`، K8)؛ `order_count int not null check (> 0)`؛ `expected_iqd bigint not null check (> 0)`؛ `fees_iqd bigint not null check (>= 0)` (Σ `delivery_fee_iqd` للطلبات، للتقارير وQ1)؛ `received_iqd bigint not null check (>= 0 and % 250 = 0)`؛ `difference_iqd bigint generated always as (received_iqd - expected_iqd) stored`؛ `note text null` (≤ 300 بعد `clean_user_text`)؛ قيد `difference_iqd = 0 or note is not null` (الملاحظة إلزامية مع أي فرق)؛ `first_delivered_at`/`last_delivered_at timestamptz not null` (المدة المغطاة)؛ `recorded_by uuid null → profiles on delete set null`؛ `recorded_by_role text null` (`admin`/`staff`؛ null لـ `opening`)؛ `recorded_at timestamptz not null default now()`؛ `idempotency_key uuid not null unique`؛ التصحيح: `original_received_iqd bigint null`، `corrected_at`، `corrected_by → profiles on delete set null`. فهارس: `(driver_id, recorded_at desc)`، `(recorded_at)` |
+| K1 | جدول `public.cash_handovers` | `id uuid pk default gen_random_uuid()`؛ `driver_id uuid null → profiles on delete set null` (حذف حساب سائق برصيد ممنوع، K9؛ بعد الحذف يُعرض "سائق محذوف")؛ `kind text not null default 'handover'` (`handover` \| `opening`، K8)؛ `order_count int not null check (> 0)`؛ `goods_iqd bigint not null check (>= 0)` (Σ `subtotal_iqd`)؛ `fees_iqd bigint not null check (>= 0)` (Σ `delivery_fee_iqd`)؛ `includes_delivery_fee boolean not null` (الإعداد K19 لحظة التسجيل)؛ `expected_iqd bigint not null check (>= 0)` مع قيد `expected_iqd = goods_iqd + case when includes_delivery_fee then fees_iqd else 0 end`؛ `received_iqd bigint not null check (>= 0 and % 250 = 0)`؛ `difference_iqd bigint generated always as (received_iqd - expected_iqd) stored`؛ `note text null` (≤ 300 بعد `clean_user_text`)؛ قيد `difference_iqd = 0 or note is not null` (الملاحظة إلزامية مع أي فرق)؛ `first_delivered_at`/`last_delivered_at timestamptz not null` (المدة المغطاة)؛ `recorded_by uuid null → profiles on delete set null`؛ `recorded_by_role text null` (`admin`/`staff`؛ null لـ `opening`)؛ `recorded_at timestamptz not null default now()`؛ `idempotency_key uuid not null unique`؛ التصحيح: `original_received_iqd bigint null`، `corrected_at`، `corrected_by → profiles on delete set null`. فهارس: `(driver_id, recorded_at desc)`، `(recorded_at)` |
 | K2 | عمود `orders.cash_handover_id` | `uuid null → cash_handovers(id) on delete restrict`؛ قيد `orders_cash_handover_delivered_check`: `cash_handover_id is null or status = 'delivered'`؛ فهرس جزئي `orders (driver_id) where status = 'delivered' and cash_handover_id is null` (الرصيد بلا مسح للجدول). لا صلاحية update عليه لأي دور (كتابة الطلبات عبر الدوال فقط، كما هي) |
 | K3 | RLS والصلاحيات | `cash_handovers`: RLS مفعّل؛ `revoke all` من `anon`/`authenticated`؛ **لا قراءة مباشرة لأي دور** (حتى الأدمن): كل القراءة عبر الدوال K4–K7 (تطبّق قاعدة الموظف 7 أيام والسائق صفوفه فقط بمكان واحد). `service_role`: لا شيء |
-| K4 | `public.cash_outstanding() → setof (driver_id, full_name, phone, is_active, outstanding_iqd, order_count, oldest_delivered_at, last_handover_at, last_received_iqd, last_difference_iqd)` | أدمن أو موظف aal2 (وإلا `NOT_ALLOWED`). كل حساب دوره `driver`، **وأي** حساب آخر له رصيد > 0 (سائق خُفّض دوره أو عُطّل ما زال بذمته كاش). مرتب بالرصيد تنازلياً ثم الاسم. حساب برصيد 0 وغير فعّال لا يظهر |
+| K4 | `public.cash_outstanding() → setof (driver_id, full_name, phone, is_active, outstanding_iqd, order_count, oldest_delivered_at, last_handover_at, last_received_iqd, last_difference_iqd, includes_delivery_fee)` (الأخير = الإعداد الحالي، لتعرض النافذة "شامل أجرة التوصيل" أو "بدون أجرة التوصيل") | أدمن أو موظف aal2 (وإلا `NOT_ALLOWED`). كل حساب دوره `driver`، **وأي** حساب آخر له رصيد > 0 (سائق خُفّض دوره أو عُطّل ما زال بذمته كاش). مرتب بالرصيد تنازلياً ثم الاسم. حساب برصيد 0 وغير فعّال لا يظهر |
 | K5 | `public.cash_outstanding_orders(p_driver_id uuid) → setof (order_id, order_number, delivered_at, total_iqd, delivery_fee_iqd, subsection, building)` | أدمن أو موظف aal2. طلبات السائق بذمته، الأحدث أولاً، حد 500 (أكثر = خطأ تشغيلي يُرى بالعدد بـ K4). البلوك والبناية فقط من لقطة العنوان (لا اسم ولا هاتف زبون، فلا تتجاوز قاعدة الموظف 7 أيام بالطلبات) |
 | K6 | `public.record_cash_handover(p_driver_id uuid, p_expected_iqd bigint, p_order_count int, p_received_iqd bigint, p_note text, p_idempotency_key uuid) → jsonb` | §3.2 |
 | K7 | `public.cash_handover_history(p_driver_id uuid default null, p_from date default null, p_to date default null, p_limit int default 50, p_before_at timestamptz default null, p_before_id uuid default null) → setof (...)` | أدمن aal2: كل شيء؛ موظف aal2: **آخر 7 أيام بتوقيت بغداد فقط** (نفس قاعدة الطلبات والتقييمات، T23 M6/F M1)؛ غيرهم `NOT_ALLOWED`. keyset على (`recorded_at`, `id`) تنازلياً، `p_limit` 1..200. الأعمدة: كل أعمدة K1 + `driver_name` + `recorded_by_name` + `corrected_by_name` (المحذوف ← null، الواجهة تعرض "محذوف"). `kind = 'opening'` لا يُرجَع |
 | K8 | الرصيد الافتتاحي (بنفس الـ migration) | لكل سائق له طلبات مسلّمة **قبل** الـ migration: صف `kind = 'opening'`، `received = expected`، `recorded_by = null`، مفتاح عشوائي، والطلبات تُربط به. بلا إشعار ولا تدقيق. **السبب:** بلا ذلك يبدأ كل سائق برصيد كل تاريخه. على dev = بيانات تجريبية؛ الإنتاج يبدأ فارغاً فلا أثر. التقارير وسجل السائق تستثني `opening` |
 | K9 | `begin_account_deletion` | سائق (أو أي حساب) له رصيد > 0 ← `CASH_OUTSTANDING` (409، `detail` = المبلغ)، بنفس قفل الحساب الموجود. تطبيق السائق: "عندك كاش ما سلّمته للمحل (X د.ع). سلّمه أولاً". بعد التسليم يُحذف عادياً و`driver_id` بالتسليمات يصير null |
-| K10 | `public.driver_cash_summary() → table(outstanding_iqd, order_count, oldest_delivered_at, last_handover_at, last_received_iqd, last_difference_iqd)` | سائق فعّال فقط (نفس فحص `available_orders`؛ وإلا `NOT_ALLOWED`). صف واحد دائماً (أصفار ونُل بلا بيانات) |
-| K11 | `public.my_cash_handovers(p_limit int default 20, p_before_at timestamptz default null, p_before_id uuid default null) → setof (id, recorded_at, order_count, expected_iqd, received_iqd, difference_iqd, note, recorded_by_name, corrected_at)` | سائق فعّال فقط، صفوفه فقط، بلا `opening`، keyset، `p_limit` 1..100. `recorded_by_name` = الاسم الأول فقط (لا هاتف الموظف) |
+| K10 | `public.driver_cash_summary() → table(outstanding_iqd, order_count, oldest_delivered_at, last_handover_at, last_received_iqd, last_difference_iqd, includes_delivery_fee)` | سائق فعّال فقط (نفس فحص `available_orders`؛ وإلا `NOT_ALLOWED`). صف واحد دائماً (أصفار ونُل بلا بيانات) |
+| K11 | `public.my_cash_handovers(p_limit int default 20, p_before_at timestamptz default null, p_before_id uuid default null) → setof (id, recorded_at, order_count, expected_iqd, received_iqd, difference_iqd, includes_delivery_fee, note, recorded_by_name, corrected_at)` | سائق فعّال فقط، صفوفه فقط، بلا `opening`، keyset، `p_limit` 1..100. `recorded_by_name` = الاسم الأول فقط (لا هاتف الموظف) |
 | K12 | `public.correct_cash_handover(p_id uuid, p_received_iqd bigint, p_note text) → jsonb` | **أدمن aal2 فقط**. قفل الصف؛ `kind = 'handover'` فقط (وإلا `HANDOVER_NOT_FOUND`)؛ نفس فحص المبلغ (`CASH_AMOUNT_INVALID`)؛ الملاحظة **إلزامية دائماً** هنا (`NOTE_REQUIRED`)؛ نفس المبلغ ← لا شيء. أول تصحيح يحفظ `original_received_iqd`. تدقيق `admin_audit` (`op = 'correct'`، before/after المبلغ والفرق والملاحظة)؛ إشعار للسائق "تعدّل تسليم الكاش: X د.ع" (`data.type = 'cash_handover'`) |
 | K13 | `public.report_cash(p_from date, p_to date) → jsonb` | **أدمن aal2 فقط** (الموظف `NOT_ALLOWED`، كبقية التقارير T20). نفس تحقق المدى (`INVALID_DATE_RANGE`، 1..366 يوماً). `{held_now_iqd, held_now_drivers, totals: {handover_count, expected_iqd, received_iqd, shortage_iqd, overage_iqd, net_difference_iqd}, drivers: [{driver_id, full_name, handover_count, expected_iqd, received_iqd, shortage_iqd, overage_iqd, net_difference_iqd, held_now_iqd}]}`. `shortage_iqd` = Σ |الفرق| للفروق السالبة، `overage_iqd` = Σ الموجبة (منفصلين، لا يلغي أحدهما الآخر). بيوم `recorded_at` بغداد. السائق بلا تسليم بالمدى ورصيده > 0 يظهر بـ `held_now_iqd` فقط |
 | K14 | قيد `admin_audit_action_check` | يضاف `'cash_handover'` (drop + add بنفس نمط `20261208000001`). `target_id` = التسليم. `op` = `record` \| `correct` |
@@ -80,19 +82,20 @@
 | K16 | الصلاحيات والحراس | `grant execute` صريح: K4/K5/K6/K7 لـ `authenticated` (الدالة تفحص الدور)، K10/K11 لـ `authenticated`، K12/K13 لـ `authenticated`. تُضاف الدوال لقوائم `01_schema.sql` (دوال SECURITY DEFINER المكشوفة)، `27_access_matrix.sql`، حارس aal (`28_mfa_aal.sql`)، وحارس دوال definer. كلها `search_path = ''` |
 | K17 | تصنيف المبالغ | `21_staff_money.sql`: كل عمود `*_iqd` جديد (`cash_handovers.*`) يُصنَّف "مبالغ بيع، للموظف عبر الدوال فقط" (لا قراءة مباشرة لأي دور)، و`report_cash` "أدمن فقط". عمود غير مصنّف يُفشل الاختبار كالعادة |
 | K18 | الأنواع | `database.types.ts` يُولَّد من جديد |
+| K19 | إعداد الأجرة (قرار المالك Q1) | `app_settings.cash_handover_includes_delivery_fee boolean not null default true`. يُغيَّر **عبر `update_app_settings` فقط** (أدمن aal2، مفتاح جديد بقائمة المفاتيح، `boolean` وإلا `INVALID_SETTINGS`)، ويُدقَّق تلقائياً (`admin_audit`، `action = 'settings'`، القديم ← الجديد). القراءة كبقية الإعدادات (`settings_read` العامة؛ ليس مبلغاً). يُصنَّف بـ `21_staff_money.sql` (الاسم يطابق نمط `fee`). K4/K6/K10 تقرأه؛ التسليم يحفظ قيمته (K1). **التغيير لا يعيد حساب التسليمات المسجّلة** |
 
-**لا تغيير** بـ `set_order_status` و`accept_order` و`assign_driver` و`available_orders` و`push-dispatch` و`claim_push_notifications` (الإشعار بجمهور `user` الموجود). لا Edge Function جديدة.
+`update_app_settings` تتغير لمفتاح K19 فقط (`create or replace`، نفس التوقيع). **لا تغيير** بـ `set_order_status` و`accept_order` و`assign_driver` و`available_orders` و`push-dispatch` و`claim_push_notifications` (الإشعار بجمهور `user` الموجود). لا Edge Function جديدة.
 
 ### 3.2 `record_cash_handover`: الخطوات (معاملة واحدة)
 
 1. **الدور:** أدمن أو موظف بجلسة aal2 (`private.current_user_role()`؛ الرمز المؤقت والمعطّل يرجعان null) ← وإلا `NOT_ALLOWED`.
-2. **المدخلات:** `p_driver_id` و`p_idempotency_key` غير null (`INVALID_REQUEST`، `detail` = الحقل)؛ `p_expected_iqd > 0`، `p_order_count > 0` (`INVALID_REQUEST`)؛ `p_received_iqd` عدد ≥ 0 ومضاعف 250 و≤ `p_expected_iqd + 10,000,000` (حد عقلاني ضد خطأ كتابة صفر زائد) ← وإلا `CASH_AMOUNT_INVALID`؛ الملاحظة تُنظَّف بـ `clean_user_text` و≤ 300 (`INVALID_REQUEST`، `detail = 'note'`).
+2. **المدخلات:** `p_driver_id` و`p_idempotency_key` غير null (`INVALID_REQUEST`، `detail` = الحقل)؛ `p_expected_iqd >= 0`، `p_order_count > 0` (`INVALID_REQUEST`)؛ `p_received_iqd` عدد ≥ 0 ومضاعف 250 و≤ `p_expected_iqd + 10,000,000` (حد عقلاني ضد خطأ كتابة صفر زائد) ← وإلا `CASH_AMOUNT_INVALID`؛ الملاحظة تُنظَّف بـ `clean_user_text` و≤ 300 (`INVALID_REQUEST`، `detail = 'note'`).
 3. **منع التكرار (سريع):** مفتاح موجود ← إن كان لنفس السائق يرجع نفس النتيجة مع `replayed: true`، وإلا `INVALID_REQUEST` (`detail = 'idempotency_key'`).
 4. **قفل السائق:** `pg_advisory_xact_lock(hashtextextended('cash_handover:' || p_driver_id, 0))`؛ ثم إعادة فحص المفتاح (ضغطتان متوازيتان).
 5. **قفل الطلبات:** `select ... from orders where driver_id = p_driver_id and status = 'delivered' and cash_handover_id is null order by id for update`. صفر صفوف ← `NO_CASH_OUTSTANDING`.
-6. **المقارنة المتفائلة:** المجموع ≠ `p_expected_iqd` أو العدد ≠ `p_order_count` ← `CASH_BALANCE_CHANGED` (`detail` = `{"expected_iqd": N, "order_count": M}` نصاً). المسجِّل كتب مبلغاً مقابل رقم معروض؛ أي تغيير بعد العرض يعني أن العدّ يجب أن يُعاد.
+6. **الإعداد والمقارنة المتفائلة:** يُقرأ `cash_handover_includes_delivery_fee` مرة واحدة، والمجموع = Σ `subtotal_iqd` + (Σ `delivery_fee_iqd` إن كان true). المجموع ≠ `p_expected_iqd` أو العدد ≠ `p_order_count` ← `CASH_BALANCE_CHANGED` (`detail` = `{"expected_iqd": N, "order_count": M}` نصاً). المسجِّل كتب مبلغاً مقابل رقم معروض؛ أي تغيير بعد العرض يعني أن العدّ يجب أن يُعاد.
 7. **الملاحظة:** `received ≠ expected` بلا ملاحظة ← `NOTE_REQUIRED`.
-8. **الإدراج والربط:** صف `cash_handovers` (`recorded_by = auth.uid()`، `recorded_by_role`)، و`update orders set cash_handover_id = <id>` لنفس الصفوف المقفولة.
+8. **الإدراج والربط:** صف `cash_handovers` (`goods_iqd`، `fees_iqd`، `includes_delivery_fee` = القيمة المقروءة، `recorded_by = auth.uid()`، `recorded_by_role`)، و`update orders set cash_handover_id = <id>` لنفس الصفوف المقفولة.
 9. **التدقيق:** `admin_audit` (`action = 'cash_handover'`، `target_id` = التسليم، `after = {op: 'record', driver_id, order_count, expected_iqd, received_iqd, difference_iqd, note}`).
 10. **الإشعار:** `_notify('user', p_driver_id, 'تسليم الكاش', 'استلمنا منك ' || <المبلغ بفواصل الآلاف> || ' د.ع' [|| ' · نقص Y د.ع' | ' · زيادة Y د.ع'], {type: 'cash_handover', handover_id})`. حساب `must_change_pin` لا يستلم (سلوك `claim_push_notifications` الموجود).
 11. **يرجع:** `{handover_id, driver_id, order_count, expected_iqd, received_iqd, difference_iqd, recorded_at, replayed: false}`.
@@ -102,6 +105,7 @@
 | السيناريو | ماذا يحدث |
 |---|---|
 | توصيل يكتمل **أثناء** التسليم | `set_order_status(delivered)` يقفل صف الطلب ويغيّره. جملة الخطوة 5 (`READ COMMITTED`) ترى فقط الطلبات المسلّمة **الملتزمة** لحظة بدئها؛ الطلب الذي ما زال `out_for_delivery` بلقطتها لا يطابق ولا يُقفل، فيبقى بالرصيد للتسليم القادم. لا يُفقد ولا يُحسب مرتين |
+| الأدمن يغيّر إعداد الأجرة **بين** عرض النافذة والضغط | المجموع بالإعداد الجديد يختلف (إن وُجدت أجرة) ← `CASH_BALANCE_CHANGED` بالمبلغ الجديد. التسليم يحفظ الإعداد الذي حُسب به فعلاً |
 | توصيل يكتمل **بين** عرض النافذة والضغط | العدد أو المجموع يختلف ← `CASH_BALANCE_CHANGED`؛ النافذة تعرض المبلغ الجديد وتمسح المبلغ المكتوب. لا نقص وهمي |
 | مسجِّلان لنفس السائق معاً | القفل الاستشاري يسلسلهما؛ الثاني يجد الرصيد 0 ← `NO_CASH_OUTSTANDING`، أو رصيداً مختلفاً ← `CASH_BALANCE_CHANGED`. تسليم واحد فقط |
 | ضغطتان من نفس النافذة / إعادة بعد انقطاع | نفس `p_idempotency_key` ← نفس النتيجة `replayed: true` |
@@ -120,7 +124,7 @@
 - **الرأس:** "الكاش عند السواق الآن: X د.ع (N سائق)" (من مجموع K4؛ للموظف أيضاً: مبالغ بيع، قرار المالك).
 - **تبويب "الأرصدة"** (K4): الصف = اسم السائق (و"غير مفعّل" إن وُجد)، الرقم (اتصال)، **الرصيد** بخط كبير، عدد الطلبات، "أقدم توصيل من N يوم/ساعة" (`formatElapsedAr`)، آخر تسليم (الوقت، المبلغ، شارة نقص/زيادة)، وزر **"استلام الكاش"** (معطّل برصيد 0).
 - **نافذة "استلام الكاش من <الاسم>":**
-  - "المطلوب: **X د.ع** عن N طلب" + قائمة قابلة للطي من K5 (`#رقم · بلوك · بناية · الوقت · المبلغ`).
+  - "المطلوب: **X د.ع** عن N طلب" وتحته "شامل أجرة التوصيل" أو "بدون أجرة التوصيل (تبقى عند السائق)" حسب `includes_delivery_fee` من K4 + قائمة قابلة للطي من K5 (`#رقم · بلوك · بناية · الوقت · المبلغ`).
   - حقل **"المبلغ اللي استلمته"** فارغ (لا يُملأ تلقائياً حتى يُعَدّ فعلاً)، أرقام عربية أو لاتينية، تحقق مضاعف 250. زر صغير "نفس المبلغ" يملأه بالمطلوب (اختصار للحالة الأكثر شيوعاً؛ المسجِّل يضغطه بقصد).
   - فرق حي: أخضر "مطابق"، أحمر "**نقص** Y د.ع"، برتقالي "**زيادة** Y د.ع"؛ مع أي فرق يظهر حقل **ملاحظة إلزامي** (≤ 300).
   - "تأكيد الاستلام" ← `record_cash_handover` بمفتاح يُولَّد عند فتح النافذة ويُعاد مع كل إعادة محاولة لنفس المبلغ (مفتاح جديد إن تغيّر المبلغ أو النافذة أُعيد تحميلها بعد `CASH_BALANCE_CHANGED`).
@@ -129,6 +133,10 @@
 - **تبويب "السجل"** (K7): فلترة بالسائق والمدى؛ الصف = الوقت، السائق، من استلم، عدد الطلبات، المطلوب، المستلم، الفرق (شارة)، الملاحظة، و"مُصحَّح" إن وُجد (مع المبلغ الأصلي للأدمن). الموظف: ملاحظة "يظهر لك سجل آخر 7 أيام فقط. الأقدم عند المدير." صفحات 50 (keyset).
 - **"تصحيح"** (أدمن فقط، بالسجل): نافذة بالمبلغ الجديد وملاحظة إلزامية ← `correct_cash_handover`.
 - **التحديث:** عند تركيز النافذة، كل 30 ثانية والصفحة ظاهرة، وبعد أي عملية. لا Realtime (الرصيد يتغير بتوصيل لا بحدث على جدول تشترك به اللوحة؛ الاستطلاع أبسط وكافٍ).
+- **الإعدادات (`/settings`، أدمن فقط، K19؛ SPEC-admin §2.10):** قسم واضح "أجرة التوصيل وتسليم الكاش" بخيارين (radio):
+  - **"أجرة التوصيل للمحل"** (الافتراضي): "السائق يسلّم المجموع كاملاً (البضاعة + أجرة التوصيل)، والمحل يدفع للسائق أجوره بطريقته."
+  - **"أجرة التوصيل تبقى عند السائق"**: "السائق يسلّم مبلغ البضاعة فقط ويحتفظ بأجرة كل توصيل."
+  - تنبيه ثابت تحته: "التغيير يسري على الكاش اللي بيد السواق الآن والتسليمات الجاية فقط. التسليمات المسجّلة قبل التغيير ما تتغير." الحفظ عبر `update_app_settings` (مُدقَّق كبقية الإعدادات).
 - **التقارير (SPEC-admin §2.5، أدمن فقط):** قسم جديد "الكاش والسواق" من `report_cash` لنفس مدى الصفحة: بطاقة "الكاش عند السواق الآن"، بطاقتا "النقص" و"الزيادة" بالمدى، وجدول لكل سائق (التسليمات، المطلوب، المستلم، النقص، الزيادة، بيده الآن)، وتصدير CSV للجدول.
 
 ---
@@ -138,7 +146,7 @@
 > يحل محل SPEC-driver §2.9 (قصة U8) بمهمة T42.
 
 - **شاشة `(tabs)/today.tsx`** (يبقى التبويب، الاسم "سجل اليوم" بلا تغيير بالنسخة الأولى):
-  - **"الكاش اللي بيدك"** = `outstanding_iqd` من `driver_cash_summary()` (لا مجموع بالتطبيق)، وتحته "عن N طلب · من آخر تسليم <التاريخ والوقت>" أو "ما سلّمت كاش بعد".
+  - **"الكاش اللي بيدك"** (أو **"المطلوب تسليمه للمحل"** إن كان `includes_delivery_fee = false`) = `outstanding_iqd` من `driver_cash_summary()` (لا مجموع بالتطبيق)، وتحته "عن N طلب · من آخر تسليم <التاريخ والوقت>" أو "ما سلّمت كاش بعد"، ومع `false` سطر "أجرة التوصيل إلك، ما تنحسب".
   - **"توصيلات اليوم"** = العدد كما هو (`baghdadDayRange`، قراءة RLS الموجودة).
   - القائمة: **الطلبات اللي فلوسها بيدك** (`orders` بـ `driver_id = me`، `status = 'delivered'`، `cash_handover_id is null`، الأحدث أولاً، حد 200؛ قراءة RLS الموجودة للسائق المعيَّن). عرض فقط؛ المجموع من الدالة.
   - الملاحظة تتغير من "الأرقام تتصفّر كل يوم الساعة 12 بالليل" إلى "الكاش يتصفّر لما تسلّمه للمحل".
@@ -207,7 +215,8 @@ export function cashDifference(expected: number, received: number): CashDiff {
 | المجال | الحالات |
 |---|---|
 | الصلاحيات | K4/K5/K6/K7: أدمن aal2 وموظف aal2 ✓؛ أدمن/موظف aal1، أدمن برمز مؤقت، سائق، زبون، `anon` ✗ (`NOT_ALLOWED` أو لا صلاحية). K12/K13: أدمن aal2 فقط (الموظف ✗). K10/K11: سائق فعّال ✓؛ سائق معطّل أو برمز مؤقت، زبون، موظف ✗. `cash_handovers` بلا قراءة مباشرة لأي دور (حتى الأدمن) |
-| الحساب | الرصيد = Σ `total_iqd` للمسلّمة غير المربوطة فقط (لا `out_for_delivery` ولا `cancelled` ولا طلبات سائق آخر)؛ `fees_iqd` صحيح؛ `first/last_delivered_at` صحيحة |
+| الحساب | الرصيد = Σ `total_iqd` للمسلّمة غير المربوطة فقط (لا `out_for_delivery` ولا `cancelled` ولا طلبات سائق آخر)؛ `goods_iqd` و`fees_iqd` صحيحان؛ `first/last_delivered_at` صحيحة |
+| إعداد الأجرة (K19) | `update_app_settings` يقبل `true/false` فقط (`INVALID_SETTINGS` لغير ذلك)، أدمن فقط، ومُدقَّق؛ مع `false` الرصيد = Σ `subtotal_iqd` بـ K4/K10، والتسليم يحفظ `includes_delivery_fee = false` و`expected = goods`؛ تسليم قديم بـ `true` لا يتغير بعد تغيير الإعداد؛ تغيير الإعداد بعد العرض ← `CASH_BALANCE_CHANGED`؛ القيد يرفض `expected` لا يطابق |
 | التسليم المطابق | كموظف aal2: الطلبات تُربط، الرصيد 0، `difference = 0`، `note` null مقبول، سطر `admin_audit` بالقيم، صف إشعار `user` للسائق بنص "استلمنا منك X د.ع" و`data.type = 'cash_handover'` |
 | النقص والزيادة | كأدمن aal2: أقل بلا ملاحظة ← `NOTE_REQUIRED`؛ بملاحظة ← `difference < 0`، نص الإشعار فيه "نقص"، والرصيد 0؛ أكثر ← "زيادة" |
 | التحقق | مبلغ سالب، غير مضاعف 250، أو فوق الحد ← `CASH_AMOUNT_INVALID`؛ ملاحظة > 300 ← `INVALID_REQUEST`؛ رصيد 0 ← `NO_CASH_OUTSTANDING`؛ expected/count لا يطابقان ← `CASH_BALANCE_CHANGED` و`detail` يحمل القيم الحالية |
@@ -244,7 +253,7 @@ export function cashDifference(expected: number, received: number): CashDiff {
 | # | المهمة | تعتمد على | النموذج | على dev | لماذا هذا النموذج |
 |---|---|---|---|---|---|
 | T40 | **DB:** K1–K18 + `39_cash_handover.sql` + الحراس + سيناريوهات التزامن + `errors.ts` + الأنواع + تحديث SPEC-backend §4/§5 وDRIVER-API (دالتا السائق والإشعار) | — | **Opus** | migration (`db push` بعد dry-run، بموافقتك) | أقفال، تزامن، RLS، ثابت محاسبي: الخطأ هنا يكلّف فلوساً |
-| T41 | **اللوحة:** صفحة `/cash` (الأرصدة، النافذة، السجل، التصحيح) + قسم التقارير + `access.ts` + Playwright + SPEC-admin §2.11 و§2.5 | T40 | Sonnet | - (Pages ينشر بعد الدمج) | واجهة فوق دوال جاهزة، بنمط صفحات موجودة (طلبات السواق، التقارير) |
+| T41 | **اللوحة:** صفحة `/cash` (الأرصدة، النافذة، السجل، التصحيح) + قسم التقارير + إعداد الأجرة بـ `/settings` (K19) + `access.ts` + Playwright + SPEC-admin §2.11 و§2.5 و§2.10 | T40 | Sonnet | - (Pages ينشر بعد الدمج) | واجهة فوق دوال جاهزة، بنمط صفحات موجودة (طلبات السواق، التقارير) |
 | T42 | **السائق:** بطاقة الكاش من الدالة، قائمة الطلبات بذمته، `cash/history`، توجيه الإشعار وsw.js، رسالة الحذف + اختبارات + SPEC-driver §2.9 | T40 | Sonnet | - (PWA تُنشر بعد الدمج؛ APK مع T33) | تعديلات شاشات بنمط T32 |
 | R4 | **مراجعة** (`/review`) لـ T40–T42: السباقات، تصنيف المبالغ، الأدوار، الثابت، الإشعار؛ ثم فحص يدوي على dev | T40–T42 | **Opus** | - | مراجعة أمان ومال |
 
@@ -252,17 +261,17 @@ T41 وT42 مستقلتان (أي ترتيب). كل مهمة: فرع ← PR ← C
 
 ---
 
-## 11) أسئلة مفتوحة (افتراضات مطبّقة؛ تُغيَّر بكلمة منك قبل T40)
+## 11) القرارات (قرار المالك 2026-11-22)
 
-| # | السؤال | الافتراض المطبّق | أثر التغيير |
-|---|---|---|---|
-| **Q1** | السائق يسلّم **المجموع كاملاً** (مع أجرة التوصيل) ثم يأخذ أجوره من المحل لاحقاً، أم **يحتفظ بالأجرة** ويسلّم مجموع البضاعة (`subtotal`) فقط؟ | **المجموع كاملاً** (`total_iqd`): هو ما يعرضه التطبيق اليوم "تستلم كاش" و"الكاش اللي بيدك"، وتسوية الأجور خارج النظام (افتراض SPEC-driver 4) | سطر واحد بـ K4/K6/K10 (`total_iqd` ← `subtotal_iqd`)، و`fees_iqd` مخزّن أصلاً لكل تسليم. **يجب الحسم قبل T40** لأن التسليمات المسجّلة لا تُعاد حسابها |
-| Q2 | هل النقص يُنقص **صافي الربح**؟ | **لا:** تعريف صافي الربح ثابت (CLAUDE.md)؛ النقص والزيادة يُعرضان منفصلين بالتقارير | إن نعم: تعديل `daily_stats` و`report_summary` وتعريف صافي الربح بـ CLAUDE.md وSPEC-admin/backend |
-| Q3 | تصحيح مبلغ كُتب غلط | **أدمن فقط، المبلغ والملاحظة فقط، مدقَّق ومبلَّغ للسائق** (C9). لا إلغاء ولا إرجاع طلبات للرصيد | إن لا تصحيح: تُحذف K12 من T40 |
-| Q4 | الموظف وسجل التسليمات | **آخر 7 أيام**، بالمبالغ والفروق (كقاعدة الطلبات والتقييمات)؛ التقارير للأدمن وحده | إن لا يرى الفروق: إخفاء عمود بـ K7 للموظف |
-| Q5 | سائق خُفّض دوره أو عُطّل وبذمته كاش | **يُسمح** بالتعطيل والتخفيض (يبقى ظاهراً بالأرصدة حتى يُسلَّم)؛ **حذف الحساب فقط يُمنع** (K9) | إن تمنعه: `set_user_role` يرفض بـ `CASH_OUTSTANDING` |
+| # | السؤال | القرار |
+|---|---|---|
+| **Q1** | السائق يسلّم **المجموع كاملاً** (مع أجرة التوصيل)، أم **يحتفظ بالأجرة** ويسلّم مبلغ البضاعة (`subtotal`) فقط؟ | **المالك لم يحسم بعد ← إعداد للأدمن** (K19): "أجرة التوصيل للمحل" (**الافتراضي**: المجموع كاملاً `total_iqd`) أو "أجرة التوصيل تبقى عند السائق" (`subtotal_iqd` فقط). يُغيَّر من `/settings` عبر `update_app_settings` (مُدقَّق) مع شرح عربي. **كل تسليم يحفظ مبلغه المطلوب وقيمة الإعداد لحظتها**؛ التغيير يؤثر على الرصيد الحالي والتسليمات القادمة فقط، ولا يعيد حساب القديم |
+| Q2 | هل النقص يُنقص **صافي الربح**؟ | **لا (معتمد):** تعريف صافي الربح ثابت (CLAUDE.md)؛ النقص والزيادة يُعرضان منفصلين بالتقارير |
+| Q3 | تصحيح مبلغ كُتب غلط | **معتمد:** أدمن فقط، المبلغ والملاحظة فقط، مدقَّق ومبلَّغ للسائق (C9). لا إلغاء ولا إرجاع طلبات للرصيد |
+| Q4 | الموظف وسجل التسليمات | **معتمد:** آخر 7 أيام، بالمبالغ والفروق (كقاعدة الطلبات والتقييمات)؛ التقارير للأدمن وحده |
+| Q5 | سائق خُفّض دوره أو عُطّل وبذمته كاش | **معتمد:** يُسمح بالتعطيل والتخفيض (يبقى ظاهراً بالأرصدة حتى يُسلَّم)؛ **حذف الحساب فقط يُمنع** (K9) |
 
-## 12) افتراضات أخرى
+## 12) افتراضات أخرى (معتمدة كما كُتبت، 2026-11-22)
 1. **المبلغ المستلم مضاعف 250** (أصغر فئة نقدية متداولة؛ كل مجاميع الطلبات مضاعفات 250)، وحد عقلاني `expected + 10,000,000`.
 2. **حقل المبلغ لا يُملأ تلقائياً** (حتى يُعَدّ فعلاً)، مع زر "نفس المبلغ" صريح.
 3. **نص الإشعار** يضيف الفرق إن وُجد (" · نقص Y د.ع")؛ المالك طلب "استلمنا منك X د.ع" والإضافة للشفافية مع السائق. المبالغ بفواصل الآلاف (`to_char(n, 'FM999,999,999,990')`)، بخلاف إشعار الطلب الجديد الحالي (بلا فواصل).
@@ -272,6 +281,8 @@ T41 وT42 مستقلتان (أي ترتيب). كل مهمة: فرع ← PR ← C
 7. **اسم التبويب** "سجل اليوم" لا يتغير بالنسخة الأولى (تعديل محتوى فقط).
 8. **الكاش عند السواق** يظهر للموظف برأس صفحة `/cash` (مجموع مبالغ بيع، قرار المالك)، لكن بالتقارير للأدمن فقط.
 9. **حد 500 طلب** بنافذة التسليم (K5)؛ رصيد أكبر يُسجَّل عادياً (الدالة لا تحدّ)، والقائمة تعرض أول 500 مع العدد الكلي.
+10. **إعداد الأجرة يُقرأ للجميع** (K19) كبقية `app_settings` (`settings_read` العامة): قيمة سياسة لا مبلغ، والسائق يحتاجها ليفهم رقمه. التغيير للأدمن فقط.
+11. **`expected_iqd >= 0`** (لا `> 0`): مع "الأجرة تبقى عند السائق" يكون المطلوب `subtotal` وحده، والقيد على `subtotal_iqd` بالطلبات `>= 0`. عملياً كل طلب له بنود بأسعار موجبة.
 
 ## 13) الحدود
 - **دائماً:** المجاميع بقاعدة البيانات؛ اختبار كل كتابة بدورها الحقيقي (aal2)؛ migration جديدة و`pnpm sb db push` على dev فقط بعد dry-run؛ فرع ← PR ← CI أخضر ← دمج؛ تحديث الـ SPEC بنفس الـ PR عند أي قرار يتغير.
