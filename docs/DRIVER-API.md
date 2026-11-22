@@ -134,7 +134,7 @@ Short version to send to the driver-app developer. Migrations `20261130000001`, 
 driver call needs to change.** What you may notice:
 
 1. **Demo login on mukhdar-dev:** demo driver accounts `07000000011`, `07000000012`, `07000000013` use
-   their own dev-only PIN **`739164`** (not the admin/staff/customer demo PIN). Development only; never
+   their own dev-only PIN, sent to you privately by the project owner (not the admin/staff/customer demo PIN; never in this repo). Development only; never
    valid on production.
 2. **Push tokens:** at most **5 tokens per account**; registering a 6th removes the oldest. Tokens whose
    device has not been seen for **60 days** are deleted by the daily cleanup. Keep calling
@@ -261,11 +261,11 @@ own session; RLS and the functions enforce what a driver may see and do.
    ```ts
    // sign up (new account): no session is returned, sign in right after
    const { error } = await supabase.functions.invoke('signup', {
-     body: { phone: '+9647XXXXXXXXX', pin: '482915' },   // any Iraqi format is accepted
+     body: { phone: '+9647XXXXXXXXX', pin: '<6-digit PIN>' },   // any Iraqi format is accepted
    });
    // on error: const body = await error.context.json()  ->  { error: 'PHONE_TAKEN' | ... }
    // sign in (existing account)
-   await supabase.auth.signInWithPassword({ phone: '+9647XXXXXXXXX', password: '482915' }); // E.164
+   await supabase.auth.signInWithPassword({ phone: '+9647XXXXXXXXX', password: '<6-digit PIN>' }); // E.164
    ```
    `signup` responses (no login needed; the call carries only the publishable key):
 
