@@ -18,6 +18,7 @@ export const MFA_PATH = '/mfa';
 export const PAGE_ACCESS: Record<string, readonly PanelRole[]> = {
   '/': ['admin', 'staff'], // الرئيسية (الموظف بلا مبالغ، T25)
   '/orders': ['admin', 'staff'],
+  '/cash': ['admin', 'staff'], // تسليم الكاش من السواق (T41، SPEC-admin §2.11)؛ الحماية الحقيقية بالدوال (aal2)
   '/stock': ['admin', 'staff'], // الأرصدة وتنبيه النقص (الحركات للأدمن داخل الصفحة)
   '/ratings': ['admin', 'staff'],
   '/products': ['admin'], // المنتجات والأقسام
@@ -59,7 +60,8 @@ export function isKnownPanelPath(pathname: string): boolean {
   return firstSegment(pathname) in PAGE_ACCESS;
 }
 
-export type NavIcon = 'home' | 'orders' | 'products' | 'waste' | 'ratings' | 'reports' | 'settings';
+export type NavIcon =
+  'home' | 'orders' | 'cash' | 'products' | 'waste' | 'ratings' | 'reports' | 'settings';
 
 export interface NavItem {
   href: string;
@@ -81,6 +83,7 @@ export function navItems(role: PanelRole): NavItem[] {
     match: ['/orders'],
     badge: 'pendingOrders',
   };
+  const cash: NavItem = { href: '/cash', label: 'تسليم الكاش', icon: 'cash', match: ['/cash'] };
   const ratings: NavItem = {
     href: '/ratings',
     label: 'التقييمات',
@@ -91,6 +94,7 @@ export function navItems(role: PanelRole): NavItem[] {
     return [
       home,
       orders,
+      cash,
       { href: '/stock', label: 'المخزون', icon: 'products', match: ['/stock'] },
       ratings,
     ];
@@ -98,6 +102,7 @@ export function navItems(role: PanelRole): NavItem[] {
   return [
     home,
     orders,
+    cash,
     {
       href: '/products',
       label: 'المنتجات والمخزون',

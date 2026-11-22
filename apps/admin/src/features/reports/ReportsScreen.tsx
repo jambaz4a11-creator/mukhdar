@@ -5,6 +5,7 @@ import { errorMessage, formatAdminQuantity, formatIQD } from '@mukhdar/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
+import { CashReportSection } from '@/features/cash/CashReportSection';
 import { baghdadToday } from '@/features/orders/filters';
 import { fetchReport, reportKeys, type ReportData, type ReportSummary } from './api';
 import { chartGeometry, labelEvery } from './chart';
@@ -165,6 +166,7 @@ export function ReportsScreen() {
             <Drivers data={data} />
           </div>
           <WasteReport data={data} range={range} />
+          <CashReportSection range={range} />
           <Comments data={data} />
         </div>
       )}

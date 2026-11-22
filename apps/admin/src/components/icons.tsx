@@ -14,6 +14,13 @@ const PATHS: Record<NavIcon, React.ReactNode> = {
       <path d="M9 8h6M9 12h6" />
     </>
   ),
+  cash: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6.5 9.5v5M17.5 9.5v5" />
+    </>
+  ),
   products: (
     <>
       <path d="M5 19c0-8 6-14 14-14 0 8-6 14-14 14z" />

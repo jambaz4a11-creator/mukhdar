@@ -39,6 +39,27 @@ test.describe.serial('settings, staff, addresses (admin, read / refused)', () =>
   });
   test.afterAll(async () => page.context().close());
 
+  test('T41: the delivery-fee / cash-handover section explains both options and the going-forward warning', async () => {
+    await page.goto('/settings');
+    const card = page.getByTestId('fee-setting');
+    await expect(card.getByRole('heading', { name: 'أجرة التوصيل وتسليم الكاش' })).toBeVisible();
+    await expect(card.getByText('أجرة التوصيل للمحل', { exact: true })).toBeVisible();
+    await expect(
+      card.getByText(
+        'السائق يسلّم المجموع كاملاً (البضاعة + أجرة التوصيل)، والمحل يدفع للسائق أجوره بطريقته.',
+      ),
+    ).toBeVisible();
+    await expect(card.getByText('أجرة التوصيل تبقى عند السائق', { exact: true })).toBeVisible();
+    await expect(
+      card.getByText('السائق يسلّم مبلغ البضاعة فقط ويحتفظ بأجرة كل توصيل.'),
+    ).toBeVisible();
+    await expect(card.getByTestId('fee-warning')).toContainText(
+      'التسليمات المسجّلة قبل التغيير ما تتغير',
+    );
+    // لا تغيير بلا اختيار مختلف
+    await expect(card.getByTestId('fee-save')).toBeDisabled();
+  });
+
   test('settings form shows the current values; minimum 1100 is rejected by the form', async () => {
     await page.goto('/settings');
     await expect(

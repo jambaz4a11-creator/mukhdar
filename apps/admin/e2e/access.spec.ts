@@ -14,7 +14,7 @@ const ADMIN_ONLY = [
   '/settings',
   '/driver-requests',
 ];
-const SHARED = ['/orders', '/stock', '/ratings'];
+const SHARED = ['/orders', '/cash', '/stock', '/ratings'];
 
 test.describe('public pages (no sign-in)', () => {
   const pages: [string, string][] = [
@@ -100,6 +100,7 @@ test.describe.serial('admin', () => {
     await expect(sidebarLinks(page)).toHaveText([
       /الرئيسية/,
       /الطلبات/,
+      /تسليم الكاش/,
       /المنتجات والمخزون/,
       /هدر اليوم/,
       /التقييمات/,
@@ -138,19 +139,20 @@ test.describe.serial('staff', () => {
   });
   test.afterAll(async () => page.context().close());
 
-  test('lands on / with home, orders, stock and ratings only', async () => {
+  test('lands on / with home, orders, cash, stock and ratings only', async () => {
     // الرئيسية (T25): العنوان تحية بالتصميم المعتمد، فنتحقق من بطاقاتها
     await expect(page.getByTestId('kpi-delivered')).toBeVisible();
     await expect(sidebarLinks(page)).toHaveText([
       /الرئيسية/,
       /الطلبات/,
+      /تسليم الكاش/,
       /المخزون/,
       /التقييمات/,
       /تغيير الرمز/,
     ]);
   });
 
-  test('reaches orders, stock and ratings', async () => {
+  test('reaches orders, cash, stock and ratings', async () => {
     for (const path of SHARED) {
       const res = await page.goto(path);
       expect(res?.status(), path).toBe(200);
@@ -173,7 +175,7 @@ for (const role of ['customer', 'driver'] as const) {
     const page = await context.newPage();
     await signIn(page, ACCOUNTS[role]);
     await expectNotAuthorized(page);
-    for (const path of ['/', '/orders']) {
+    for (const path of ['/', '/orders', '/cash']) {
       await page.goto(path);
       await expectNotAuthorized(page);
     }
