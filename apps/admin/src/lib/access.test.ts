@@ -24,6 +24,7 @@ const TABLE: [string, string, boolean, boolean][] = [
   ['الموظفون والسائقون', '/staff', true, false],
   ['الإعدادات', '/settings', true, false],
   ['طلبات السواق (T29)', '/driver-requests', true, false],
+  ['تسليم الكاش (T41)', '/cash', true, true],
   // ليست صفحة بجدول §1: إيصال طباعة الطلب (T17) لمن يرى الطلبات
   ['طباعة الطلب', '/print', true, true],
   ['تغيير الرمز', '/change-pin', true, true],
@@ -74,10 +75,11 @@ describe('public pages', () => {
 });
 
 describe('navItems (sidebar per role, design order)', () => {
-  it('admin sees the 7 design items in order', () => {
+  it('admin sees the design items in order (cash right after orders)', () => {
     expect(navItems('admin').map((i) => i.label)).toEqual([
       'الرئيسية',
       'الطلبات',
+      'تسليم الكاش',
       'المنتجات والمخزون',
       'هدر اليوم',
       'التقييمات',
@@ -86,8 +88,20 @@ describe('navItems (sidebar per role, design order)', () => {
     ]);
   });
 
-  it('staff sees home, orders, stock and ratings only', () => {
-    expect(navItems('staff').map((i) => i.href)).toEqual(['/', '/orders', '/stock', '/ratings']);
+  it('staff sees home, orders, cash, stock and ratings only', () => {
+    expect(navItems('staff').map((i) => i.href)).toEqual([
+      '/',
+      '/orders',
+      '/cash',
+      '/stock',
+      '/ratings',
+    ]);
+  });
+
+  it('/cash is open to admin and staff (functions enforce aal2), not to anyone else', () => {
+    expect(canAccess('admin', '/cash')).toBe(true);
+    expect(canAccess('staff', '/cash')).toBe(true);
+    expect(canAccess('staff', '/cash/anything')).toBe(true);
   });
 
   it.each<PanelRole>(['admin', 'staff'])(

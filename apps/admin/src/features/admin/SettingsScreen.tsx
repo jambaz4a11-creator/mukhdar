@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePanel } from '@/components/PanelProviders';
+import { FeeSettingsCard } from '@/features/cash/FeeSettingsCard';
 import { inputClass } from '@/features/catalog/ui';
 import {
   adminKeys,
@@ -60,6 +61,7 @@ export function SettingsScreen() {
             </p>
           </section>
         )}
+        <FeeSettingsCard />
         <StaffSummary />
       </div>
       <AddressSummary />
