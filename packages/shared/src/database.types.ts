@@ -151,6 +151,7 @@ export type Database = {
       };
       app_settings: {
         Row: {
+          cash_handover_includes_delivery_fee: boolean;
           closed_message: string | null;
           delivery_fee_iqd: number;
           id: number;
@@ -166,6 +167,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          cash_handover_includes_delivery_fee?: boolean;
           closed_message?: string | null;
           delivery_fee_iqd?: number;
           id?: number;
@@ -180,6 +182,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          cash_handover_includes_delivery_fee?: boolean;
           closed_message?: string | null;
           delivery_fee_iqd?: number;
           id?: number;
@@ -224,6 +227,98 @@ export type Database = {
             columns: ['subsection_id'];
             isOneToOne: false;
             referencedRelation: 'subsections';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      cash_handovers: {
+        Row: {
+          corrected_at: string | null;
+          corrected_by: string | null;
+          difference_iqd: number | null;
+          driver_id: string | null;
+          expected_iqd: number;
+          fees_iqd: number;
+          first_delivered_at: string;
+          goods_iqd: number;
+          id: string;
+          idempotency_key: string;
+          includes_delivery_fee: boolean;
+          kind: string;
+          last_delivered_at: string;
+          note: string | null;
+          order_count: number;
+          original_received_iqd: number | null;
+          received_iqd: number;
+          recorded_at: string;
+          recorded_by: string | null;
+          recorded_by_role: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          corrected_at?: string | null;
+          corrected_by?: string | null;
+          difference_iqd?: never;
+          driver_id?: string | null;
+          expected_iqd: number;
+          fees_iqd: number;
+          first_delivered_at: string;
+          goods_iqd: number;
+          id?: string;
+          idempotency_key: string;
+          includes_delivery_fee: boolean;
+          kind?: string;
+          last_delivered_at: string;
+          note?: string | null;
+          order_count: number;
+          original_received_iqd?: number | null;
+          received_iqd: number;
+          recorded_at?: string;
+          recorded_by?: string | null;
+          recorded_by_role?: string | null;
+        };
+        Update: {
+          corrected_at?: string | null;
+          corrected_by?: string | null;
+          difference_iqd?: never;
+          driver_id?: string | null;
+          expected_iqd?: number;
+          fees_iqd?: number;
+          first_delivered_at?: string;
+          goods_iqd?: number;
+          id?: string;
+          idempotency_key?: string;
+          includes_delivery_fee?: boolean;
+          kind?: string;
+          last_delivered_at?: string;
+          note?: string | null;
+          order_count?: number;
+          original_received_iqd?: number | null;
+          received_iqd?: number;
+          recorded_at?: string;
+          recorded_by?: string | null;
+          recorded_by_role?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'cash_handovers_corrected_by_fkey';
+            columns: ['corrected_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cash_handovers_driver_id_fkey';
+            columns: ['driver_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cash_handovers_recorded_by_fkey';
+            columns: ['recorded_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
             referencedColumns: ['id'];
           },
         ];
@@ -633,6 +728,7 @@ export type Database = {
           cancel_reason: string | null;
           cancelled_at: string | null;
           cancelled_by: string | null;
+          cash_handover_id: string | null;
           city_id: number | null;
           created_at: string;
           customer_id: string | null;
@@ -661,6 +757,7 @@ export type Database = {
           cancel_reason?: string | null;
           cancelled_at?: string | null;
           cancelled_by?: string | null;
+          cash_handover_id?: string | null;
           city_id?: number | null;
           created_at?: string;
           customer_id?: string | null;
@@ -688,6 +785,7 @@ export type Database = {
           cancel_reason?: string | null;
           cancelled_at?: string | null;
           cancelled_by?: string | null;
+          cash_handover_id?: string | null;
           city_id?: number | null;
           created_at?: string;
           customer_id?: string | null;
@@ -721,6 +819,13 @@ export type Database = {
             columns: ['cancelled_by'];
             isOneToOne: false;
             referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'orders_cash_handover_id_fkey';
+            columns: ['cash_handover_id'];
+            isOneToOne: false;
+            referencedRelation: 'cash_handovers';
             referencedColumns: ['id'];
           },
           {
@@ -1219,6 +1324,7 @@ export type Database = {
           cancel_reason: string | null;
           cancelled_at: string | null;
           cancelled_by: string | null;
+          cash_handover_id: string | null;
           city_id: number | null;
           created_at: string;
           customer_id: string | null;
@@ -1280,6 +1386,7 @@ export type Database = {
           cancel_reason: string | null;
           cancelled_at: string | null;
           cancelled_by: string | null;
+          cash_handover_id: string | null;
           city_id: number | null;
           created_at: string;
           customer_id: string | null;
@@ -1332,6 +1439,69 @@ export type Database = {
         }[];
       };
       break_glass_reset_mfa: { Args: { p_user_id: string }; Returns: number };
+      cash_handover_history: {
+        Args: {
+          p_before_at?: string;
+          p_before_id?: string;
+          p_driver_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_to?: string;
+        };
+        Returns: {
+          corrected_at: string;
+          corrected_by: string;
+          corrected_by_name: string;
+          difference_iqd: number;
+          driver_id: string;
+          driver_name: string;
+          expected_iqd: number;
+          fees_iqd: number;
+          first_delivered_at: string;
+          goods_iqd: number;
+          id: string;
+          includes_delivery_fee: boolean;
+          last_delivered_at: string;
+          note: string;
+          order_count: number;
+          original_received_iqd: number;
+          received_iqd: number;
+          recorded_at: string;
+          recorded_by: string;
+          recorded_by_name: string;
+          recorded_by_role: string;
+        }[];
+      };
+      cash_outstanding: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          driver_id: string;
+          full_name: string;
+          includes_delivery_fee: boolean;
+          is_active: boolean;
+          last_difference_iqd: number;
+          last_handover_at: string;
+          last_received_iqd: number;
+          oldest_delivered_at: string;
+          order_count: number;
+          outstanding_iqd: number;
+          phone: string;
+        }[];
+      };
+      cash_outstanding_orders: {
+        Args: { p_driver_id: string };
+        Returns: {
+          amount_iqd: number;
+          building: string;
+          delivered_at: string;
+          delivery_fee_iqd: number;
+          order_id: string;
+          order_number: number;
+          subsection: string;
+          subtotal_iqd: number;
+          total_iqd: number;
+        }[];
+      };
       claim_push_notifications: {
         Args: { p_limit?: number };
         Returns: {
@@ -1342,6 +1512,10 @@ export type Database = {
           recipients: Json;
           title: string;
         }[];
+      };
+      correct_cash_handover: {
+        Args: { p_id: string; p_note: string; p_received_iqd: number };
+        Returns: Json;
       };
       current_user_role: {
         Args: Record<PropertyKey, never>;
@@ -1354,6 +1528,18 @@ export type Database = {
       };
       delete_category: { Args: { p_id: number }; Returns: string };
       dismiss_failed_notifications: { Args: Record<PropertyKey, never>; Returns: number };
+      driver_cash_summary: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          includes_delivery_fee: boolean;
+          last_difference_iqd: number;
+          last_handover_at: string;
+          last_received_iqd: number;
+          oldest_delivered_at: string;
+          order_count: number;
+          outstanding_iqd: number;
+        }[];
+      };
       driver_request_rate_hit: { Args: { p_ip: string; p_phone: string }; Returns: boolean };
       driver_request_status: {
         Args: { p_device_secret: string; p_request_id: string };
@@ -1402,6 +1588,21 @@ export type Database = {
           phone: string;
         }[];
       };
+      my_cash_handovers: {
+        Args: { p_before_at?: string; p_before_id?: string; p_limit?: number };
+        Returns: {
+          corrected_at: string;
+          difference_iqd: number;
+          expected_iqd: number;
+          id: string;
+          includes_delivery_fee: boolean;
+          note: string;
+          order_count: number;
+          received_iqd: number;
+          recorded_at: string;
+          recorded_by_name: string;
+        }[];
+      };
       panel_session_alive: { Args: Record<PropertyKey, never>; Returns: boolean };
       pending_driver_requests_count: { Args: Record<PropertyKey, never>; Returns: number };
       place_order: {
@@ -1444,6 +1645,17 @@ export type Database = {
         Returns: Json;
       };
       recompute_daily_stats: { Args: { p_from: string; p_to: string }; Returns: number };
+      record_cash_handover: {
+        Args: {
+          p_driver_id: string;
+          p_expected_iqd: number;
+          p_idempotency_key: string;
+          p_note: string;
+          p_order_count: number;
+          p_received_iqd: number;
+        };
+        Returns: Json;
+      };
       record_pin_reset: {
         Args: { p_kind?: string; p_reset_by: string; p_user_id: string };
         Returns: undefined;
@@ -1462,6 +1674,7 @@ export type Database = {
       };
       reorder_categories: { Args: { p_ids: number[] }; Returns: undefined };
       reorder_products: { Args: { p_ids: string[] }; Returns: undefined };
+      report_cash: { Args: { p_from: string; p_to: string }; Returns: Json };
       report_daily: {
         Args: { p_from: string; p_to: string };
         Returns: {
@@ -1537,6 +1750,7 @@ export type Database = {
           cancel_reason: string | null;
           cancelled_at: string | null;
           cancelled_by: string | null;
+          cash_handover_id: string | null;
           city_id: number | null;
           created_at: string;
           customer_id: string | null;
@@ -1586,6 +1800,7 @@ export type Database = {
       update_app_settings: {
         Args: { p: Json };
         Returns: {
+          cash_handover_includes_delivery_fee: boolean;
           closed_message: string | null;
           delivery_fee_iqd: number;
           id: number;
