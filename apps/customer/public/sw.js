@@ -55,7 +55,8 @@ self.addEventListener('push', function (event) {
   var data = cleanData(payload.data);
   var title = typeof payload.title === 'string' && payload.title ? payload.title : 'المخضر';
   var body = typeof payload.body === 'string' ? payload.body : '';
-  var tag = (data.status || data.type || 'order') + ':' + (data.order_id || '');
+  // R3 L2: إشعار واحد لكل طلب (الحالة الأحدث تستبدل الأقدم بدل أن تتراكم)
+  var tag = 'order:' + (data.order_id || '');
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(title, {
@@ -83,9 +84,15 @@ self.addEventListener('notificationclick', function (event) {
         return c.url.indexOf(self.location.origin) === 0 && typeof c.focus === 'function';
       });
       if (open) {
-        return open.focus().then(function () {
-          open.postMessage({ type: CLICK, data: data });
-        });
+        // R3 L3: إن رُفض التركيز لا يضيع النقر: نفتح المسار بنافذة
+        return open
+          .focus()
+          .then(function () {
+            open.postMessage({ type: CLICK, data: data });
+          })
+          .catch(function () {
+            return self.clients.openWindow(route);
+          });
       }
       return self.clients.openWindow(route);
     }),
