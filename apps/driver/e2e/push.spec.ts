@@ -12,6 +12,35 @@ function fakeJwt(): string {
   return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: USER_ID, role: 'authenticated', exp: 4102444800 })}.sig`;
 }
 
+/** هل كُتب المدخل بمخزن IndexedDB المشفَّر (`mukhdar-secure`/`items`)؟ للانتظار بلا نوم ثابت. */
+function idbHasItem(page: Page, key: string): Promise<boolean> {
+  return page.evaluate(
+    (k) =>
+      new Promise<boolean>((resolve) => {
+        const open = indexedDB.open('mukhdar-secure');
+        open.onerror = () => resolve(false);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains('items')) {
+            db.close();
+            resolve(false);
+            return;
+          }
+          const get = db.transaction('items', 'readonly').objectStore('items').get(k);
+          get.onsuccess = () => {
+            db.close();
+            resolve(get.result !== undefined);
+          };
+          get.onerror = () => {
+            db.close();
+            resolve(false);
+          };
+        };
+      }),
+    key,
+  );
+}
+
 interface Seen {
   rpc: { name: string; body: unknown }[];
   deletes: string[];
@@ -199,6 +228,11 @@ test.describe('driver Web Push (Chromium, simulated Notification/PushManager)', 
     );
     await page.getByTestId('push-later').click();
     await expect(page.getByTestId('push-prompt')).toBeHidden();
+    // البطاقة تختفي فوراً (تفاؤلياً) بينما الكتابة بـ IndexedDB المشفَّر غير متزامنة: انتظر وصول القيمة فعلاً
+    // قبل إعادة التحميل، وإلا يقطع reload الكتابة على CI البطيء ويظهر الكرت من جديد.
+    await expect
+      .poll(() => idbHasItem(page, 'mukhdar.driver.pushSnoozeUntil'), { timeout: 10_000 })
+      .toBe(true);
     await page.reload();
     await expect(page.getByTestId('ready-list')).toBeVisible();
     await expect(page.getByTestId('push-prompt')).toBeHidden();
