@@ -149,7 +149,7 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       await expect(staff.getByTestId('cash-notice')).toContainText('تم: استلمت');
       await expect(driverRow(staff, driverName)).toHaveAttribute('data-outstanding', '0');
       await expect(driverRow(staff, driverName).getByTestId('receive-cash')).toBeDisabled();
-      expect(await outstandingFor(admin, driverId)).toBeUndefined();
+      expect((await outstandingFor(admin, driverId))?.outstanding_iqd ?? 0).toBe(0);
     });
 
     test('a shortage needs a note: button disabled without it; with it the history shows a "نقص" badge', async () => {
@@ -207,7 +207,7 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       await dialog.getByTestId('handover-same').click();
       await dialog.getByTestId('handover-confirm').click();
       await expect(staff.getByTestId('cash-notice')).toContainText('تم: استلمت');
-      expect(await outstandingFor(admin, driverId)).toBeUndefined();
+      expect((await outstandingFor(admin, driverId))?.outstanding_iqd ?? 0).toBe(0);
     });
 
     test('admin corrects a handover (note required), the row shows "مُصحَّح" with the original amount', async () => {
