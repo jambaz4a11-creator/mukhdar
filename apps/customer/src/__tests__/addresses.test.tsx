@@ -448,7 +448,8 @@ describe('address form', () => {
     ]);
     await renderUi(<EditAddressScreen />);
     expect(await screen.findByText(ar.address.editTitle)).toBeTruthy();
-    expect(await screen.findByTestId('block-value')).toHaveTextContent('B8');
+    // العنصر موجود من أول رسم بنص الاختيار الفارغ، فننتظر وصول قيمة العنوان نفسها (لا findBy وحدها)
+    await waitFor(() => expect(screen.getByTestId('block-value')).toHaveTextContent('B8'));
     expect(screen.getByTestId('building-value')).toHaveTextContent('10');
     expect(screen.getByTestId('floor-value')).toHaveTextContent('3');
     expect(screen.getByTestId('apartment-value')).toHaveTextContent('7');
@@ -472,8 +473,8 @@ describe('address form', () => {
     const { calls } = setup([makeAddress('a1', { isDefault: true, floor: null, apartment: '26' })]);
     await renderUi(<EditAddressScreen />);
     expect(await screen.findByTestId('address-fix-notice')).toHaveTextContent(ar.address.fixOld);
-    expect(await screen.findByTestId('block-value')).toHaveTextContent('A3');
-    expect(await screen.findByTestId('building-value')).toHaveTextContent('12');
+    await waitFor(() => expect(screen.getByTestId('block-value')).toHaveTextContent('A3'));
+    await waitFor(() => expect(screen.getByTestId('building-value')).toHaveTextContent('12'));
     // الحقلان غير الصالحين يبدآن فارغين
     expect(screen.getByTestId('floor-value')).toHaveTextContent(ar.address.floorPlaceholder);
     expect(screen.getByTestId('apartment-value')).toHaveTextContent(
