@@ -73,7 +73,7 @@
 | 40 | [DB: `cash_handovers` والدوال والرصيد الافتتاحي وإعداد الأجرة + pgTAP بالدور الحقيقي + التزامن](40-cash-handover-db.md) | Q1 ✅ | Opus | **migration** | ✅ 2026-11-22 (PR #37، CI أخضر؛ `20261212000001` على mukhdar-dev بـ `db push --remote` بعد dry-run، 43 = 43، `db:test:remote` 39/39؛ إعادة نشر `delete-account` مع T42) |
 | 41 | [اللوحة: "تسليم الكاش" + قسم التقارير + إعداد الأجرة بـ `/settings` + Playwright](41-admin-cash.md) | 40 | Sonnet | - | ✅ 2026-11-22 (PR بالفرع `feat/t41-admin-cash`؛ بلا migration ولا Edge Function؛ نشر اللوحة بعد الدمج) |
 | 42 | [تطبيق السائق: الكاش منذ آخر تسليم، سجل التسليمات، الإشعار](42-driver-cash.md) | 40 | Sonnet | إعادة نشر `delete-account` فقط | ✅ 2026-11-22 (PR #39 مدموج، CI أخضر؛ بلا migration؛ `delete-account` أُعيد نشرها على mukhdar-dev فقط؛ بناء Cloudflare `mukhdar-driver` على main `770119a` ناجح) |
-| R4 | [**مراجعة** (`/review`) لـ T40–T42: السباقات، تصنيف المبالغ، الأدوار، الثابت المحاسبي](R4-cash-review.md) | 40–42 | Opus | - | ⬜ |
+| R4 | [**مراجعة** (`/review`) لـ T40–T42: السباقات، تصنيف المبالغ، الأدوار، الثابت المحاسبي](R4-cash-review.md) | 40–42 | Opus | - | ⬜ (التقرير [`docs/reviews/R4-cash-review.md`](../reviews/R4-cash-review.md) 2026-11-22: 0 Critical، 0 High، 2 Medium، 10 Low؛ الإصلاحات والفحص اليدوي على dev بجلسة منفصلة) |
 
 "على dev" = ما يحتاج **موافقة صاحب المشروع** قبل التنفيذ (migration بـ `pnpm sb db push`، نشر Edge Function، أو EAS/Firebase). الإنتاج خارج هذه الخطة. 29 مستقلة عن 28 (تُنفَّذ قبلها أو بعدها). iOS Ad Hoc لاحقاً، خارج T33.
 
