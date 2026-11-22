@@ -10,6 +10,7 @@ const mockController = {
   register: jest.fn(),
   remove: jest.fn(),
   retryPending: jest.fn(),
+  unsubscribeLocal: jest.fn(),
   isSnoozed: jest.fn(),
   snooze: jest.fn(),
 };
@@ -41,6 +42,13 @@ function renderUi(ui: ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
+type AuthListener = (event: string) => void;
+let mockAuthListeners: AuthListener[] = [];
+const fakeOnAuthStateChange = (fn: AuthListener) => {
+  mockAuthListeners.push(fn);
+  return { data: { subscription: { unsubscribe: jest.fn() } } };
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   Object.defineProperty(globalThis, 'document', {
@@ -55,7 +63,8 @@ beforeEach(() => {
   mockController.snooze.mockResolvedValue(undefined);
   mockController.remove.mockResolvedValue(undefined);
   mockController.retryPending.mockResolvedValue(undefined);
-  mockClient = { id: 'client' };
+  mockAuthListeners = [];
+  mockClient = { id: 'client', auth: { onAuthStateChange: fakeOnAuthStateChange } };
 });
 
 describe('PushPrompt (after the first order)', () => {
@@ -175,8 +184,23 @@ describe('NotificationsBridge.web', () => {
     mockController.register.mockResolvedValue('registered');
     await renderUi(<NotificationsBridge />);
     await waitFor(() => expect(mockController.register).toHaveBeenCalled());
-    expect(mockController.register).toHaveBeenCalledWith(mockClient, { ask: false });
+    expect(mockController.register).toHaveBeenCalledWith(mockClient, { ask: false, userId: 'u1' });
     expect(mockController.retryPending).toHaveBeenCalledWith(mockClient);
+  });
+
+  it('R3 L1: a passive SIGNED_OUT (revoked session, deleted account) unsubscribes locally', async () => {
+    jest.useFakeTimers();
+    try {
+      await renderUi(<NotificationsBridge />);
+      for (const l of mockAuthListeners) l('SIGNED_IN');
+      jest.runOnlyPendingTimers();
+      expect(mockController.unsubscribeLocal).not.toHaveBeenCalled();
+      for (const l of mockAuthListeners) l('SIGNED_OUT');
+      jest.runOnlyPendingTimers();
+      expect(mockController.unsubscribeLocal).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('does nothing while a temporary PIN must be changed or without a session', async () => {

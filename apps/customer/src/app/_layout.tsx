@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../lib/webShims';
 import { AppText } from '../components/AppText';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { StorageWarning } from '../components/StorageWarning';
 import { config } from '../config';
 import { ForcedPinGuard } from '../features/auth/ForcedPinGuard';
 import { initAuth } from '../features/auth/store';
@@ -88,6 +89,8 @@ function RootLayout() {
         <StatusBar style="dark" />
         <NotificationsBridge />
         <OfflineBanner />
+        {/* R3 M4: الويب فقط، عند التخزين بالذاكرة (وضع خاص) */}
+        <StorageWarning />
         <ForcedPinGuard />
         <Stack
           screenOptions={{

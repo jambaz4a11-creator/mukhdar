@@ -3,8 +3,9 @@
 // routeForNotification نفسها (UUID + أنواع معروفة) بعد أن يعرف الحارس الوجهة. نفس أسماء التصدير للنسخة الأصلية.
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { canUseRemotePush, registerPushToken } from '../../lib/push';
+import { canUseRemotePush } from '../../lib/push';
 import { getSupabase } from '../../lib/supabase';
+import { getWebPush } from '../../lib/webPushController';
 import { isGuardBlocking } from '../auth/guard';
 import { useAuth } from '../auth/store';
 import { emitNotification } from './events';
@@ -35,7 +36,8 @@ export function NotificationsBridge() {
   useEffect(() => {
     const client = getSupabase();
     if (!userId || !isActiveDriver || !client || !canUseRemotePush()) return undefined;
-    const silent = () => void registerPushToken(client, { ask: false });
+    // userId: نفس الحساب ونفس الـ endpoint خلال ساعة ← بلا RPC (R3 L4)
+    const silent = () => void getWebPush().register(client, { ask: false, userId });
     silent();
     const onVisible = () => {
       if (document.visibilityState === 'visible') silent();
@@ -51,6 +53,17 @@ export function NotificationsBridge() {
       sw.removeEventListener('message', onChanged);
     };
   }, [userId, isActiveDriver]);
+
+  // R3 L1: الجلسة ضاعت بلا خروج (رمز التحديث أُبطل/انتهى): لا جلسة لحذف الصف، فنبطل الاشتراك محلياً (خدمة الدفع
+  // ترجع 410 فيحذف المرسِل الصف) حتى لا يستقبل الجهاز إشعارات حساب لم يعد داخلاً. بعد signOut() لا اشتراك فلا شيء.
+  useEffect(() => {
+    const client = getSupabase();
+    if (!client || !canUseRemotePush()) return undefined;
+    const { data } = client.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') setTimeout(() => void getWebPush().unsubscribeLocal(), 0);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   // رسائل الـ SW: وصول إشعار (تحديث فوري) ونقره (توجيه)
   useEffect(() => {

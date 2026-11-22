@@ -333,6 +333,11 @@ export const ar = {
     pinSame: PIN_CHANGE_MESSAGES.same,
     pinFailed: PIN_CHANGE_MESSAGES.failed,
   },
+  // R3 M4 (SPEC-webpush §6.3): التخزين المشفَّر غير متاح (وضع التصفح الخاص…) ← الجلسة بالذاكرة فقط
+  storage: {
+    degraded:
+      'المتصفح ما يسمح بحفظ الدخول (يمكن وضع التصفح الخاص). إذا سكّرت الصفحة تحتاج تسجّل دخول من جديد.',
+  },
   offline: {
     banner: `${glossary.noInternet}. نعرض آخر معلومات محفوظة`,
     title: glossary.noInternet,
