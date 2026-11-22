@@ -245,5 +245,5 @@ fee-setting flip.
 6. **L5, L9**: small migration changes, or record them as SPEC assumptions.
 7. **L7, L8**: dialog polish.
 8. **T3–T6**: test additions.
-9. **L10**: when those functions are next replaced.
+9. **L10**: done 2026-11-23 (migration `20261214000001_r4_l10_search_path.sql`, `search_path = ''` on the three functions, test `41_search_path_l10.sql`).
 10. Then the manual dev check (SPEC-cash §14 items 3–4), with the owner's approval.
