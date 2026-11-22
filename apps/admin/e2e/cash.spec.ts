@@ -217,6 +217,8 @@ test.describe.serial('cash handover (staff, then admin)', () => {
         .getByTestId('history-table')
         .locator('tr', { hasText: 'ورقة ممزقة' })
         .first();
+      const handoverId = await line.getAttribute('data-handover-id');
+      expect(handoverId).toBeTruthy();
       await line.getByTestId('correct-handover').click();
       const dialog = adminPage.getByTestId('correct-dialog');
       await expect(dialog.getByTestId('correct-confirm')).toBeDisabled(); // لم يتغير المبلغ ولا ملاحظة
@@ -228,13 +230,11 @@ test.describe.serial('cash handover (staff, then admin)', () => {
       await dialog.getByLabel(/ملاحظة/).fill('عدّ ثاني: ظهرت ورقة');
       await dialog.getByTestId('correct-confirm').click();
       await expect(adminPage.getByTestId('cash-notice')).toHaveText('تم تصحيح التسليم');
-      const corrected = adminPage
-        .getByTestId('history-table')
-        .locator('tr', { hasText: 'ورقة ممزقة' })
-        .first()
-        .getByTestId('history-corrected');
-      await expect(corrected).toContainText('مُصحَّح');
-      await expect(corrected).toContainText(formatIQD(current));
+      // التصحيح يستبدل الملاحظة، فنجد الصف بمعرّف التسليم لا بنص الملاحظة القديم
+      const after = adminPage.locator(`tr[data-handover-id="${handoverId}"]`);
+      await expect(after.getByTestId('history-corrected')).toContainText('مُصحَّح');
+      await expect(after.getByTestId('history-corrected')).toContainText(formatIQD(current));
+      await expect(after).toContainText('عدّ ثاني: ظهرت ورقة');
     });
 
     test('admin report: "الكاش والسواق" shows report_cash numbers and the driver row', async () => {
