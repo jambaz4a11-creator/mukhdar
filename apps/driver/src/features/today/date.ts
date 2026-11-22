@@ -21,6 +21,14 @@ export function formatBaghdadDateLabel(now: number = Date.now()): string {
   return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
+/** "18 تشرين الثاني" لتوقيت بغداد من ISO (سجل التسليمات وبطاقة الكاش). */
+export function formatBaghdadDayMonth(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const d = new Date(t + BAGHDAD_OFFSET_MS);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+
 /** 74750 ← "74,750" */
 export function groupDigits(n: number): string {
   return Math.round(n)

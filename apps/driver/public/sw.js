@@ -24,6 +24,8 @@ function routeFor(data) {
       return '/my-orders';
     case 'driver_request_approved':
       return '/auth/pending';
+    case 'cash_handover':
+      return '/today';
     default:
       return null;
   }

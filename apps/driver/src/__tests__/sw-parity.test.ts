@@ -15,6 +15,8 @@ const CASES: unknown[] = [
   { type: 'unassigned', order_id: ID },
   { type: 'cancelled', order_id: ID },
   { type: 'driver_request_approved' },
+  { type: 'cash_handover' },
+  { type: 'cash_handover', handover_id: ID },
   { type: 'something_else', order_id: ID },
   { type: 5, order_id: ID },
   { order_id: ID },

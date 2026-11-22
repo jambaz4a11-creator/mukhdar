@@ -18,7 +18,7 @@ covered by the pgTAP tests in `supabase/tests/` (`04_status_transitions.sql`, `0
 
 The shop records, from the panel, that a driver handed over **all** the cash collected since the last
 handover. Every delivered order stays "in the driver's hands" (`orders.cash_handover_id is null`) until a
-handover links it. Screens: T42 (SPEC-cash §5). Functions for an **active driver** (`NOT_ALLOWED` for a
+handover links it. Screens: T42 (done 2026-11-22; SPEC-cash §5). Functions for an **active driver** (`NOT_ALLOWED` for a
 temporary PIN, a deactivated account, or another role):
 
 - `supabase.rpc('driver_cash_summary')` → always **one row**: `outstanding_iqd` (bigint), `order_count`,
@@ -38,9 +38,17 @@ temporary PIN, a deactivated account, or another role):
   (+ ` · نقص 250 د.ع` / ` · زيادة 500 د.ع`) or `تعدّل تسليم الكاش: …`; `data = { "type": "cash_handover",
   "handover_id": "uuid" }` → open the "today" tab and refresh.
 - Account deletion while holding cash: `begin_account_deletion` raises `CASH_OUTSTANDING` (`detail` =
-  amount); `delete-account` maps it to `409 { "error": "CASH_OUTSTANDING" }` (needs the function
-  redeployed, with T42). Message: "عندك كاش ما سلّمته للمحل (X د.ع). سلّمه أولاً" (read X from
-  `driver_cash_summary`).
+  amount); `delete-account` maps it to `409 { "error": "CASH_OUTSTANDING" }` (redeployed to
+  mukhdar-dev with T42). The 409 body carries **no amount**, so the app reads X from
+  `driver_cash_summary` and shows "عندك كاش ما سلّمته للمحل (X د.ع). سلّمه أولاً" (if that read
+  fails: the same message without the amount).
+- **How `apps/driver` uses it (T42):** the today tab shows the card from `driver_cash_summary`
+  (label "المطلوب تسليمه للمحل" + "أجرة التوصيل إلك، ما تنحسب" when `includes_delivery_fee = false`;
+  "ما سلّمت كاش بعد" when `last_handover_at` is null), the in-hand orders list (limit 200, display
+  only), and a "سجل التسليمات" screen (`/cash/history`, `my_cash_handovers`, pages of 20 by scrolling).
+  Refresh: on focus, every 30 s while visible, on return to the app, pull-to-refresh, and a
+  `cash_handover` push while open. The push opens `/today` (the URL of the tab; `routeForNotification`
+  and `public/sw.js` agree, enforced by `sw-parity.test.ts`).
 ## Self-registration (T27, migration `20261208000001`)
 
 A new driver registers from the app with name + phone; **no Auth account exists until an admin
@@ -528,7 +536,7 @@ minute). Nothing is sent to an account whose `must_change_pin` is true. Notifica
 | staff/admin marks `ready` an order already assigned to you | that driver | `الطلب #<number> جاهز للاستلام` | `{ "order_id": "uuid", "type": "ready" }` → open the order |
 | staff/admin assigns an order to you | that driver | `تم تعيين طلب لك #<number>`; if the order is already on the way (moved from another driver): `نُقل لك طلب بالطريق #<number>` | `{ "order_id": "uuid", "type": "assigned" }` → open the order (check its status) |
 | staff/admin reassigns your order to another driver | the previous driver | `سُحب منك الطلب #<number>` | `{ "order_id": "uuid", "type": "unassigned" }` → remove it from current orders |
-| the shop records (or corrects) your cash handover (T40) | that driver | `تسليم الكاش` (body `استلمنا منك X د.ع` [+ ` · نقص/زيادة Y د.ع`], or `تعدّل تسليم الكاش: …`) | `{ "handover_id": "uuid", "type": "cash_handover" }` → open the today tab and refresh |
+| the shop records (or corrects) your cash handover (T40) | that driver | `تسليم الكاش` (body `استلمنا منك X د.ع` [+ ` · نقص/زيادة Y د.ع`], or `تعدّل تسليم الكاش: …`) | `{ "handover_id": "uuid", "type": "cash_handover" }` → open the today tab (`/today`) and refresh |
 | an order assigned to you is cancelled | the assigned driver | `تم إلغاء الطلب #<number>` (body = `بلوك X - بناية Y` only; since R3 M1, 2026-11-22, the free-text reason is never sent in the push) | `{ "order_id": "uuid", "type": "cancelled", "status": "cancelled" }` → remove it from current orders |
 
 Delivery is chosen **per token** by its provider (`push_tokens.provider`, set by `register_push_token`):

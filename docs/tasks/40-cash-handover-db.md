@@ -1,6 +1,6 @@
 # 40: قاعدة بيانات تسليم الكاش ✅
 
-> **منجزة 2026-11-22 (PR #37، CI أخضر).** migration `20261212000001` على mukhdar-dev بـ `pnpm sb db push --remote` بعد dry-run؛ `migration list` مطابق 43 = 43؛ `db:test:remote` 39/39 (1739 تأكيداً، منها `39_cash_handover` 130). التزامن (CI): 5a–5d كلها تمر. `database.types.ts` من dev. **مؤجَّل لـ T42:** إعادة نشر `delete-account` (`CASH_OUTSTANDING` ← 409؛ قبلها 500 والحذف ممنوع على أي حال). فحص K9 بـ `39_cash_handover` و`12_delete_account`.
+> **منجزة 2026-11-22 (PR #37، CI أخضر).** migration `20261212000001` على mukhdar-dev بـ `pnpm sb db push --remote` بعد dry-run؛ `migration list` مطابق 43 = 43؛ `db:test:remote` 39/39 (1739 تأكيداً، منها `39_cash_handover` 130). التزامن (CI): 5a–5d كلها تمر. `database.types.ts` من dev. إعادة نشر `delete-account` (`CASH_OUTSTANDING` ← 409) أُنجزت مع T42 (2026-11-22، mukhdar-dev فقط). فحص K9 بـ `39_cash_handover` و`12_delete_account`.
 
 **الهدف:** SPEC-cash §2، §3 (K1–K19)، §9.1–§9.2. دفتر تسليمات بقاعدة البيانات: كل طلب مسلّم يبقى بذمة السائق حتى يُربط بتسليم كامل يسجّله أدمن أو موظف (aal2)، مع الفرق (نقص/زيادة) والتصحيح والتقرير ودالتي السائق، وإعداد الأجرة (Q1) بـ `app_settings`.
 **يعتمد على:** قرار Q1 (محسوم 2026-11-22: إعداد للأدمن، SPEC-cash §11).
