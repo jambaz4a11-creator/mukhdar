@@ -1,7 +1,7 @@
 # Open questions for the owner
 
-Decisions that were not mine to make. Items 1–3 (2026-11-18) were answered by the owner and are applied; open:
-the billing step in item 3 and the confirmation in item 4 (T35, not blocking).
+Decisions that were not mine to make. Items 1–4 were answered by the owner and are applied; open: the billing step
+in item 3, and item 5 (not blocking).
 
 ## 1. Address wording everywhere — ✅ resolved (2026-11-18)
 **Decision:** use "بلوك / بناية / الطابق / شقة" everywhere (order screens, admin, receipts, driver data and
@@ -39,3 +39,13 @@ reproduces the official RFC 8291 test vector **byte for byte**, adds no dependen
 keeps full control of the request (8 s timeout, no redirects, no URL in error messages). SPEC-webpush §5.4.
 **Your call:** keep it (my recommendation), or switch to the library. Either way, the first deploy (T38) sends a test
 notification to a desktop browser before any phone is involved.
+
+## 5. Will the customer web app (PWA) go to production? (R3 L8, 2026-11-22) — open, not blocking
+**Why it matters:** the customer PWA calls two browser-facing Edge Functions (`signup`, `delete-account`). In
+production they only answer origins listed in `ALLOWED_ORIGINS`. The RUNBOOK used to say "admin only" (§17) and
+"admin + driver PWA" (§16f), which disagree, and neither includes the customer web origin.
+**What I did:** one rule in RUNBOOK §16f, which §17 now follows: production = admin + driver PWA, **+ the customer PWA
+origin if the customer web app is launched in production**. No cloud change (production doesn't exist yet). Dev is
+unchanged (5 origins).
+**Your call (before T24):** launch the customer PWA in production (add its origin and a production Pages project), or
+keep the customer on the native apps only (leave it out).

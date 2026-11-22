@@ -82,6 +82,18 @@ jobs:
           name: driver-pwa-playwright
           path: apps/driver/test-results
           retention-days: 7
+      # R3 L7: PWA الزبون بلا خادم (manifest، CSP بلا unsafe-inline، sw.js بلا كاش، RTL، لا أخطاء CSP). المتصفحات من الخطوة السابقة.
+      - name: Customer PWA Playwright static (WebKit iPhone + Chromium Android)
+        working-directory: apps/customer
+        env:
+          E2E_SKIP_BUILD: '1'
+        run: pnpm exec playwright test -c playwright.static.config.ts
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: customer-pwa-playwright
+          path: apps/customer/test-results
+          retention-days: 7
       - name: Admin on Cloudflare (OpenNext build)
         run: pnpm --filter @mukhdar/admin run build:cf
 

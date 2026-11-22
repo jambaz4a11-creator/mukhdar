@@ -544,14 +544,14 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
   curl -i -X OPTIONS -H "Origin: https://mukhdar-driver.pages.dev" -H "Access-Control-Request-Method: POST" https://<ref>.supabase.co/functions/v1/driver-register   # 204 والأصل نفسه
   ```
 - **الاختبار:** `pnpm --filter @mukhdar/driver test:e2e` (يبني ويخدم `dist` مع `_headers` على `127.0.0.1:3100`؛ `E2E_SKIP_BUILD=1` لـ dist الحالي؛ `E2E_BASE_URL=https://mukhdar-driver.pages.dev` ضد المنشور). `login.spec.ts` يدخل بالسائق التجريبي `07000000011` (رمز `DRIVER_DEMO_PIN`) ولا يكتب شيئاً.
-- **الإنتاج لاحقاً:** مشروع Pages منفصل بمتغيرات الإنتاج، و`ALLOWED_ORIGINS` الإنتاج = أصل لوحة الإنتاج + أصل PWA السائق فقط (§17).
+- **الإنتاج لاحقاً:** مشروع Pages منفصل بمتغيرات الإنتاج. **`ALLOWED_ORIGINS` لكل بيئة (R3 L8، المرجع الوحيد):** الإنتاج = أصل لوحة الإنتاج + أصل PWA السائق، **+ أصل PWA الزبون إن أُطلق تطبيق الزبون على الويب بالإنتاج** (يستدعي `signup` و`delete-account` من المتصفح؛ قرار المالك، OPEN-QUESTIONS البند 5)؛ بلا `localhost` ولا `*`. التطوير = الأصول الخمسة أعلاه. §17 يتبع هذا البند.
 
 ## 17) إطلاق الإنتاج: ترتيب الـ migrations والدوال (مراجعات الجلسات A وB وC وD، حتى T26، وإصلاحات T23 جلسات E1 وE2 وF، 2026-11-17)
 
 > مشروع الإنتاج **لم يُنشأ بعد** (§1)، فلا توجد "حالة إنتاج سابقة": كل الـ migrations أدناه تُطبَّق عليه، **بهذا الترتيب** (الترتيب الزمني لأسماء الملفات؛ `db push` يطبّقها هكذا). كل خطوة سحابية **بموافقة صاحب المشروع**. إن وُجد مشروع إنتاج جزئياً لاحقاً: `pnpm sb migration list --remote` أولاً، ثم طبّق الناقص فقط بنفس الترتيب.
 > إصلاحات المراجعة `docs/reviews/review-fixes-AB.md` (جلسة C: migration `20261125000001` لـ H1/M1 والبنود Low، وإعادة نشر `admin-reset-pin`) مدرجة أدناه (الصفان 24 و25).
 
-### 1. الـ migrations بالترتيب (39 ملفاً)
+### 1. الـ migrations بالترتيب (42 ملفاً)
 | # | الملف |
 |---|---|
 | 1 | `20261110000001_init.sql` |
@@ -595,6 +595,7 @@ pnpm sb functions deploy driver-complete-registration --remote=<ref> --use-api -
 | 39 | `20261209000001_r1_driver_fixes.sql` (إصلاحات مراجعة R1 لـ T27–T30، قرارات المالك 2026-11-20: `set_user_role` زبون ← سائق يتطلب رمزاً مؤقتاً (H1)؛ `decide_driver_request` يسحب الموافقة من `approved` (M1)؛ `finish_driver_registration` يفحص الانتهاء (L1)؛ `submit_driver_request` بإشعار أدمن عام (M4) وموافقة منتهية تبقى `rejected` بملاحظة (L5)؛ و`pending_driver_requests_count()` (L8). نسخ دوال بنفس الصلاحيات، ودالة جديدة لـ authenticated. بعد `20261208000001`. **تُنشر معها** `driver-register` (M3: حد الرقم بعد الفحص) واللوحة (سحب الموافقة، العدّاد). فُحصت أولاً بـ `db:test:remote --prelude`) |
 | 40 | `20261210000001_webpush_enums.sql` (T36، SPEC-webpush §5.3: `push_provider += 'webpush'` و`push_platform += 'web'`. **ملف مستقل** لأن PostgreSQL لا يستعمل قيمة enum بنفس معاملة إضافتها. بعد `20261209000001`) |
 | 41 | `20261210000002_webpush_db.sql` (T36: `push_tokens.keys` وقيد `push_tokens_webpush_shape` (endpoint https بلا منفذ على مضيفي الدفع المسموحين، طول ≤ 1024، مفاتيح base64url، المنصة `web` ⇔ `webpush`)؛ `register_web_push` لـ authenticated (نفس قواعد `register_push_token` الذي **لم يُمس**)؛ `claim_push_notifications` يضيف `keys` لمستلمي `webpush` فقط (نفس نوع المخرجات، مستلمو Expo بنفس الشكل، فـ `push-dispatch` المنشور حالياً يتخطى webpush بلا كسر). **بعد `20261210000001`.** لا Edge Function ولا تطبيق يعتمد عليها بعد (العميل بـ T38). **طُبّقت مع 40 على mukhdar-dev فقط** (2026-11-21، `pnpm sb db push --remote`، بعد CI أخضر بـ db-tests المحلي) |
+| 42 | `20261211000001_r3_cancel_push_privacy.sql` (R3 M1، 2026-11-22: `set_order_status` يرسل للسائق المعيَّن عند الإلغاء `بلوك X - بناية Y` فقط بدل سبب الإلغاء الحر (قد يحوي هاتف/طابق/شقة الزبون). تبديل حرفي لموضع واحد يفشل إن لم يجده؛ بلا تغيير جداول ولا صلاحيات ولا توقيع. لا Edge Function ولا تطبيق يعتمد عليها. بعد `20261210000002`. فُحصت أولاً بـ `db:test:remote --prelude`) |
 
 **شجرة عناوين بسماية الدقيقة (2026-11-19):** `pnpm exec node scripts/address-tree/run.mjs --remote` (معاينة، لا يكتب) ثم `--apply`. البيانات بملف واحد `scripts/address-tree/data.json` (13 بلوكاً: A1..A9 وB1 وB2 وB3 وB8 بعماراتها 1..N)، والسكربت قابل للإعادة (يُنشئ الناقص، يفعّل المذكور، يُخفي ما عداه، لا يحذف ولا يمس العناوين والطلبات) ويطبع العناوين المحفوظة غير الصالحة. **عند الإطلاق على الإنتاج** (بعد `db push` للـ migrations و`seed.sql` الأساسي): من نسخة الإنتاج المنفصلة (§17.2) `MUKHDAR_TARGET=prod node scripts/address-tree/run.mjs --remote --target=prod --confirm-ref=<ref الإنتاج>` (معاينة) ثم الأمر نفسه مع `--apply`؛ يرفض أي مشروع غير مسجَّل بـ `PROD_PROJECT_REFS`.
 
@@ -622,13 +623,13 @@ select count(*) from public.buildings where number !~ '^([1-9][0-9]?|100)$';
    ```
    كل أوامر الإنتاج بالخطوات التالية تُشغَّل من `../mukhdar-prod` فقط، بـ `MUKHDAR_TARGET=prod pnpm sb …`، وتكتب الـ ref عند السؤال. لا حاجة لـ "إعادة ربط التطوير": نسخة التطوير لم تُمس. (سكربتات `seed:*` و`db:concurrency` و`it:*` ترفض أي مشروع غير mukhdar-dev، **وترفض ref الإنتاج دائماً حتى لو أُضيف خطأً لقائمة التطوير** (T23 H3، `scripts/seed-guard.test.mjs`)، وهذا مقصود. اختبار الحمل على الإنتاج له مسار صريح منفصل: §17.4.)
 2. إعدادات Auth من اللوحة **أولاً**: §6 الخطوات 1، 2، 4، 5، 6 (Email: Disabled)، 7، و**8 (TOTP: Enabled) قبل أي migration** (`20261130000001` تقفل الأدمن عن اللوحة بلا TOTP). **الخطوة 3 (إيقاف التسجيل العام) لاحقاً**، بعد نشر `signup`.
-3. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 39 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد). **لا** `insert into private.deployment` على الإنتاج (علامة التطوير فقط، L3؛ تُضاف على mukhdar-dev مرة واحدة يدوياً وبـ `seed.sql` محلياً).
+3. `pnpm sb db push --remote --dry-run` ← يجب أن يعرض الـ 42 ملفاً بالترتيب أعلاه ← `MUKHDAR_TARGET=prod pnpm sb db push --remote` (يسأل الحارس عن الـ ref ثم الـ CLI عن التأكيد). **لا** `insert into private.deployment` على الإنتاج (علامة التطوير فقط، L3؛ تُضاف على mukhdar-dev مرة واحدة يدوياً وبـ `seed.sql` محلياً).
 4. الدوال، بالترتيب (كلها بعد الخطوة 3، فالقواعد أعلاه محققة تلقائياً؛ **كلها `--no-verify-jwt`** منذ T23 F H2: التحقق من المستخدم داخل الدالة):
    ```bash
    pnpm sb functions deploy push-dispatch     --remote=<prod-ref> --use-api --no-verify-jwt
    pnpm sb functions deploy delete-account    --remote=<prod-ref> --use-api --no-verify-jwt
    pnpm sb functions deploy signup            --remote=<prod-ref> --use-api --no-verify-jwt
-   MUKHDAR_TARGET=prod pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain> --project-ref <prod-ref>   # T23 H1: نطاق لوحة الإنتاج فقط، قبل الدالتين
+   MUKHDAR_TARGET=prod pnpm sb secrets set ALLOWED_ORIGINS=https://admin.<domain>,https://<driver-pwa> --project-ref <prod-ref>   # T23 H1 + R3 L8: اللوحة + PWA السائق (+ الزبون إن أُطلق ويب، §16f)، قبل الدالتين
    pnpm sb functions deploy admin-reset-pin   --remote=<prod-ref> --use-api --no-verify-jwt   # بعد 20261125000001
    pnpm sb functions deploy admin-create-user --remote=<prod-ref> --use-api --no-verify-jwt   # بعد 20261124000001
    pnpm sb functions deploy driver-register              --remote=<prod-ref> --use-api --no-verify-jwt   # T28، بعد 20261208000001 (§16b)
@@ -651,7 +652,7 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 لازمة **قبل فتح التطبيق للزبائن** (T22 اعتُبرت ✅ بالصحة فقط؛ الزمن لم يُقَس على بيئة حقيقية):
 - [ ] **اختيار منطقة الإنتاج الأقرب للعراق:** قِس زمن الذهاب والإياب (RTT) من بغداد إلى المناطق المرشحة لـ Supabase (مثلاً Frankfurt مقابل Singapore وأي منطقة أقرب متاحة) واختر الأقل. إن اختلف الناتج عن `eu-central-1` المذكورة بالخطوة 2.1 فحدّث RUNBOOK §1 وهذه الوثيقة بنفس الـ commit، **قبل** إنشاء المشروع (المنطقة لا تتغير بعدها).
 - [ ] **اختبار الحمل قبل فتح الإنتاج للزبائن** بنفس العتبات. **الأفضل** على مشروع staging بنفس خطة الإنتاج ومنطقته (يُضاف ref الـ staging لـ `DEV_PROJECT_REFS` كأي مشروع تطوير). على الإنتاج نفسه فقط إن لم يوجد staging، **وبالمسار الصريح فقط** (T23 H3): من نسخة الإنتاج المنفصلة (§17.2 الخطوة 1)، `pnpm load:run -- --target=prod` (يرفض إن لم يكن المشروع المربوط هو ref الإنتاج المسجّل بـ `PROD_PROJECT_REFS`، ويطلب طرفية حقيقية **وكتابة الـ ref حرفياً**)، ثم `pnpm load:cleanup -- --target=prod` والتحقق من **صفر بقايا** (حسابات وطلبات وحركات مخزون الحمل). **لا تضف ref الإنتاج أبداً لـ `DEV_PROJECT_REFS`** (ولا لأي قائمة سماح للتطوير): `seed:demo`/`seed:reset` و`it:*` ترفضه دائماً، وأي ref بالقائمتين يوقف كل السكربتات. الحمل يسجّل TOTP لأدمن/موظف الحمل المؤقتين بنفسه (Auth API) ويحذفهما بالتنظيف.
-- [ ] **`ALLOWED_ORIGINS` على الإنتاج = نطاق لوحة الإنتاج فقط** (مثلاً `https://admin.<domain>`، بلا `localhost` ولا `*`)، قبل نشر `admin-reset-pin` و`admin-create-user` (§16). تحقق: `curl -i -X OPTIONS -H "Origin: https://admin.<domain>" -H "Access-Control-Request-Method: POST" https://<prod-ref>.supabase.co/functions/v1/admin-reset-pin` ← 204 بالأصل نفسه، و`Origin: http://localhost:3000` ← 403 بلا ترويسة.
+- [ ] **`ALLOWED_ORIGINS` على الإنتاج = كما بـ §16f** (اللوحة + PWA السائق، + PWA الزبون إن أُطلق؛ بلا `localhost` ولا `*`)، قبل نشر `admin-reset-pin` و`admin-create-user` (§16). تحقق: `curl -i -X OPTIONS -H "Origin: https://admin.<domain>" -H "Access-Control-Request-Method: POST" https://<prod-ref>.supabase.co/functions/v1/admin-reset-pin` ← 204 بالأصل نفسه، و`Origin: http://localhost:3000` ← 403 بلا ترويسة.
 - [ ] **TOTP مفعّل بـ Auth** (§6 الخطوة 8) وأول أدمن سجّل تطبيق المصادقة؛ واختبار سريع: دخول بالـ PIN وحده ← `/mfa`، ولا بيانات قبل الرمز.
 - [ ] **مراقبة كلفة استعلام Realtime الدوري على قاعدة الإنتاج:** كان أكبر مستهلك لقاعدة البيانات في T22 ([load-test-T22.md](reviews/load-test-T22.md)).
 - [ ] **اختبار `BELOW_MIN_ORDER` تحت الحمل على الإنتاج** إن كان للطلب حد أدنى مضبوطاً.

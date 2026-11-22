@@ -28,7 +28,7 @@ interface BrowserLike {
 /** يقرأ ما يلزم من window (أو لا شيء خارج المتصفح). */
 export function readBrowserInstallEnv(win: BrowserLike | undefined): BrowserInstallEnv {
   const nav = win?.navigator;
-  let displayMode = false;
+  let displayMode: boolean;
   try {
     displayMode = win?.matchMedia?.('(display-mode: standalone)').matches === true;
   } catch {

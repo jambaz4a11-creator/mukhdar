@@ -327,14 +327,14 @@ describe('R3 M3: a closed or lost IndexedDB connection is reopened', () => {
     const s = make({ indexedDB: factory });
     await s.setItem(KEY, SESSION);
     expect(opened).toHaveLength(1);
-    opened[0]!.close(); // أي معاملة بعدها ترمي InvalidStateError
+    opened[0]?.close(); // أي معاملة بعدها ترمي InvalidStateError
     expect(await s.getItem(KEY)).toBe(SESSION);
     expect(opened).toHaveLength(2);
     expect(s.isDegraded()).toBe(false);
-    opened[1]!.close();
+    opened[1]?.close();
     await s.setItem(KEY, 'v2');
     expect(await s.getItem(KEY)).toBe('v2');
-    opened[opened.length - 1]!.close();
+    opened.at(-1)?.close();
     await s.removeItem(KEY);
     expect(await s.getItem(KEY)).toBeNull();
   });
