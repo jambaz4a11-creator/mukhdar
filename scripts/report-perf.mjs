@@ -74,33 +74,49 @@ try {
   const t0 = performance.now();
 
   const cat = (
-    await gen('category', 
+    await gen(
+      'category',
       `insert into public.categories (name) values ('perf ' || gen_random_uuid()) returning id`,
     )
   ).rows[0].id;
-  await gen('products', 
+  await gen(
+    'products',
     `insert into public.products (category_id, name, unit, price_iqd)
      select $1, 'perf ' || g, case when g % 3 = 0 then 'باقة' else 'نص كيلو' end, 250 * (2 + g % 8)
        from generate_series(1, 60) g`,
     [cat],
   );
-  await gen('perf_products temp', 
+  await gen(
+    'perf_products temp',
     `create temp table perf_products on commit drop as
      select id, unit, price_iqd from public.products where category_id = $1`,
     [cat],
   );
-  await gen('product_costs', `insert into public.product_costs (product_id, cost_iqd)
-           select id, price_iqd - 250 from perf_products`);
+  await gen(
+    'product_costs',
+    `insert into public.product_costs (product_id, cost_iqd)
+           select id, price_iqd - 250 from perf_products`,
+  );
   await q(`analyze perf_products`); // جداول temp لا يحللها autovacuum: بلا هذا يخمّن المخطط أحجامها
-  await gen('perf_drivers temp', `create temp table perf_drivers on commit drop as
-    select gen_random_uuid() as id, g from generate_series(1, 12) g`);
-  await gen('driver users', `insert into auth.users (id, phone, aud, role)
-           select id, (9647799990000 + g)::text, 'authenticated', 'authenticated' from perf_drivers`);
-  await gen('driver profiles', `update public.profiles p set role = 'driver', full_name = 'سائق ' || d.g
-             from perf_drivers d where p.id = d.id`);
+  await gen(
+    'perf_drivers temp',
+    `create temp table perf_drivers on commit drop as
+    select gen_random_uuid() as id, g from generate_series(1, 12) g`,
+  );
+  await gen(
+    'driver users',
+    `insert into auth.users (id, phone, aud, role)
+           select id, (9647799990000 + g)::text, 'authenticated', 'authenticated' from perf_drivers`,
+  );
+  await gen(
+    'driver profiles',
+    `update public.profiles p set role = 'driver', full_name = 'سائق ' || d.g
+             from perf_drivers d where p.id = d.id`,
+  );
 
   // الطلبات: 85% مسلّمة، 8% ملغاة، والباقي معلّقة؛ موزعة على 366 يوماً تنتهي أمس (بغداد)
-  await gen('perf_orders temp', 
+  await gen(
+    'perf_orders temp',
     `create temp table perf_orders on commit drop as
      select gen_random_uuid() as id, g,
             (public.baghdad_today() - 366)::timestamp at time zone 'Asia/Baghdad'
@@ -111,26 +127,36 @@ try {
     [ORDERS],
   );
   await q(`analyze perf_orders, perf_drivers`);
-  await gen('orders', `insert into public.orders (id, address_snapshot, status, subtotal_iqd, delivery_fee_iqd, total_iqd,
+  await gen(
+    'orders',
+    `insert into public.orders (id, address_snapshot, status, subtotal_iqd, delivery_fee_iqd, total_iqd,
                                       idempotency_key, created_at, delivered_at, cancelled_at, driver_id)
            select o.id, '{}'::jsonb, o.status, 250 * (8 + o.g % 40), 1000, 250 * (8 + o.g % 40) + 1000,
                   gen_random_uuid(), o.created_at,
                   case when o.status = 'delivered' then o.created_at + interval '45 minutes' end,
                   case when o.status = 'cancelled' then o.created_at + interval '20 minutes' end,
                   case when o.status = 'delivered' then (select id from perf_drivers where g = 1 + o.g % 12) end
-             from perf_orders o`);
-  await gen('order_items', `with pp as (select id, unit, price_iqd, row_number() over (order by id) as n from perf_products)
+             from perf_orders o`,
+  );
+  await gen(
+    'order_items',
+    `with pp as (select id, unit, price_iqd, row_number() over (order by id) as n from perf_products)
            insert into public.order_items (order_id, product_id, name_snapshot, unit_snapshot,
                                            price_snapshot_iqd, qty, line_total_iqd)
            select o.id, pp.id, 'perf', pp.unit, pp.price_iqd, 1 + (o.g + k) % 5, pp.price_iqd * (1 + (o.g + k) % 5)
              from perf_orders o cross join generate_series(1, 4) k
-             join pp on pp.n = 1 + (o.g * 7 + k * 13) % 60`);
+             join pp on pp.n = 1 + (o.g * 7 + k * 13) % 60`,
+  );
   await q(`analyze public.order_items`);
-  await gen('order_item_costs', `insert into public.order_item_costs (order_item_id, cost_snapshot_iqd)
+  await gen(
+    'order_item_costs',
+    `insert into public.order_item_costs (order_item_id, cost_snapshot_iqd)
            select i.id, i.price_snapshot_iqd - 250 from public.order_items i
-             join perf_orders o on o.id = i.order_id`);
+             join perf_orders o on o.id = i.order_id`,
+  );
   // هدر وتسويات سالبة (~ 8 لكل يوم لكل … مجموعها ORDERS/5)
-  await gen('inventory_movements', 
+  await gen(
+    'inventory_movements',
     `insert into public.inventory_movements (product_id, qty, type, note, unit_cost_iqd, created_at)
      select p.id, -(1 + g % 4), case when g % 4 = 0 then 'adjust' else 'waste' end::public.movement_type,
             'perf', p.price_iqd - 250,
@@ -140,15 +166,22 @@ try {
     [Math.floor(ORDERS / 5)],
   );
   // تقييمات لـ 60% من المسلّمة (دون زبون: customer_id اختياري، والتعليق لثلثها)
-  await gen('ratings', `insert into public.ratings (order_id, stars, comment, created_at)
+  await gen(
+    'ratings',
+    `insert into public.ratings (order_id, stars, comment, created_at)
            select o.id, 1 + (o.g * 7) % 5, case when o.g % 3 = 0 then 'تعليق ' || o.g end,
                   o.created_at + interval '45 minutes' + random() * interval '2 hours'
-             from perf_orders o where o.status = 'delivered' and o.g % 10 < 6`);
-  await gen('rebuild_daily_stats', 
+             from perf_orders o where o.status = 'delivered' and o.g % 10 < 6`,
+  );
+  await gen(
+    'rebuild_daily_stats',
     `select private.rebuild_daily_stats(public.baghdad_today() - 367, public.baghdad_today())`,
   );
-  await gen('analyze', `analyze public.orders, public.order_items, public.order_item_costs, public.inventory_movements,
-           public.daily_stats, public.ratings, public.profiles`);
+  await gen(
+    'analyze',
+    `analyze public.orders, public.order_items, public.order_item_costs, public.inventory_movements,
+           public.daily_stats, public.ratings, public.profiles`,
+  );
   const counts = (
     await q(`select (select count(*) from public.orders)::int as orders,
                     (select count(*) from public.order_items)::int as items,
@@ -301,4 +334,5 @@ try {
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nall report timings within limits');
-process.exit(failures ? 1 : 0);
+// 3 = فشل التوليد (لا قياس تم): CI يعيد المحاولة مرة واحدة لهذا فقط؛ أي حد قياس مخروق (1) يفشل فوراً.
+process.exit(failures ? (generationFailed ? 3 : 1) : 0);
