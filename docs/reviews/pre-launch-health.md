@@ -19,11 +19,14 @@ by severity; the last section lists what this PR fixed and what is left as follo
 
 ### Medium
 
-**M1. Driver PWA downloads a 1.28 MB icon font for a single icon.** `apps/driver/src/components/AuthLayout.tsx`
+**M1. Driver PWA downloaded a 1.28 MB icon font for a single icon (FIXED, 2026-11-23).** `apps/driver/src/components/AuthLayout.tsx`
 imports `MaterialCommunityIcons` only for `truck-outline`; the whole `MaterialCommunityIcons.ttf` (1,307,660 bytes,
 about 30% of the driver's first-load weight) is fetched on the login page. Ionicons (390 KB) is already loaded anyway.
-Replacing that one icon with an Ionicons glyph removes the font. Not done here: it changes how the login screen looks,
-which is the owner's call. Follow-up.
+Fixed: the login header icon is now Ionicons `car-outline` (Ionicons has no truck glyph; this is the closest) and
+the `MaterialCommunityIcons` font is gone from `apps/driver/dist` (0 files, was 1,307,660 bytes). Re-measured with
+Lighthouse mobile on the rebuilt driver: performance 53 (was 55, within run-to-run noise: the score is dominated by JS
+execution under simulated throttling, not by this font, which only loads on demand), accessibility 100, best-practices
+100, SEO 63 (expected: `robots.txt` is `Disallow: /` on purpose), total transfer 2,905 KiB uncompressed.
 
 **M2. Customer first load is heavy.** `__common` is 2.2 MB raw (545 KB gzip) plus `entry` 1.1 MB (288 KB gzip), four
 IBM Plex Sans Arabic weights (about 0.9 MB of TTF) and the Ionicons font (381 KB). Lighthouse (mobile, simulated 4G):
@@ -97,10 +100,14 @@ adding the dry-run size line to CI later so growth is visible.
 
 ## Follow-ups (not done)
 
-1. M1: replace the one `MaterialCommunityIcons` icon in the driver login (saves 1.28 MB).
+1. ~~M1~~ done (driver login icon swapped to Ionicons, font removed).
 2. M2: customer first-load plan (font subsetting, code splitting, find out why `__common` is 2.2 MB), then
    re-measure on the deployed URL with a real phone.
 3. L1: bump or override `glob`/`minimatch` when Expo/Sentry release patched versions.
 4. L4: decide on uploading web source maps to Sentry.
 5. I2: print the worker size in CI.
 6. I1/I3: on-device PWA install and signed-in RTL pass.
+
+## Open question for the owner
+
+- Shop phone / WhatsApp number: not added anywhere yet (the owner has not provided the numbers). Needed before launch for the forgot-PIN flow.

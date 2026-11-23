@@ -86,5 +86,5 @@
 
 ### صحة ما قبل الإطلاق (2026-11-23)
 
-- [`docs/reviews/pre-launch-health.md`](../reviews/pre-launch-health.md): audit، أحجام الحزم، Lighthouse، العربية/RTL، مرتَّبة بالخطورة مع قائمة المتابعة (أبرزها: خط MaterialCommunityIcons بحجم 1.28 MB لأيقونة واحدة بتطبيق السائق، وثقل التحميل الأول للزبون). أُصلح منها: `robots.txt` للتطبيقين وalt الصور الزخرفية.
+- [`docs/reviews/pre-launch-health.md`](../reviews/pre-launch-health.md): audit، أحجام الحزم، Lighthouse، العربية/RTL، مرتَّبة بالخطورة مع قائمة المتابعة (أبرزها: خط MaterialCommunityIcons بحجم 1.28 MB لأيقونة واحدة بتطبيق السائق (أُصلح: صارت Ionicons)، وثقل التحميل الأول للزبون). أُصلح منها: `robots.txt` للتطبيقين وalt الصور الزخرفية.
 - اختبار `addresses.test.tsx` المتقطع أُصلح (PR #45): سباق قراءة القيم المعبّأة بشاشة التعديل ومهلة Jest الافتراضية 5 ثوانٍ على CI البطيء؛ `testTimeout: 20000` بـ `apps/customer`.

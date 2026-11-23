@@ -1,6 +1,6 @@
 // إطار شاشات الدخول (التصميم المعتمد): رأس أخضر اختياري بالشعار ("المخضر" / "تطبيق السائق")، محتوى قابل للتمرير،
 // وتذييل ثابت اختياري للزر الرئيسي. لوحة المفاتيح لا تغطي الحقول.
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,7 +31,7 @@ export function AuthLayout({
           {brandHeader ? (
             <View style={styles.header}>
               <View style={styles.logo}>
-                <MaterialCommunityIcons name="truck-outline" size={40} color={colors.primary} />
+                <Ionicons name="car-outline" size={40} color={colors.primary} />
               </View>
               <AppText weight="bold" size="display" color={colors.surface} style={styles.center}>
                 {ar.appName}
