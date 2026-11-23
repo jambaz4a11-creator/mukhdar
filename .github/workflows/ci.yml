@@ -117,6 +117,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Local function secrets (supabase/functions/.env from .env.example; never in config.toml)
+        run: cp supabase/functions/.env.example supabase/functions/.env
       - name: Start local Supabase (Postgres + Auth + Storage, migrations applied)
         timeout-minutes: 10
         run: >-
@@ -167,6 +169,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # edge-runtime: admin-reset-pin وadmin-create-user (T19) تُخدم محلياً من supabase/functions
+      - name: Local function secrets (supabase/functions/.env from .env.example; never in config.toml)
+        run: cp supabase/functions/.env.example supabase/functions/.env
       - name: Start local Supabase (Postgres + Auth + REST + Realtime + Storage + Edge Functions via Kong)
         timeout-minutes: 10
         run: >-

@@ -403,10 +403,10 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# T23 H1: أصول لوحة الأدمن المسموحة لـ CORS بالدالتين الإداريتين (مفصولة بفواصل، أبداً *). محلياً = أصل
-# لوحة التطوير وأصل e2e. على السحابة سر منفصل: supabase secrets set ALLOWED_ORIGINS=... (RUNBOOK §16، §17).
-[edge_runtime.secrets]
-ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3100,http://127.0.0.1:3100"
+# T23 H1: ALLOWED_ORIGINS (أصول CORS للدوال) **لا يُكتب هنا أبداً** ولا أي سر آخر بـ [edge_runtime.secrets]:
+# `supabase secrets set` يدفع هذا القسم للمشروع المربوط مع أي سر آخر، فكتب القيمة المحلية (localhost فقط) فوق
+# سر mukhdar-dev بـ 2026-11-21 وأوقف كل نداء دالة من الويب (بلاغ 2026-11-23). محلياً: supabase/functions/.env
+# (انسخه من .env.example؛ `supabase start` يقرأه)، وعلى السحابة: RUNBOOK §16f. الحارس: scripts/edge-secrets-guard.test.mjs
 
 # T07: تُستدعى من القاعدة (pg_net) بسر مشترك بترويسة x-dispatch-secret (يُتحقق منه بـ Vault)، لا بـ JWT.
 [functions.push-dispatch]
