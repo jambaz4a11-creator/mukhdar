@@ -19,7 +19,9 @@
 - **Report path:** the task file says `docs/reviews/review-R4-cash.md`; the owner asked for
   `docs/reviews/R4-cash-review.md` in this session, so the report is here.
 - **Not done in this session:** the manual check on dev (SPEC-cash §14 items 3 and 4). It needs the owner's approval
-  and a driver device. R4 stays ⬜ until that check is done and the fixes below are scheduled.
+  and a driver device. R4 stayed ⬜ until that check was done and the fixes below were scheduled.
+- **Update 2026-11-23:** the manual check was done by the owner on the driver PWA (real iPhone 11, iOS 26.6):
+  sign-in, push for new orders, the order flow and the cash handover all passed. The native APK check stays with T33.
 
 ## Test results
 
