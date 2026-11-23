@@ -115,6 +115,18 @@ describe('price validation (per kilo for half-kilo products)', () => {
     expect(validateProductForm(form({ unit: 'باقة', price: '1100' })).errors.price).toMatch(/250/);
   });
 
+  it('the new units كيس and عبوة are valid, priced per unit in multiples of 250', () => {
+    for (const unit of ['كيس', 'عبوة']) {
+      expect(
+        validateProductForm(form({ unit, price: '2500', threshold: '5' })).payload,
+      ).toMatchObject({
+        unit,
+        price_iqd: 2500,
+      });
+      expect(validateProductForm(form({ unit, price: '1100' })).errors.price).toMatch(/250/);
+    }
+  });
+
   it('a unit outside SALE_UNITS is not possible', () => {
     expect(validateProductForm(form({ unit: 'كيلو', price: '1000' })).errors.unit).toBeDefined();
   });

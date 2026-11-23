@@ -42,7 +42,7 @@ export const ar = {
   },
   catalog: {
     searchLabel: 'ابحث عن منتج',
-    searchPlaceholder: 'ابحث عن خضار أو فواكه',
+    searchPlaceholder: 'ابحث عن منتج',
     clearSearch: 'مسح البحث',
     categoriesLabel: 'الأقسام',
     all: 'الكل',
@@ -73,7 +73,7 @@ export const ar = {
     notFound: 'ما لقينا هذا المنتج، يمكن ما عاد متوفر',
   },
   auth: {
-    tagline: 'خضار وفواكه طازجة لباب بيتك ببسماية',
+    tagline: 'خضار وفواكه ومواد غذائية ومنظفات لباب بيتك ببسماية',
     signInTitle: 'سجّل دخولك',
     signUpTitle: 'حساب جديد',
     signUpHint: 'اختر رمزاً من 6 أرقام تتذكره. لا نرسل أي رسالة.',
@@ -153,7 +153,7 @@ export const ar = {
     title: 'السلة',
     count: (n: number) => `${n} ${n === 1 ? 'منتج' : 'منتجات'}`,
     empty: 'السلة فارغة',
-    emptyHint: 'أضف خضار وفواكه من الرئيسية.',
+    emptyHint: 'أضف منتجات من الرئيسية.',
     browse: glossary.browse,
     remove: 'حذف',
     removeA11y: (name: string) => `حذف ${name}`,
@@ -188,7 +188,9 @@ export const ar = {
     emptyCart: 'السلة فارغة',
     // T23 H2: تفصيل حدّي الطلب (الحد من app_settings). 20 وحدة = 10 كيلو للخضار والفواكه (نص كيلو).
     oneActiveOrder: 'لديك طلب جارٍ. انتظر وصوله ثم اطلب من جديد',
-    qtyLimit: (n: number) => `(الحد ${n} لكل منتج، يعني ${n / 2} كيلو للخضار والفواكه)`,
+    // kilos: نذكر الكيلو فقط حين كل بنود السلة بنص كيلو (غير ذلك: العدد فقط)
+    qtyLimit: (n: number, kilos = false) =>
+      kilos ? `(الحد ${n} لكل منتج، يعني ${n / 2} كيلو)` : `(الحد ${n} لكل منتج)`,
     linesLimit: (n: number) => `(الحد ${n} منتجاً بالطلب)`,
     // T23 F M3: حد قيمة الطلب (المجموع مع التوصيل)، المبلغ منسّق بـ formatIQD
     orderCap: (amount: string) => `(الحد ${amount} للطلب الواحد مع التوصيل)`,
