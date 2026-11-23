@@ -1,0 +1,94 @@
+name: Live smoke
+
+# Signs in with demo accounts on the DEPLOYED customer PWA, driver PWA and admin panel (mukhdar-dev),
+# and preflights every browser-called Edge Function from each deployed origin. Read-only: no orders,
+# no edits. On any failure: one ntfy push. Added after the 2026-11-23 "can't connect" incident.
+#
+# Runs on: every push to main (after Cloudflare finishes deploying that commit), every 6 hours, by hand.
+# Secrets (repo is public): this workflow never runs on pull_request / pull_request_target, so code from a
+# fork can't reach them. Nothing is uploaded (a Playwright trace would hold the PIN). RUNBOOK §18.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Wait for the Cloudflare deploys of this commit (push only)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Cloudflare posts check runs (app cloudflare-workers-and-pages): mukhdar-app, mukhdar-driver, mukhdar-admin
+          for i in $(seq 1 50); do
+            runs=$(gh api "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select(.app.slug == "cloudflare-workers-and-pages")]')
+            total=$(jq 'length' <<<"$runs")
+            pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
+            echo "cloudflare checks: $total, pending: $pending"
+            if [ "$total" -ge 3 ] && [ "$pending" -eq 0 ]; then break; fi
+            sleep 24
+          done
+          jq -r '.[] | "\(.name): \(.status) \(.conclusion)"' <<<"$runs"
+          bad=$(jq '[.[] | select(.conclusion != "success")] | length' <<<"$runs")
+          if [ "$total" -lt 3 ] || [ "$bad" -ne 0 ]; then
+            echo "::error::Cloudflare deploy not all green for $SHA ($total checks, $bad not success)"
+            exit 1
+          fi
+          # let the edge caches pick up the new build
+          sleep 30
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Edge Function CORS from every deployed origin (OPTIONS only)
+        run: pnpm cors:live
+
+      - name: Playwright browser
+        working-directory: apps/customer
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Sign in on the live customer, driver and admin apps (read-only)
+        working-directory: apps/customer
+        env:
+          SMOKE_PIN: ${{ secrets.DEMO_PIN }}
+          SMOKE_DRIVER_PIN: ${{ secrets.DRIVER_DEMO_PIN }}
+          SMOKE_TOTP_SECRET: ${{ secrets.DEMO_TOTP_SECRET }}
+        run: |
+          for v in SMOKE_PIN SMOKE_DRIVER_PIN SMOKE_TOTP_SECRET; do
+            if [ -z "${!v}" ]; then echo "::error::GitHub secret for $v is missing (RUNBOOK §18)"; exit 1; fi
+          done
+          pnpm test:smoke
+
+      - name: ntfy push on failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then echo "::warning::NTFY_TOPIC secret not set, no push sent"; exit 0; fi
+          curl -sS -m 10 -H "Title: mukhdar live smoke" -H "Priority: high" -H "Click: $RUN_URL" \
+            -d "mukhdar: live smoke FAILED ($EVENT). $RUN_URL" "https://ntfy.sh/$NTFY_TOPIC" > /dev/null

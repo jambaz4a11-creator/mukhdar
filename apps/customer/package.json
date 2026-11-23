@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:e2e": "playwright test",
-    "test:e2e:static": "playwright test -c playwright.static.config.ts"
+    "test:e2e:static": "playwright test -c playwright.static.config.ts",
+    "test:smoke": "playwright test -c playwright.live.config.ts"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.4.2",
@@ -70,7 +71,8 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "<rootDir>/e2e/"
+      "<rootDir>/e2e/",
+      "<rootDir>/e2e-live/"
     ]
   }
 }
