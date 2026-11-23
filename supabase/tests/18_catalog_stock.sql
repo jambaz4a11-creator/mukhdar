@@ -1,7 +1,7 @@
 -- 18: المنتجات والمخزون (T18): دوال المنتجات وسحب الكتابة المباشرة، adjust_stock الجديدة،
 -- adjust_stock_bulk (الذرية)، الكلفة والخسائر اليومية، إشعار النقص، recompute_daily_stats،
 -- والثابت stock.qty = Σ الحركات. الكميات بوحدات البيع (أنصاف الكيلو) والمبالغ لكل وحدة.
-select plan(72);
+select plan(76);
 
 select tests.remember('admin', tests.new_user('admin'));
 select tests.remember('staff', tests.new_user('staff'));
@@ -48,6 +48,18 @@ select throws_ok($$ select public.admin_save_product(jsonb_build_object(
 select throws_ok($$ select public.admin_save_product(jsonb_build_object(
     'category_id', current_setting('t.cat_id')::int, 'unit', 'باقة', 'price_iqd', 250)) $$,
   'INVALID_PRODUCT', 'a new product needs a name');
+-- T43: وحدتا "كيس" و"عبوة" مقبولتان (الدالة + قيد products_unit_allowed)، وغيرهما مرفوض
+select lives_ok($$ select public.admin_save_product(jsonb_build_object(
+    'category_id', current_setting('t.cat_id')::int, 'name', 'T43 رز', 'unit', 'كيس', 'price_iqd', 5000)) $$,
+  'unit كيس accepted');
+select lives_ok($$ select public.admin_save_product(jsonb_build_object(
+    'category_id', current_setting('t.cat_id')::int, 'name', 'T43 منظف', 'unit', 'عبوة', 'price_iqd', 2500)) $$,
+  'unit عبوة accepted');
+select results_eq($$ select unit from public.products where name in ('T43 رز', 'T43 منظف') order by name $$,
+  $$ values ('كيس'::text), ('عبوة'::text) $$, 'both products saved with the new units');
+select throws_ok($$ select public.admin_save_product(jsonb_build_object(
+    'category_id', current_setting('t.cat_id')::int, 'name', 'x', 'unit', 'كرتون', 'price_iqd', 250)) $$,
+  'INVALID_PRODUCT', 'a unit outside the list is still rejected');
 select throws_ok($$ select public.admin_save_product(jsonb_build_object(
     'category_id', -1, 'name', 'x', 'unit', 'باقة', 'price_iqd', 250)) $$,
   'INVALID_PRODUCT', 'unknown category');

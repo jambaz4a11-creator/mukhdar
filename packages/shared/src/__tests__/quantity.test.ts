@@ -35,6 +35,8 @@ describe('SALE_UNITS', () => {
 
   it('isSaleUnit rejects free text', () => {
     expect(isSaleUnit(HALF_KILO_UNIT)).toBe(true);
+    expect(isSaleUnit('كيس')).toBe(true);
+    expect(isSaleUnit('عبوة')).toBe(true);
     expect(isSaleUnit('كيلو')).toBe(false);
     expect(isSaleUnit('نصف كيلو')).toBe(false);
     expect(isSaleUnit(3)).toBe(false);
@@ -65,6 +67,8 @@ describe('formatQuantity', () => {
   it('other piece units are shown as "N unit"', () => {
     expect(formatQuantity(1, 'حبة')).toBe('1 حبة');
     expect(formatQuantity(3, 'سلة')).toBe('3 سلة');
+    expect(formatQuantity(2, 'كيس')).toBe('2 كيس');
+    expect(formatQuantity(4, 'عبوة')).toBe('4 عبوة');
   });
 
   it('tolerates surrounding spaces in the stored unit', () => {

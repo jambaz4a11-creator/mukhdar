@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ERROR_MESSAGES,
   formatIQD,
+  HALF_KILO_UNIT,
   parseBackendError,
   type CartLine,
   type ErrorCode,
@@ -18,6 +19,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { ar } from '../../i18n/ar';
 import { getSupabase } from '../../lib/supabase';
+import { cachedProductMap } from '../catalog/cache';
 import { APP_SETTINGS_KEY } from '../settings/useAppSettings';
 import { cartSignature, useCart } from '../cart/store';
 import { useSelectedAddress } from '../addresses/selected';
@@ -102,8 +104,17 @@ export interface PlaceOrderFailure {
   retryable: boolean;
 }
 
+function allHalfKilo(units: readonly (string | null)[]): boolean {
+  return units.length > 0 && units.every((u) => u === HALF_KILO_UNIT);
+}
+
 /** رسالة عربية لكل رمز من place_order (من errors.ts)، مع تفاصيل الحد (الأدنى، حدّا الطلب T23 H2، حدّا القيمة T23 F) إن وُجدت. */
-export function placeOrderMessage(code: ErrorCode | null, detail: string | null): string {
+export function placeOrderMessage(
+  code: ErrorCode | null,
+  detail: string | null,
+  /** وحدات بنود السلة: الكيلو يُذكر فقط إن كانت كلها "نص كيلو" (غير معروفة أو مختلطة ← العدد فقط) */
+  units: readonly (string | null)[] = [],
+): string {
   if (code === null) return ar.checkout.sendFailed;
   const base = ERROR_MESSAGES[code];
   const limit = detail && /^\d+$/.test(detail) ? Number(detail) : null;
@@ -111,7 +122,7 @@ export function placeOrderMessage(code: ErrorCode | null, detail: string | null)
   // T23 H2: الحساب الجديد (بلا طلب مُسلَّم) طلب مفتوح واحد فقط
   if (code === 'TOO_MANY_ACTIVE_ORDERS' && limit === 1) return ar.checkout.oneActiveOrder;
   if (code === 'BELOW_MIN_ORDER') return `${base} (${formatIQD(limit)})`;
-  if (code === 'QTY_LIMIT') return `${base} ${ar.checkout.qtyLimit(limit)}`;
+  if (code === 'QTY_LIMIT') return `${base} ${ar.checkout.qtyLimit(limit, allHalfKilo(units))}`;
   if (code === 'TOO_MANY_ITEMS') return `${base} ${ar.checkout.linesLimit(limit)}`;
   // T23 F M3: حد قيمة الطلب بالمبلغ
   if (code === 'ORDER_TOO_LARGE') return `${base} ${ar.checkout.orderCap(formatIQD(limit))}`;
@@ -172,7 +183,13 @@ export function usePlaceOrder() {
       const parsed = e instanceof PlaceOrderTimeout ? null : parseBackendError(e);
       const code = parsed?.code ?? null;
       const detail = parsed?.detail ?? null;
-      setFailure({ code, message: placeOrderMessage(code, detail), retryable: code === null });
+      const cached = cachedProductMap(queryClient);
+      const units = lines.map((l) => cached.get(l.product_id)?.unit ?? null);
+      setFailure({
+        code,
+        message: placeOrderMessage(code, detail, units),
+        retryable: code === null,
+      });
 
       if ((code === 'INSUFFICIENT_STOCK' || code === 'PRODUCT_UNAVAILABLE') && detail) {
         // رجوع للسلة مع تعليم المنتج (SPEC-customer §2.4)

@@ -78,7 +78,7 @@ export interface SettingsValues {
   max_active_orders: string;
   /** T23 H2: حد الطلبات المفتوحة لحساب بلا طلب مُسلَّم بعد (افتراضي 1) */
   new_account_max_active_orders: string;
-  /** T23 H2: حد الكمية لكل منتج بالطلب (وحدات بيع، 20 = 10 كيلو للنص كيلو) */
+  /** T23 H2: حد الكمية لكل منتج بالطلب (وحدات بيع، 20 = 10 كيلو للنص كيلو، ولغيره العدد نفسه) */
   max_line_qty: string;
   /** T23 H2: حد عدد المنتجات بالطلب */
   max_order_lines: string;

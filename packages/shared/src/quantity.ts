@@ -12,7 +12,16 @@ export const BUNCH_UNIT = 'باقة';
  * products_unit_allowed؛ إضافة وحدة = migration جديد يعدّل القيد + تحديث هذه القائمة
  * (اختبار quantity.test.ts يفشل إن اختلفتا).
  */
-export const SALE_UNITS = [HALF_KILO_UNIT, BUNCH_UNIT, 'حبة', 'علبة', 'قنينة', 'سلة'] as const;
+export const SALE_UNITS = [
+  HALF_KILO_UNIT,
+  BUNCH_UNIT,
+  'حبة',
+  'علبة',
+  'قنينة',
+  'سلة',
+  'كيس',
+  'عبوة',
+] as const;
 export type SaleUnit = (typeof SALE_UNITS)[number];
 
 export function isSaleUnit(value: unknown): value is SaleUnit {
