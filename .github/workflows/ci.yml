@@ -132,8 +132,21 @@ jobs:
         run: pnpm seed:demo --scale=load --no-images
       - name: pgTAP (with demo data; 09 = daily_stats matches orders)
         run: pnpm db:test
+      # التوليد (قبل القياس) علق مرة واحدة 15 دقيقة (2026-11-23) بينما القياسات نفسها 24-43ms لشهر. السكربت يسمّي كل
+      # خطوة توليد ويقيّدها بـ 3 دقائق ويخرج بـ 3 عند فشل التوليد فقط؛ نعيد المحاولة مرة واحدة لهذا الرمز.
+      # أي حد قياس مخروق (خروج 1) يفشل فوراً بلا إعادة، فالتراجع الحقيقي لا يُخفى. الحدود لم تُرفع.
       - name: Report RPC speed (T20; one year, 200k orders, rolled back)
-        run: pnpm db:report-perf
+        timeout-minutes: 12
+        run: |
+          set +e
+          pnpm db:report-perf
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::report-perf data generation failed (not a timing limit); retrying once"
+            pnpm db:report-perf
+            code=$?
+          fi
+          exit $code
       - name: seed:reset, then check again
         run: pnpm seed:reset && pnpm db:test 09
       - name: seed:demo refuses a non-local target (and says why)
