@@ -124,7 +124,9 @@ test.describe('device alerts (staff)', () => {
     await expect(
       panel.getByRole('button', { name: 'شغّل الإشعارات على هذا الجهاز' }),
     ).toBeVisible();
-    await expect(panel.getByText('يوصلك: طلب جديد، وإلغاء الزبون لطلبه.')).toBeVisible();
+    await expect(
+      panel.getByText('يوصلك: طلب جديد، إلغاء الزبون لطلبه، ونقص المخزون.'),
+    ).toBeVisible();
     await expect(panel.getByText(/طلب سائق/)).toHaveCount(0);
     await expect(panel.getByText(/12 ساعة/)).toBeVisible();
   });

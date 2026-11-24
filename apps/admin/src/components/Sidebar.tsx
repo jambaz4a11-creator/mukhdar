@@ -36,7 +36,8 @@ export function Sidebar({ items, role, name, pendingOrders, pendingDriverRequest
   // T44: "(N) …" بعنوان التبويب = الطلبات الجديدة (نفس رقم الشارة، حي بـ Realtime)
   useTitleCount(pending);
 
-  // T44 (SPEC-admin-push §4): حذف اشتراك إشعارات هذا الجهاز **قبل** خروج الخادم (وإلا يبقى الصف بلا جلسة)
+  // T44 (SPEC-admin-push §4): حذف اشتراك إشعارات هذا الجهاز ثم unsubscribe **قبل** خروج الخادم (الخادم يحذف أيضاً
+  // اشتراكات الجلسة بـ forget_session_push؛ الإشعارات لا تتوقف إلا بالخروج الصريح لا بالخمول)
   function onSignOut(e: React.FormEvent<HTMLFormElement>) {
     if (leaving.current) return; // الإرسال الثاني (requestSubmit) يمر للـ Server Action
     e.preventDefault();

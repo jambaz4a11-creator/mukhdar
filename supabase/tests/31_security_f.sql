@@ -55,7 +55,7 @@ select tests.as_postgres();
 select is((select session_id from public.push_tokens where token = 'ExponentPushToken[f-drv]'), null,
   'driver token carries no session');
 
--- المستلمون: aal2 حيّة فقط
+-- المستلمون (T44 متابعة: لا يشترط جلسة حيّة)
 insert into public.push_tokens (user_id, token, platform, session_id) values
   (tests.id('admin'), 'ExponentPushToken[f-adm-aal2]', 'ios', tests.panel_session(tests.id('admin'))),
   (tests.id('admin'), 'ExponentPushToken[f-adm-aal1]', 'ios', tests.panel_session(tests.id('admin'), 'aal1')),
@@ -73,13 +73,14 @@ grant all on f_claimed to service_role;
 select tests.as_service();
 insert into f_claimed select * from public.claim_push_notifications(50);
 select tests.as_postgres();
+-- T44 متابعة (قرار المالك 2026-11-24): الإرسال لم يعد مربوطاً بحياة الجلسة؛ الاشتراك يكفي أن يحمل جلسة (سُجِّل عبر register_*)
 select is((select jsonb_path_query_array(recipients, '$[*].token') from f_claimed where title = 'F-admins'),
-  '["ExponentPushToken[f-staff-ok]", "ExponentPushToken[f-adm-aal2]"]'::jsonb,
-  'admins audience: only tokens of live aal2 sessions (not aal1, idle, deleted or session-less)');
+  '["ExponentPushToken[f-staff-ok]", "ExponentPushToken[f-adm-aal2]", "ExponentPushToken[f-adm-aal1]", "ExponentPushToken[f-stf-idle]", "ExponentPushToken[f-stf-gone]"]'::jsonb,
+  'admins audience: every subscription registered with a session, even idle or ended (T44 follow-up); not session-less');
 select is((select jsonb_path_query_array(recipients, '$[*].token') from f_claimed where title = 'F-admins-only'),
-  '["ExponentPushToken[f-adm-aal2]"]'::jsonb, 'admins_only: same rule');
+  '["ExponentPushToken[f-adm-aal2]", "ExponentPushToken[f-adm-aal1]"]'::jsonb, 'admins_only: same rule');
 select is((select jsonb_path_query_array(recipients, '$[*].token') from f_claimed where title = 'F-admin-user'),
-  '["ExponentPushToken[f-adm-aal2]"]'::jsonb, 'a personal push to an admin: same rule');
+  '["ExponentPushToken[f-adm-aal2]", "ExponentPushToken[f-adm-aal1]"]'::jsonb, 'a personal push to an admin: same rule');
 select ok((select recipients @> '[{"token": "ExponentPushToken[f-drv]"}]' from f_claimed where title = 'F-drivers'),
   'drivers are unaffected (no session needed)');
 select ok(not has_function_privilege('authenticated', 'private.panel_push_session_ok(uuid)', 'execute'),

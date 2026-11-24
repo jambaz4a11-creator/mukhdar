@@ -205,14 +205,14 @@ select is(public.adjust_stock_bulk(jsonb_build_array(
 select is((select cost_iqd from public.product_costs where product_id = tests.id('w4')), 1250::bigint,
   'bulk purchase sets the purchase price');
 
--- ================================================================ إشعار النقص (للأدمن فقط، مرة عند العبور)
+-- ================================================================ إشعار النقص (للأدمن والموظف، قرار المالك Q2 2026-11-24؛ مرة عند العبور)
 select tests.as_postgres();
 select tests.remember('low', tests.new_product(500, 10));   -- الحد الافتراضي 5
 select tests.place(tests.id('cust'), jsonb_build_array(tests.item(tests.id('low'), 6)));  -- 10 ← 4
 select is(tests.low_alerts(tests.id('low')), 1, 'a sale crossing below the threshold writes one alert');
 select is((select audience from public.notification_outbox
             where data ->> 'type' = 'low_stock' and data ->> 'product_id' = tests.id('low')::text),
-  'admins_only', 'the alert goes to admins only');
+  'admins', 'the alert goes to the panel (admins and staff, owner decision Q2)');
 select tests.place(tests.id('cust'), jsonb_build_array(tests.item(tests.id('low'), 1)));  -- 4 ← 3
 select is(tests.low_alerts(tests.id('low')), 1, 'a second sale below the threshold does not repeat it');
 select tests.set_uid(tests.id('admin'));
@@ -220,7 +220,7 @@ select public.adjust_stock(tests.id('low'), 5, 'purchase', null, 250);   -- 3 �
 select public.adjust_stock(tests.id('low'), -4, 'waste');                -- 8 ← 4
 select is(tests.low_alerts(tests.id('low')), 2, 'back above the threshold then below again: a new alert');
 
--- المستلمون: الأدمن نعم، الموظف لا
+-- المستلمون: الأدمن والموظف (النص كميات فقط، بلا مبالغ)
 insert into public.push_tokens (user_id, token, platform, session_id)
 values (tests.id('admin'), 'ExponentPushToken[t18-admin]', 'ios', tests.panel_session(tests.id('admin'))),
        (tests.id('staff'), 'ExponentPushToken[t18-staff]', 'ios', tests.panel_session(tests.id('staff')));
@@ -228,9 +228,9 @@ update public.notification_outbox set sent_at = now()
  where sent_at is null and not (data ->> 'type' = 'low_stock' and data ->> 'product_id' = tests.id('low')::text);
 select tests.as_service();
 select ok((select bool_and(recipients @> '[{"token": "ExponentPushToken[t18-admin]"}]'
-                           and not recipients @> '[{"token": "ExponentPushToken[t18-staff]"}]')
+                           and recipients @> '[{"token": "ExponentPushToken[t18-staff]"}]')
              from public.claim_push_notifications(50)),
-  'low-stock alerts reach admins, not staff');
+  'low-stock alerts reach admins and staff');
 
 -- ================================================================ recompute_daily_stats = التحديث التراكمي
 select tests.as_postgres();
