@@ -112,6 +112,17 @@ Behaviour lives in `docs/SPEC-admin.md`; this section only records the look and 
 - Category and product images are resized in the browser to WebP before upload; missing images
   show a neutral tile with the first letter.
 
+## Panel alerts (T44): additions not in the approved design
+SPEC-admin-push §4–§5. Built with the existing tokens only (no new colours):
+1. **"🔔 تنبيهات هذا الجهاز"** at the bottom of the sidebar, above "تغيير الرمز": a 44 px row with a status dot
+   (`primary` on, `star` needs attention, `textMuted` off) that expands an inline card (`background`, `border`, radius 16):
+   status line, one button (primary "شغّل…" or outlined "أطفئ…"), what reaches this role, the 12-hour note, then the
+   per-device sound checkbox and "جرّب الصوت".
+2. **"فعّل الصوت" banner** at the top of every panel page while the browser keeps audio locked: `warningSoft` with
+   `warningText`, radius 16, primary button on the end. Hidden once audio is unlocked or the sound is off for this device.
+3. **Tab title** "(N) …" with the count of new orders (same number as the orders badge).
+4. **Home-screen icon** = the app icons for now (assumption A8).
+
 ## Home screen: deviations from the approved design (T25)
 Design source: `project/Home.dc.html` of the approved admin canvas. Implemented as drawn (layout, order of the
 8 cards, tags, colours, Iraqi wording such as "هسه" and "وي أمس", the 4 open-order tiles, the low-stock list).

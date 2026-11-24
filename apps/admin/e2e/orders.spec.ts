@@ -200,6 +200,8 @@ test.describe.serial('orders (writes: live order and actions)', () => {
       timeout: 5_000,
     });
     await expect(page.locator('html')).toHaveAttribute('data-new-order-alerts', /[1-9]/);
+    // T44: عدد الطلبات الجديدة بعنوان التبويب، بلا تحديث للصفحة
+    await expect(page).toHaveTitle(/^\(\d+\+?\) /);
     await expect(page.getByTestId('count-pending')).toHaveText(String(before + 1));
     await expect(badge).toHaveText(String(badgeBefore + 1));
   });

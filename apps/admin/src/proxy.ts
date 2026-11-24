@@ -153,8 +153,9 @@ async function handle(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  // كل شيء عدا ملفات Next الثابتة والصور والخطوط
+  // كل شيء عدا ملفات Next الثابتة والصور والخطوط، وملفات الـ PWA (T44): sw.js وmanifest يطلبهما المتصفح بلا جلسة
+  // أحياناً، وتحويلهما لصفحة الدخول يكسر التثبيت والإشعارات. لا بيانات بهما.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|webp|ico|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|sw\\.js$|manifest\\.webmanifest$|.*\\.(?:svg|png|jpg|jpeg|webp|ico|woff2?)$).*)',
   ],
 };

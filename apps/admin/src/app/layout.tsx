@@ -12,9 +12,17 @@ const plex = IBM_Plex_Sans_Arabic({
 export const metadata: Metadata = {
   title: { default: 'لوحة المخضر', template: '%s · لوحة المخضر' },
   robots: { index: false, follow: false },
+  // T44: قابلة للتثبيت على الشاشة الرئيسية (Web Push على الآيفون يحتاجه). manifest من app/manifest.ts
+  applicationName: 'لوحة المخضر',
+  appleWebApp: { capable: true, title: 'لوحة المخضر', statusBarStyle: 'default' },
+  icons: { apple: '/icons/apple-touch-icon.png' },
 };
 
-export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1F6B3A',
+};
 
 // T23 F L2: CSP بـ nonce لكل طلب (proxy.ts) يتطلب عرض كل صفحة ديناميكياً: الصفحة المبنية مسبقاً (static) لا تحمل
 // الـ nonce فيحجب المتصفح كل سكربتاتها ('strict-dynamic' يتجاهل 'self'). الصفحات العامة (/privacy، /terms،

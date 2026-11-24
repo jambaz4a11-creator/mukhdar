@@ -14,6 +14,7 @@ import { ordersKeys } from '@/features/orders/api';
 import { maxWaitDebounce } from '@/lib/maxWaitDebounce';
 import { PanelSessionExpiredError, leaveExpiredSession } from '@/lib/panelSession';
 import { playNewOrderSound, unlockAudio } from '@/lib/sound';
+import { silentReregister } from '@/features/notifications/pushClient';
 import type { MukhdarClient } from '@mukhdar/shared';
 import type { PanelRole } from '@/lib/access';
 
@@ -23,6 +24,8 @@ interface PanelContextValue {
   /** معرّفات الطلبات التي وصلت بهذه الجلسة (للتمييز بالجدول). */
   newOrderIds: ReadonlySet<string>;
   realtimeStatus: 'connecting' | 'live' | 'offline';
+  /** يزيد بعد كل تسجيل صامت لإشعارات الجهاز، فتعيد "تنبيهات هذا الجهاز" قراءة حالتها (T44). */
+  pushVersion: number;
 }
 
 const REFRESH_WAIT_MS = 250;
@@ -67,9 +70,10 @@ function RealtimeBridge({ children, role }: { children: React.ReactNode; role: P
   const supabase = useMemo(() => createClient(), []);
   const [newOrderIds, setNewOrderIds] = useState<ReadonlySet<string>>(() => new Set());
   const [realtimeStatus, setStatus] = useState<PanelContextValue['realtimeStatus']>('connecting');
+  const [pushVersion, setPushVersion] = useState(0);
 
   useEffect(() => {
-    const unlock = () => unlockAudio();
+    const unlock = () => void unlockAudio();
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
     return () => {
@@ -77,6 +81,25 @@ function RealtimeBridge({ children, role }: { children: React.ReactNode; role: P
       window.removeEventListener('keydown', unlock);
     };
   }, []);
+
+  // T44 (SPEC-admin-push §4): اشتراك إشعارات **موجود** بهذا الجهاز يُربط بالجلسة الحالية عند الفتح والرجوع (الإرسال
+  // للأدمن/الموظف مربوط بجلسته). لا يشترك من جديد ولا يطلب إذناً؛ مرة بالساعة لنفس الجلسة على الأكثر.
+  useEffect(() => {
+    let alive = true;
+    const run = () =>
+      void silentReregister(supabase).then(() => {
+        if (alive) setPushVersion((v) => v + 1);
+      });
+    run();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [supabase]);
 
   useEffect(() => {
     // دفعة تحديثات ← إعادة جلب واحدة؛ لكن تحت سيل مستمر (ذروة) لا ننتظر الهدوء: سقف انتظار 2 ثانية (M4).
@@ -111,8 +134,8 @@ function RealtimeBridge({ children, role }: { children: React.ReactNode; role: P
   }, [supabase, queryClient]);
 
   const value = useMemo(
-    () => ({ supabase, role, newOrderIds, realtimeStatus }),
-    [supabase, role, newOrderIds, realtimeStatus],
+    () => ({ supabase, role, newOrderIds, realtimeStatus, pushVersion }),
+    [supabase, role, newOrderIds, realtimeStatus, pushVersion],
   );
   return (
     <PanelContext.Provider value={value}>

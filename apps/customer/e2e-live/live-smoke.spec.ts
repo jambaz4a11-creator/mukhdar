@@ -1,4 +1,5 @@
-// Live smoke: demo sign-in on the deployed customer PWA, driver PWA and admin panel (mukhdar-dev).
+// Live smoke: demo sign-in on the deployed customer PWA, driver PWA and admin panel (mukhdar-dev), and the
+// admin panel's PWA files (T44).
 // READ-ONLY: signs in and checks the first screen loads; never places, accepts or edits anything.
 // Credentials only from the environment (GitHub secrets in CI) or the git-ignored .env.local locally;
 // nothing is printed. Accounts: seed-demo customer 07000000101, driver 07000000011, admin 07000000001.
@@ -76,4 +77,26 @@ test('admin panel: demo admin signs in with PIN + TOTP', async ({ page }) => {
   await page.getByRole('button', { name: /^(دخول|تفعيل ودخول)$/ }).click();
   await page.waitForURL((u) => u.pathname === '/', { timeout: 30_000 });
   await expect(page.getByRole('navigation', { name: 'القائمة الرئيسية' })).toBeVisible();
+  // T44: the device alerts panel reads the VAPID public key from push-config on the live origin (CORS + deploy).
+  // Read-only: nothing is subscribed (the button is never pressed).
+  await page.getByRole('button', { name: /تنبيهات هذا الجهاز/ }).click();
+  await expect(page.getByTestId('device-alerts-status')).toHaveAttribute(
+    'data-state',
+    /^(default|granted-unregistered|registered|denied)$/,
+  );
+});
+
+test('admin panel: installable without a session (manifest, service worker, icons)', async ({
+  request,
+}) => {
+  const manifest = await request.get(`${ADMIN_URL}/manifest.webmanifest`, { maxRedirects: 0 });
+  expect(manifest.status()).toBe(200);
+  expect(await manifest.json()).toMatchObject({ name: 'لوحة المخضر', display: 'standalone' });
+  const sw = await request.get(`${ADMIN_URL}/sw.js`, { maxRedirects: 0 });
+  expect(sw.status()).toBe(200);
+  expect(sw.headers()['content-type']).toMatch(/javascript/);
+  expect(sw.headers()['cache-control']).toContain('no-cache');
+  expect(await sw.text()).toContain("addEventListener('push'");
+  const icon = await request.get(`${ADMIN_URL}/icons/apple-touch-icon.png`, { maxRedirects: 0 });
+  expect(icon.status()).toBe(200);
 });

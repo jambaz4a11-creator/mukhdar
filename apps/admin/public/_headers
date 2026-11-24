@@ -1,0 +1,9 @@
+# Cloudflare Workers static assets (OpenNext): next.config headers() لا تُطبَّق على الملفات الثابتة هناك (T44).
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
+  X-Content-Type-Options: nosniff
+
+/icons/*
+  Cache-Control: public, max-age=86400
+  X-Content-Type-Options: nosniff
