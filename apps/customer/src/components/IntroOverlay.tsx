@@ -136,36 +136,43 @@ export function IntroOverlay({ enabled = shouldPlayIntro() }: { enabled?: boolea
         pointerEvents="none"
         style={{ width: boxW, height: px(SCENE.h), transform: [{ scale: bounce }] }}
       >
-        <Animated.Image
-          source={LINES}
-          accessibilityIgnoresInvertColors
-          style={{
-            position: 'absolute',
-            left: px(LINES_BOX.left),
-            top: px(LINES_BOX.top),
-            width: px(LINES_BOX.w),
-            height: px(LINES_BOX.h),
-            opacity: linesOpacity,
-            transform: [
-              { translateX: px(LINES_BOX.w / 2) },
-              { scaleX: linesScale },
-              { translateX: -px(LINES_BOX.w / 2) },
-            ],
-          }}
-        />
-        <Animated.Image
-          source={CART}
-          accessibilityIgnoresInvertColors
-          resizeMode="contain"
-          style={{
-            position: 'absolute',
-            left: px(CART_BOX.left),
-            top: px(CART_BOX.top),
-            width: px(CART_BOX.w),
-            height: px(CART_BOX.h),
-            transform: [{ translateX: Animated.multiply(cartX, k) }],
-          }}
-        />
+        {/* العربة والخطوط طبقة واحدة تتحرك معاً (لا خط فاصل بينهما)؛ الخطوط تتمدد من طرفها الملاصق للعربة */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { transform: [{ translateX: Animated.multiply(cartX, k) }] },
+          ]}
+        >
+          <Animated.Image
+            source={LINES}
+            accessibilityIgnoresInvertColors
+            style={{
+              position: 'absolute',
+              left: px(LINES_BOX.left),
+              top: px(LINES_BOX.top),
+              width: px(LINES_BOX.w),
+              height: px(LINES_BOX.h),
+              opacity: linesOpacity,
+              transform: [
+                { translateX: px(LINES_BOX.w / 2) },
+                { scaleX: linesScale },
+                { translateX: -px(LINES_BOX.w / 2) },
+              ],
+            }}
+          />
+          <Animated.Image
+            source={CART}
+            accessibilityIgnoresInvertColors
+            resizeMode="contain"
+            style={{
+              position: 'absolute',
+              left: px(CART_BOX.left),
+              top: px(CART_BOX.top),
+              width: px(CART_BOX.w),
+              height: px(CART_BOX.h),
+            }}
+          />
+        </Animated.View>
       </Animated.View>
     </Animated.View>
   );
