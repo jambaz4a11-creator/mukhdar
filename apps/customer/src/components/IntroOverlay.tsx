@@ -32,7 +32,8 @@ let played = false;
 export function shouldPlayIntro(): boolean {
   if (played) return false;
   if (process.env.NODE_ENV === 'test') return false;
-  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.webdriver) return false;
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.webdriver)
+    return false;
   return true;
 }
 
@@ -91,7 +92,12 @@ export function IntroOverlay({ enabled = shouldPlayIntro() }: { enabled?: boolea
               Animated.delay(600),
               // ارتداد خفيف عند التوقف
               Animated.timing(bounce, { toValue: 1.04, duration: 120, useNativeDriver: nd }),
-              Animated.spring(bounce, { toValue: 1, friction: 4, tension: 160, useNativeDriver: nd }),
+              Animated.spring(bounce, {
+                toValue: 1,
+                friction: 4,
+                tension: 160,
+                useNativeDriver: nd,
+              }),
             ]),
           ]),
           Animated.delay(300),

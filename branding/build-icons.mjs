@@ -23,11 +23,14 @@ for (let i = 0; i < N * N; i++) {
   const a = Math.min(1, Math.max(0, (d - 3) / 40));
   const bgc = [BG.r, BG.g, BG.b];
   for (let k = 0; k < 3; k++) {
-    rgba[i * 4 + k] = a > 0 ? Math.max(0, Math.min(255, Math.round((c[k] - bgc[k] * (1 - a)) / a))) : 0;
+    rgba[i * 4 + k] =
+      a > 0 ? Math.max(0, Math.min(255, Math.round((c[k] - bgc[k] * (1 - a)) / a))) : 0;
   }
   rgba[i * 4 + 3] = Math.round(a * 255);
 }
-const full = await sharp(rgba, { raw: { width: N, height: N, channels: 4 } }).png().toBuffer();
+const full = await sharp(rgba, { raw: { width: N, height: N, channels: 4 } })
+  .png()
+  .toBuffer();
 
 // خطوط السرعة (يسار العربة) وحدها، والعربة بدونها
 const LINES = { left: 120, top: 500, width: 280, height: 205 };
@@ -35,7 +38,9 @@ const lines = await sharp(full).extract(LINES).png().toBuffer();
 const cartRgba = Buffer.from(rgba);
 for (let y = LINES.top; y < LINES.top + LINES.height; y++)
   for (let x = LINES.left; x < LINES.left + LINES.width; x++) cartRgba[(y * N + x) * 4 + 3] = 0;
-const cart = await sharp(cartRgba, { raw: { width: N, height: N, channels: 4 } }).png().toBuffer();
+const cart = await sharp(cartRgba, { raw: { width: N, height: N, channels: 4 } })
+  .png()
+  .toBuffer();
 
 // 2) مربع حول مركز المحتوى بضلع S على الخلفية الكريمية (يمتد بالخلفية إن زاد عن المصدر)
 const CART_C = { x: 547, y: 520 }; // مركز العربة (x 195..900، y 232..812)
@@ -47,7 +52,13 @@ const framed = async (layer, c, S, size, transparent = false) => {
   // مساحة عمل أكبر من S لتحمّل الامتداد خارج الصورة
   const pad = Math.max(0, -L, -T, L + S - N, T + S - N);
   const padded = await sharp(layer)
-    .extend({ top: pad, bottom: pad, left: pad, right: pad, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .extend({
+      top: pad,
+      bottom: pad,
+      left: pad,
+      right: pad,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .png()
     .toBuffer();
   const base = await sharp(padded)
@@ -56,13 +67,17 @@ const framed = async (layer, c, S, size, transparent = false) => {
     .png()
     .toBuffer();
   if (transparent) return base;
-  return sharp({ create: { width: size, height: size, channels: 4, background: { ...BG, alpha: 1 } } })
+  return sharp({
+    create: { width: size, height: size, channels: 4, background: { ...BG, alpha: 1 } },
+  })
     .composite([{ input: base }])
     .png()
     .toBuffer();
 };
 const roundMask = (size, r) =>
-  Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${r}"/></svg>`);
+  Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${r}"/></svg>`,
+  );
 const rounded = async (buf, size) =>
   sharp(buf)
     .composite([{ input: roundMask(size, Math.round(size * 0.22)), blend: 'dest-in' }])
@@ -95,7 +110,9 @@ for (const app of ['customer', 'driver']) {
   write(await framed(cart, CART_C, 1400, 512, true), join(a, 'android-icon-foreground.png'));
   write(await silhouette(1400, 432), join(a, 'android-icon-monochrome.png'));
   write(
-    await sharp({ create: { width: 512, height: 512, channels: 3, background: BG } }).png().toBuffer(),
+    await sharp({ create: { width: 512, height: 512, channels: 3, background: BG } })
+      .png()
+      .toBuffer(),
     join(a, 'android-icon-background.png'),
   );
   write(await rounded(await small(48), 48), join(a, 'favicon.png'));
@@ -118,6 +135,13 @@ write(await rounded(await small(96), 96), join(root, 'apps/admin/src/app/icon.pn
 
 // مقدمة الزبون: عربة + خطوط (شفافة، تُحرَّك بالكود)
 const ia = join(root, 'apps/customer/assets/intro');
-write(await sharp(cart).extract({ left: 190, top: 225, width: 720, height: 600 }).resize({ width: 720 }).png().toBuffer(), join(ia, 'intro-cart.png'));
+write(
+  await sharp(cart)
+    .extract({ left: 190, top: 225, width: 720, height: 600 })
+    .resize({ width: 720 })
+    .png()
+    .toBuffer(),
+  join(ia, 'intro-cart.png'),
+);
 write(lines, join(ia, 'intro-lines.png'));
 console.log('icons generated');
