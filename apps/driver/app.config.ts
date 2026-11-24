@@ -27,7 +27,7 @@ const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '45b317c2-1949-4ebb-b3eb-4b
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'سائق المخضر',
+  name: 'سوق بسماوي - السائق',
   slug: 'mukhdar-driver',
   scheme: 'mukhdar-driver',
   version: '1.0.0',

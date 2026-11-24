@@ -53,7 +53,7 @@ self.addEventListener('push', function (event) {
   }
   if (!payload || typeof payload !== 'object') payload = {};
   var data = cleanData(payload.data);
-  var title = typeof payload.title === 'string' && payload.title ? payload.title : 'المخضر';
+  var title = typeof payload.title === 'string' && payload.title ? payload.title : 'سوق بسماوي';
   var body = typeof payload.body === 'string' ? payload.body : '';
   // R3 L2: إشعار واحد لكل طلب (الحالة الأحدث تستبدل الأقدم بدل أن تتراكم)
   var tag = 'order:' + (data.order_id || '');

@@ -53,7 +53,8 @@ self.addEventListener('push', function (event) {
   }
   if (!payload || typeof payload !== 'object') payload = {};
   var data = cleanData(payload.data);
-  var title = typeof payload.title === 'string' && payload.title ? payload.title : 'لوحة المخضر';
+  var title =
+    typeof payload.title === 'string' && payload.title ? payload.title : 'لوحة سوق بسماوي';
   var body = typeof payload.body === 'string' ? payload.body : '';
   var tag = (data.type || 'panel') + ':' + (data.order_id || '');
   event.waitUntil(

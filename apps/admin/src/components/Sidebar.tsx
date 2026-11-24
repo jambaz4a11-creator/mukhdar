@@ -55,7 +55,7 @@ export function Sidebar({ items, role, name, pendingOrders, pendingDriverRequest
             <NavIconSvg icon="products" />
           </span>
           <span className="flex flex-col">
-            <span className="text-lg font-bold text-primary">المخضر</span>
+            <span className="text-lg font-bold text-primary">سوق بسماوي</span>
             <span className="text-xs text-text-muted">لوحة الإدارة</span>
           </span>
         </Link>

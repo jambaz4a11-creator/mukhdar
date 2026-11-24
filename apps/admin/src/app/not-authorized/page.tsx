@@ -9,8 +9,8 @@ export default function NotAuthorizedPage() {
       <div className="w-full max-w-md rounded-card border border-border bg-surface p-6 text-center">
         <h1 className="mb-2 text-2xl font-bold text-danger">غير مصرح</h1>
         <p className="mb-6 text-sm leading-7 text-text-muted">
-          حسابك ما عنده صلاحية لهذه الصفحة. اللوحة للإدارة والموظفين فقط؛ الزبائن يستخدمون تطبيق
-          المخضر.
+          حسابك ما عنده صلاحية لهذه الصفحة. اللوحة للإدارة والموظفين فقط؛ الزبائن يستخدمون تطبيق سوق
+          بسماوي.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           <a

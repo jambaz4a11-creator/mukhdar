@@ -22,7 +22,7 @@ const EXPO_HTML = `<!doctype html>
 </body>
 </html>`;
 
-const APP = { title: 'سائق المخضر', description: 'تطبيق سائقي المخضر' };
+const APP = { title: 'سوق بسماوي - السائق', description: 'تطبيق سائقي سوق بسماوي' };
 
 test('html: Arabic RTL, viewport-fit, manifest, iOS meta', () => {
   const out = transformIndexHtml(EXPO_HTML, APP);
@@ -31,8 +31,8 @@ test('html: Arabic RTL, viewport-fit, manifest, iOS meta', () => {
   assert.match(out, /<link rel="manifest" href="\/manifest.webmanifest" \/>/);
   assert.match(out, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon.png" \/>/);
   assert.match(out, /apple-mobile-web-app-capable" content="yes"/);
-  assert.match(out, /apple-mobile-web-app-title" content="سائق المخضر"/);
-  assert.match(out, /name="description" content="تطبيق سائقي المخضر"/);
+  assert.match(out, /apple-mobile-web-app-title" content="سوق بسماوي - السائق"/);
+  assert.match(out, /name="description" content="تطبيق سائقي سوق بسماوي"/);
   assert.ok(!out.includes('/favicon.ico'));
   assert.match(out, /<noscript>يلزم تفعيل جافاسكربت/);
 });

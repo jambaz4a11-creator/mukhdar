@@ -6,8 +6,8 @@ import { postexportWeb } from '../../../scripts/web-postexport.mjs';
 
 postexportWeb({
   dist: join(dirname(fileURLToPath(import.meta.url)), '..', 'dist'),
-  title: 'سائق المخضر',
-  description: 'تطبيق سائقي المخضر لتوصيل الطلبات في بسماية',
+  title: 'سوق بسماوي - السائق',
+  description: 'تطبيق سائقي سوق بسماوي لتوصيل الطلبات في بسماية',
 });
 process.stdout.write(
   'postexport-web: dist/index.html and dist/_headers updated, no secrets in the bundle\n',

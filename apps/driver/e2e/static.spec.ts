@@ -13,7 +13,7 @@ test('manifest is valid and its icons load', async ({ request }) => {
   expect(res.headers()['content-type']).toContain('application/manifest+json');
   const m = await res.json();
   expect(m).toMatchObject({
-    name: 'سائق المخضر',
+    name: 'سوق بسماوي - السائق',
     lang: 'ar',
     dir: 'rtl',
     display: 'standalone',

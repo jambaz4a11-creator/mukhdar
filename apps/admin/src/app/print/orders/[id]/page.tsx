@@ -29,7 +29,7 @@ export default async function PrintOrderPage({ params }: { params: Promise<{ id:
   return (
     <main className="receipt" data-testid="receipt">
       <AutoPrint />
-      <h1>المخضر</h1>
+      <h1>سوق بسماوي</h1>
       <p className="center num">طلب #{order.order_number}</p>
       <p className="center num small">{formatDateTime(order.created_at)}</p>
       <hr />

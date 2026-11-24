@@ -57,7 +57,7 @@ describe('app.config.ts', () => {
 
   it('driver identity, no Android backup', () => {
     const cfg = load();
-    expect(cfg.name).toBe('سائق المخضر');
+    expect(cfg.name).toBe('سوق بسماوي - السائق');
     expect(cfg.android.package).toBe('com.mukhdar.driver');
     expect(cfg.ios.bundleIdentifier).toBe('com.mukhdar.driver');
     expect(cfg.android.allowBackup).toBe(false);
