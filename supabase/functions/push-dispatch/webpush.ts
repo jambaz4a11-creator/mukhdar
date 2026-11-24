@@ -57,9 +57,16 @@ export async function endpointLabel(endpoint: string): Promise<string> {
   return `${host}#${hex}`;
 }
 
-const HIGH_URGENCY_TYPES = new Set(['new_order', 'ready', 'assigned', 'unassigned']);
+// customer_cancelled (T44، SPEC-admin-push §1): الموظف قد يكون يحضّر الطلب الآن. new_order للوحة أيضاً (نفس النوع).
+const HIGH_URGENCY_TYPES = new Set([
+  'new_order',
+  'ready',
+  'assigned',
+  'unassigned',
+  'customer_cancelled',
+]);
 
-/** high: إشعارات السائق (طلب جديد/جاهز/تعيين) و"جاهز" للزبون؛ وإلا normal. */
+/** high: إشعارات السائق (طلب جديد/جاهز/تعيين)، "جاهز" للزبون، وإلغاء الزبون للوحة؛ وإلا normal. */
 export function urgencyFor(data: Record<string, unknown>): 'high' | 'normal' {
   if (typeof data.type === 'string' && HIGH_URGENCY_TYPES.has(data.type)) return 'high';
   if (data.status === 'ready') return 'high';

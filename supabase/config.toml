@@ -458,6 +458,12 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/driver-complete-registration/index.ts"
 
+# T44: مفتاح VAPID العام للوحة الأدمن (بيانات عامة، بلا حساب؛ SPEC-admin-push §2). لا أسرار هنا.
+[functions.push-config]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/push-config/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

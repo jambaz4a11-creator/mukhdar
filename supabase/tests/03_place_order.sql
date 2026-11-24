@@ -204,8 +204,8 @@ select results_eq($$ select audience from public.notification_outbox
                      where data ->> 'order_id' = tests.id('o1')::text order by audience $$,
   array['admins'], 'a new order notifies admins/staff only (drivers are notified when it is ready)');
 select ok((select body from public.notification_outbox
-            where data ->> 'order_id' = tests.id('o1')::text and audience = 'admins') like 'بلوك A1 - بناية 12 · المجموع %',
-  'admin push names the unit and the building (numbers repeat across units)');
+            where data ->> 'order_id' = tests.id('o1')::text and audience = 'admins') ~ '^المجموع [0-9]+ د\.ع$',
+  'admin push is the total only: no block or building (T44, SPEC-admin-push §1)');
 -- T38 (SPEC-webpush §5.5): حمولة الصندوق (title/body/data) بلا نمط هاتف ولا طابق ولا شقة، لكل الأنواع والجمهور
 select is((select count(*) from public.notification_outbox
             where (title || ' ' || body || ' ' || (data - 'order_id')::text) ~ '([+]?964|0)7[0-9]{8,9}'

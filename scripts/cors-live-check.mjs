@@ -21,6 +21,8 @@ export const BROWSER_FUNCTIONS = [
   'driver-complete-registration',
   'admin-reset-pin',
   'admin-create-user',
+  // T44: مفتاح VAPID العام للوحة الأدمن
+  'push-config',
 ];
 
 /** One preflight per (function, origin). Returns rows with ok=false for anything but 204 + echo. */
