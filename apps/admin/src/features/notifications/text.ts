@@ -13,8 +13,9 @@ export interface DeviceAlertCopy {
 export const ALERTS_TITLE = 'تنبيهات هذا الجهاز';
 export const ENABLE_LABEL = 'شغّل الإشعارات على هذا الجهاز';
 export const DISABLE_LABEL = 'أطفئ الإشعارات';
+// قرار المالك 2026-11-24 (SPEC-admin-push §9 A4): الإشعارات لا تتوقف بخروج الخمول من اللوحة
 export const SESSION_NOTE =
-  'توصلك الإشعارات ما دام دخولك باللوحة فعّال. إذا ما فتحت اللوحة 12 ساعة تنتهي جلستك وتوقف الإشعارات لحد ما تدخل من جديد.';
+  'الإشعارات تبقى توصلك على هذا الجهاز حتى لو انتهت جلسة اللوحة بعد 12 ساعة بلا استخدام. توقف إذا طفّيتها، أو سجّلت خروج من اللوحة، أو تغيّر حسابك (تعطيل أو تغيير دور).';
 export const SOUND_LABEL = 'صوت تنبيه الطلبات الجديدة (واللوحة مفتوحة)';
 export const TEST_SOUND_LABEL = 'جرّب الصوت';
 export const UNLOCK_BANNER = 'صوت تنبيه الطلبات مقفول بهذا المتصفح لحد ما تضغط';
@@ -23,7 +24,7 @@ export const UNLOCK_BUTTON = 'فعّل الصوت';
 export function whatArrives(role: PanelRole): string {
   return role === 'admin'
     ? 'يوصلك: طلب جديد، إلغاء الزبون لطلبه، طلب سائق جديد، ونقص المخزون.'
-    : 'يوصلك: طلب جديد، وإلغاء الزبون لطلبه.';
+    : 'يوصلك: طلب جديد، إلغاء الزبون لطلبه، ونقص المخزون.';
 }
 
 export function deviceAlertCopy(state: DeviceAlertState): DeviceAlertCopy {

@@ -91,7 +91,9 @@ describe('device alert copy', () => {
     expect(deviceAlertCopy('needs-install').help).toContain('إضافة إلى الشاشة الرئيسية');
   });
   it('staff are not promised driver requests or low stock', () => {
-    expect(whatArrives('staff')).not.toMatch(/سائق|المخزون/);
+    expect(whatArrives('staff')).not.toMatch(/سائق/);
+    // قرار المالك Q2 (2026-11-24): الموظف يستلم نقص المخزون أيضاً
+    expect(whatArrives('staff')).toMatch(/نقص المخزون/);
     expect(whatArrives('admin')).toMatch(/طلب سائق جديد/);
   });
 });

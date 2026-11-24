@@ -222,7 +222,9 @@ select set_eq(
         and p.proname not in ('place_order', 'rate_order', 'register_push_token', 'register_web_push', 'available_orders',
                             'accept_order', 'touch_panel_session', 'driver_request_status',
                             -- T40: دالتا السائق (سائق فعّال، بلا aal2؛ 39_cash_handover)
-                            'driver_cash_summary', 'my_cash_handovers') $$,
+                            'driver_cash_summary', 'my_cash_handovers',
+                            -- T44 متابعة: الخروج الصريح يحذف اشتراكات جلسة المستدعي فقط، لأي دور وبلا aal2 (43_push_after_idle)
+                            'forget_session_push') $$,
   $$ select distinct (regexp_match(sql, 'public\.(\w+)\('))[1] from tests.gate_calls() $$,
   'the aal matrix covers every admin/staff SECURITY DEFINER RPC (a new one must be added)');
 

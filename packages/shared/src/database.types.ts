@@ -1577,6 +1577,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      forget_session_push: { Args: Record<PropertyKey, never>; Returns: number };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_staff_or_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       list_driver_requests: {
