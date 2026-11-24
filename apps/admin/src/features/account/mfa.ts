@@ -14,8 +14,8 @@ export const MFA_TEXT = {
 } as const;
 
 /** اسم العامل والمُصدر كما يظهران بتطبيق المصادقة. */
-export const TOTP_ISSUER = 'Mukhdar';
-export const TOTP_FRIENDLY_NAME = 'لوحة المخضر';
+export const TOTP_ISSUER = 'Souq Basmawi';
+export const TOTP_FRIENDLY_NAME = 'لوحة سوق بسماوي';
 
 export type EnrollResult =
   { ok: true; factorId: string; qrCode: string; secret: string } | { ok: false; message: string };

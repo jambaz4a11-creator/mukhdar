@@ -1,4 +1,4 @@
-// عدّاد الطلبات الجديدة بعنوان التبويب (T44، SPEC-admin-push §5، افتراض A6): "(3) الطلبات · لوحة المخضر".
+// عدّاد الطلبات الجديدة بعنوان التبويب (T44، SPEC-admin-push §5، افتراض A6): "(3) الطلبات · لوحة سوق بسماوي".
 const PREFIX = /^\(\d+\+?\) /;
 
 export function stripCount(title: string): string {

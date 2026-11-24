@@ -26,7 +26,7 @@ const loadFailed = (what: string) => `تعذّر تحميل ${what}، ${glossary
 
 export const ar = {
   glossary,
-  appName: 'المخضر',
+  appName: 'سوق بسماوي',
   tabs: {
     home: 'الرئيسية',
     cart: 'السلة',
@@ -34,7 +34,7 @@ export const ar = {
     account: 'حسابي',
   },
   home: {
-    title: 'المخضر',
+    title: 'سوق بسماوي',
     storeClosed: 'المتجر مغلق حالياً. تقدر تتصفح وتجهّز سلتك.',
     loading: glossary.loading,
     retry: glossary.retry,
@@ -93,7 +93,7 @@ export const ar = {
     browse: 'تصفح بدون تسجيل',
     pinMismatch: PIN_CHANGE_MESSAGES.mismatch,
     accountCreated: 'تم إنشاء الحساب، سجّل الدخول بنفس الرقم والرمز',
-    nameTitle: 'أهلاً بيك بالمخضر',
+    nameTitle: 'أهلاً بيك بسوق بسماوي',
     nameHint: 'شنو نسمّيك؟ الاسم يظهر للسائق حتى يعرف منو يسلّم.',
     name: 'الاسم',
     nameLater: 'تقدر تغيّره بعدين من حسابي.',
@@ -285,10 +285,10 @@ export const ar = {
     promptBody: 'نبلّغك لما طلبك يتحضّر ويطلع للتوصيل.',
     enableFailed: 'ماكدرنا نفعّل الإشعارات، جرّب مرة ثانية.',
     deniedBanner: 'الإشعارات مطفية، ما راح توصلك تنبيهات طلبك.',
-    deniedHow: 'للتفعيل: افتح إعدادات الجهاز أو المتصفح ← الإشعارات ← المخضر ← سماح.',
+    deniedHow: 'للتفعيل: افتح إعدادات الجهاز أو المتصفح ← الإشعارات ← سوق بسماوي ← سماح.',
     needsInstall: 'على iPhone الإشعارات تشتغل بعد إضافة التطبيق إلى الشاشة الرئيسية.',
     installSteps:
-      'اضغط زر المشاركة ⬆️ بأسفل Safari ← إضافة إلى الشاشة الرئيسية ← افتح «المخضر» من الأيقونة.',
+      'اضغط زر المشاركة ⬆️ بأسفل Safari ← إضافة إلى الشاشة الرئيسية ← افتح «سوق بسماوي» من الأيقونة.',
   },
   account: {
     title: 'حسابي',

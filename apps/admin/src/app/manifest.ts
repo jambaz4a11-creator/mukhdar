@@ -5,9 +5,9 @@ import type { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'لوحة المخضر',
-    short_name: 'لوحة المخضر',
-    description: 'لوحة إدارة المخضر: الطلبات والمخزون والتقارير',
+    name: 'لوحة سوق بسماوي',
+    short_name: 'لوحة سوق بسماوي',
+    description: 'لوحة إدارة سوق بسماوي: الطلبات والمخزون والتقارير',
     lang: 'ar',
     dir: 'rtl',
     start_url: '/',

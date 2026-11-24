@@ -67,7 +67,8 @@ self.addEventListener('push', function (event) {
   }
   if (!payload || typeof payload !== 'object') payload = {};
   var data = cleanData(payload.data);
-  var title = typeof payload.title === 'string' && payload.title ? payload.title : 'سائق المخضر';
+  var title =
+    typeof payload.title === 'string' && payload.title ? payload.title : 'سوق بسماوي - السائق';
   var body = typeof payload.body === 'string' ? payload.body : '';
   var tag = (data.type || 'order') + ':' + (data.order_id || '');
   event.waitUntil(

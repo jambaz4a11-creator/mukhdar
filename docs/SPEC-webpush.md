@@ -38,7 +38,7 @@
 
 ### 3.1 التصدير والبنية
 - إضافة `react-native-web` و`react-dom` لـ `apps/driver` (نفس إصدارات الزبون)، `web: { bundler: 'metro', output: 'single' }` بـ `app.config.ts`، وسكربت `export:web` = `expo export -p web --max-workers 2 && node scripts/postexport-web.mjs` (نسخة من سكربت الزبون: وسوم manifest وapple-touch-icon وmeta iOS وستايل `viewport-fit=cover` والمناطق الآمنة؛ يفشل إن لم يجد موضع التعديل).
-- `apps/driver/public/`: `manifest.webmanifest` (`name: سائق المخضر`، `lang: ar`، `dir: rtl`، `display: standalone`، `scope`/`start_url`/`id: /`، ألوان التطبيق، أيقونات 192/512/maskable)، `icons/`، `_headers` (القسم 5.4/6.4)، `sw.js` (القسم 5.2).
+- `apps/driver/public/`: `manifest.webmanifest` (`name: سوق بسماوي - السائق`، `lang: ar`، `dir: rtl`، `display: standalone`، `scope`/`start_url`/`id: /`، ألوان التطبيق، أيقونات 192/512/maskable)، `icons/`، `_headers` (القسم 5.4/6.4)، `sw.js` (القسم 5.2).
 - **فصل المنصات (نمط الزبون: `*.web.ts`)** لكل ما لا يعمل على الويب، بواجهة موحَّدة حتى لا يتغير باقي الكود:
 
 | وحدة اليوم | على الويب |
@@ -61,7 +61,7 @@
 
 ### 3.3 بوابة التثبيت (بالعربي)
 حالات `installState` (تُحسب بدالة نقية تُختبر): `standalone` | `ios-browser` | `android-installable` | `other-browser` | `unsupported-ios` (< 16.4).
-- `ios-browser`: بطاقة كاملة الشاشة، لا تسجيل ولا دخول: «لازم تثبّت التطبيق على جهازك أولاً. اضغط زر المشاركة ⬆️ بأسفل Safari، ثم **إضافة إلى الشاشة الرئيسية**، ثم افتح "سائق المخضر" من الأيقونة.» مع صور خطوات.
+- `ios-browser`: بطاقة كاملة الشاشة، لا تسجيل ولا دخول: «لازم تثبّت التطبيق على جهازك أولاً. اضغط زر المشاركة ⬆️ بأسفل Safari، ثم **إضافة إلى الشاشة الرئيسية**، ثم افتح "سوق بسماوي - السائق" من الأيقونة.» مع صور خطوات.
 - `unsupported-ios`: «جهازك يحتاج تحديث iOS إلى 16.4 أو أحدث حتى يشتغل التطبيق والإشعارات.»
 - `android-installable` (حدث `beforeinstallprompt`): شريط اختياري «ثبّت التطبيق» (لا حجب).
 - النصوص بـ `i18n/ar.ts` بنفس لهجة التطبيق.

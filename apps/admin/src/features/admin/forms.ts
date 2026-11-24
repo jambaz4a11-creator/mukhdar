@@ -183,8 +183,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 export function pinMessage(kind: 'reset' | 'create', pin: string): string {
   return kind === 'reset'
-    ? `رمز دخولك الجديد بالمخضر: ${pin}، غيّره من حسابي`
-    : `حسابك بالمخضر جاهز. رمزك المؤقت: ${pin}، غيّره من حسابي`;
+    ? `رمز دخولك الجديد بسوق بسماوي: ${pin}، غيّره من حسابي`
+    : `حسابك بسوق بسماوي جاهز. رمزك المؤقت: ${pin}، غيّره من حسابي`;
 }
 
 /**

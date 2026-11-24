@@ -6,7 +6,7 @@ import { postexportWeb } from '../../../scripts/web-postexport.mjs';
 
 postexportWeb({
   dist: join(dirname(fileURLToPath(import.meta.url)), '..', 'dist'),
-  title: 'المخضر',
+  title: 'سوق بسماوي',
   description: 'توصيل خضار وفواكه ومواد غذائية ومنظفات لمدينة بسماية',
 });
 process.stdout.write(

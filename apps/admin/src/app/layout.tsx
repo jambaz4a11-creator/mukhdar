@@ -10,11 +10,11 @@ const plex = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'لوحة المخضر', template: '%s · لوحة المخضر' },
+  title: { default: 'لوحة سوق بسماوي', template: '%s · لوحة سوق بسماوي' },
   robots: { index: false, follow: false },
   // T44: قابلة للتثبيت على الشاشة الرئيسية (Web Push على الآيفون يحتاجه). manifest من app/manifest.ts
-  applicationName: 'لوحة المخضر',
-  appleWebApp: { capable: true, title: 'لوحة المخضر', statusBarStyle: 'default' },
+  applicationName: 'لوحة سوق بسماوي',
+  appleWebApp: { capable: true, title: 'لوحة سوق بسماوي', statusBarStyle: 'default' },
   icons: { apple: '/icons/apple-touch-icon.png' },
 };
 

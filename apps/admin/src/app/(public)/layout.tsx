@@ -4,7 +4,7 @@ import { IS_DRAFT, LEGAL_UPDATED } from '@/content/legal';
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-8">
-      <p className="mb-6 text-lg font-bold text-primary">المخضر</p>
+      <p className="mb-6 text-lg font-bold text-primary">سوق بسماوي</p>
       {IS_DRAFT && (
         <p
           role="note"

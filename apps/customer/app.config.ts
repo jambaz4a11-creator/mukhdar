@@ -23,7 +23,7 @@ if (
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'المخضر',
+  name: 'سوق بسماوي',
   slug: 'mukhdar',
   scheme: 'mukhdar',
   version: '1.0.0',

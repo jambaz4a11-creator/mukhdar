@@ -182,7 +182,7 @@ describe('sw.js push', () => {
       },
     });
     await sw.fire('push', {});
-    expect(sw.shown.map((s) => s.title)).toEqual(['لوحة المخضر', 'لوحة المخضر']);
+    expect(sw.shown.map((s) => s.title)).toEqual(['لوحة سوق بسماوي', 'لوحة سوق بسماوي']);
   });
 
   it('has no fetch handler (no offline cache, A9)', () => {

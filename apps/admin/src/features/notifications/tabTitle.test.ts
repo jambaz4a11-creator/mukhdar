@@ -4,15 +4,15 @@ import { readSoundEnabled, SOUND_KEY, writeSoundEnabled } from './soundPref';
 
 describe('titleWithCount', () => {
   it('prefixes the count of new orders, and nothing at 0', () => {
-    expect(titleWithCount('الطلبات · لوحة المخضر', 3)).toBe('(3) الطلبات · لوحة المخضر');
-    expect(titleWithCount('لوحة المخضر', 0)).toBe('لوحة المخضر');
-    expect(titleWithCount('لوحة المخضر', -1)).toBe('لوحة المخضر');
-    expect(titleWithCount('لوحة المخضر', Number.NaN)).toBe('لوحة المخضر');
+    expect(titleWithCount('الطلبات · لوحة سوق بسماوي', 3)).toBe('(3) الطلبات · لوحة سوق بسماوي');
+    expect(titleWithCount('لوحة سوق بسماوي', 0)).toBe('لوحة سوق بسماوي');
+    expect(titleWithCount('لوحة سوق بسماوي', -1)).toBe('لوحة سوق بسماوي');
+    expect(titleWithCount('لوحة سوق بسماوي', Number.NaN)).toBe('لوحة سوق بسماوي');
   });
   it('replaces an older prefix instead of stacking, caps at 99+', () => {
-    expect(titleWithCount('(2) لوحة المخضر', 5)).toBe('(5) لوحة المخضر');
-    expect(titleWithCount('(99+) لوحة المخضر', 0)).toBe('لوحة المخضر');
-    expect(titleWithCount('لوحة المخضر', 250)).toBe('(99+) لوحة المخضر');
+    expect(titleWithCount('(2) لوحة سوق بسماوي', 5)).toBe('(5) لوحة سوق بسماوي');
+    expect(titleWithCount('(99+) لوحة سوق بسماوي', 0)).toBe('لوحة سوق بسماوي');
+    expect(titleWithCount('لوحة سوق بسماوي', 250)).toBe('(99+) لوحة سوق بسماوي');
     expect(stripCount('(12) الطلبات')).toBe('الطلبات');
     expect(stripCount('(طلب) نص')).toBe('(طلب) نص');
   });

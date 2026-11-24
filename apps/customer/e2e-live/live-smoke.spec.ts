@@ -91,7 +91,7 @@ test('admin panel: installable without a session (manifest, service worker, icon
 }) => {
   const manifest = await request.get(`${ADMIN_URL}/manifest.webmanifest`, { maxRedirects: 0 });
   expect(manifest.status()).toBe(200);
-  expect(await manifest.json()).toMatchObject({ name: 'لوحة المخضر', display: 'standalone' });
+  expect(await manifest.json()).toMatchObject({ name: 'لوحة سوق بسماوي', display: 'standalone' });
   const sw = await request.get(`${ADMIN_URL}/sw.js`, { maxRedirects: 0 });
   expect(sw.status()).toBe(200);
   expect(sw.headers()['content-type']).toMatch(/javascript/);

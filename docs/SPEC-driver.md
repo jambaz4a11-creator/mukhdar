@@ -235,7 +235,7 @@ app/
 ### Tech stack
 - Expo SDK ونفس إصدارات `apps/customer` (Expo Router، TypeScript، `@supabase/supabase-js` v2، TanStack Query، `expo-secure-store`، `expo-notifications`، `expo-crypto`، `expo-linking`). **لا اعتماديات جديدة** غير `expo-crypto` (إن لم تكن موجودة) — أي اعتمادية أخرى تُسأل قبلها.
 - `packages/shared`: `phonePinCredentials`، `validatePin`/`normalizePin`، `normalizeIraqiPhone`، `formatAddress`، `formatQuantity`، `formatIqd`، `errors.ts`، والجديدة `baghdadDayRange`.
-- المعرّف: `com.mukhdar.driver`، الاسم "سائق المخضر"، مشروع EAS منفصل (`push-dispatch` يدعم أكثر من مشروع Expo أصلاً)، تطبيق Firebase ثانٍ لـ FCM (ملف `google-services.json` كمتغير ملف بـ EAS، لا يُرفع لـ git).
+- المعرّف: `com.mukhdar.driver`، الاسم "سوق بسماوي - السائق"، مشروع EAS منفصل (`push-dispatch` يدعم أكثر من مشروع Expo أصلاً)، تطبيق Firebase ثانٍ لـ FCM (ملف `google-services.json` كمتغير ملف بـ EAS، لا يُرفع لـ git).
 - حماية `app.config.ts` نفسها: بناء `production` لا يشير لمشروع dev.
 
 ### الأوامر

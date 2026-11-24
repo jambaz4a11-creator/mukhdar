@@ -30,7 +30,7 @@ test.describe('installable panel (no session needed)', () => {
     expect(res.headers()['content-type']).toContain('manifest+json');
     const m = await res.json();
     expect(m).toMatchObject({
-      name: 'لوحة المخضر',
+      name: 'لوحة سوق بسماوي',
       lang: 'ar',
       dir: 'rtl',
       display: 'standalone',
