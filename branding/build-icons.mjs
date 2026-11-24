@@ -32,12 +32,25 @@ const full = await sharp(rgba, { raw: { width: N, height: N, channels: 4 } })
   .png()
   .toBuffer();
 
-// خطوط السرعة (يسار العربة) وحدها، والعربة بدونها
+// خطوط السرعة (يسار العربة) وحدها، والعربة بدونها. الفصل باللون لا بمستطيل: داخل منطقة الخطوط تذهب البكسلات
+// البرتقالية فقط للخطوط ويبقى إطار العربة الأخضر كاملاً بطبقة العربة (القص المستطيل ترك حافة عمودية مقطوعة
+// بالعربة تظهر كخط فاصل أثناء الحركة). الوزن تدريجي بحسب "البرتقالية" فلا حافة حادة بين الطبقتين.
 const LINES = { left: 120, top: 500, width: 280, height: 205 };
-const lines = await sharp(full).extract(LINES).png().toBuffer();
+const linesRgba = Buffer.alloc(N * N * 4);
 const cartRgba = Buffer.from(rgba);
 for (let y = LINES.top; y < LINES.top + LINES.height; y++)
-  for (let x = LINES.left; x < LINES.left + LINES.width; x++) cartRgba[(y * N + x) * 4 + 3] = 0;
+  for (let x = LINES.left; x < LINES.left + LINES.width; x++) {
+    const i = (y * N + x) * 4;
+    // العربة هنا خضراء فقط (الأخضر أعلى من الأحمر)؛ كل ما عداها (البرتقالي وحوافه الفاتحة) للخطوط
+    const w = 1 - Math.min(1, Math.max(0, (rgba[i + 1] - rgba[i] - 10) / 30));
+    for (let k = 0; k < 3; k++) linesRgba[i + k] = rgba[i + k];
+    linesRgba[i + 3] = Math.round(rgba[i + 3] * w);
+    cartRgba[i + 3] = Math.round(rgba[i + 3] * (1 - w));
+  }
+const lines = await sharp(linesRgba, { raw: { width: N, height: N, channels: 4 } })
+  .extract(LINES)
+  .png()
+  .toBuffer();
 const cart = await sharp(cartRgba, { raw: { width: N, height: N, channels: 4 } })
   .png()
   .toBuffer();
