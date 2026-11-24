@@ -202,6 +202,8 @@ Deno.test('urgency: high for driver/new-order/ready, normal otherwise', () => {
   assert.equal(urgencyFor({ status: 'ready', order_id: ORDER }), 'high');
   assert.equal(urgencyFor({ status: 'preparing', order_id: ORDER }), 'normal');
   assert.equal(urgencyFor({ status: 'delivered', order_id: ORDER }), 'normal');
+  assert.equal(urgencyFor({ type: 'customer_cancelled', order_id: ORDER }), 'high');
+  assert.equal(urgencyFor({ type: 'driver_request' }), 'normal');
   assert.equal(urgencyFor({ type: 'low_stock' }), 'normal');
   assert.equal(urgencyFor({}), 'normal');
 });

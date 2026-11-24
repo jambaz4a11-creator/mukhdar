@@ -732,6 +732,11 @@ SUPABASE_URL=https://<prod-ref>.supabase.co
 - 2026-11-21: ضُبطت الأسرار ونُشرت الدالة على mukhdar-dev بموافقة المالك؛ لا migrations بـ T38.
 - 2026-11-21 (المالك): `EXPO_PUBLIC_VAPID_PUBLIC_KEY` أُضيف لمشروعي Pages بيئة **Production فقط** (لا Preview: معاينات الفروع بلا Web Push عمداً). تغيير متغير بناء لا يعيد البناء وحده: إعادة النشر من `main` أو "Retry deployment".
 
+## 16h) تنبيهات لوحة الأدمن (T44، mukhdar-dev فقط)
+- **الدوال:** `pnpm sb functions deploy push-config --remote=<ref> --use-api --no-verify-jwt --yes` (جديدة؛ تقرأ سر `VAPID_PUBLIC_KEY` الموجود، **بلا `secrets set`**) و`push-dispatch` بنفس الأمر بعد أي تغيير بها. التحقق: `pnpm cors:live` (صارت تشمل `push-config`).
+- **لا Cloudflare:** اللوحة تجلب المفتاح العام من `push-config` وقت التشغيل، فلا متغير بناء جديد بـ `mukhdar-admin`.
+- **الفحص على الأجهزة:** SPEC-admin-push §3 و§4 (iPhone: إضافة اللوحة للشاشة الرئيسية والدخول من داخلها).
+
 ## 18) الـ repo العام على GitHub (قرار المالك 2026-11-22)
 
 السبب: دقائق Actions مجانية بلا حد للـ repo العام. ما يجب أن يبقى صحيحاً:
