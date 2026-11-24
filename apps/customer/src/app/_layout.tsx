@@ -16,6 +16,7 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../lib/webShims';
 import { AppText } from '../components/AppText';
+import { IntroOverlay } from '../components/IntroOverlay';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { StorageWarning } from '../components/StorageWarning';
 import { config } from '../config';
@@ -101,6 +102,7 @@ function RootLayout() {
           {/* شاشة تغيير الرمز: بلا سحب للرجوع (الإجباري لا يُترك؛ العادي فيه زر رجوع) */}
           <Stack.Screen name="account/pin" options={{ gestureEnabled: false }} />
         </Stack>
+        <IntroOverlay />
       </PersistQueryClientProvider>
     </SafeAreaProvider>
   );

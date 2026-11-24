@@ -78,7 +78,7 @@ self.addEventListener('push', function (event) {
         lang: 'ar',
         dir: 'rtl',
         icon: '/icons/icon-192.png',
-        badge: '/icons/icon-192.png',
+        badge: '/icons/badge-96.png',
         tag: tag,
         renotify: true,
         data: data,

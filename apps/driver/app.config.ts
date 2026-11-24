@@ -67,7 +67,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-localization', { supportsRTL: true, forcesRTL: true }],
     [
       'expo-splash-screen',
-      { backgroundColor: '#F7F8F3', image: './assets/images/splash-icon.png', imageWidth: 76 },
+      { backgroundColor: '#F7F8F3', image: './assets/images/splash-icon.png', imageWidth: 180 },
     ],
     ['expo-notifications', { color: '#1F6B3A' }],
   ],
