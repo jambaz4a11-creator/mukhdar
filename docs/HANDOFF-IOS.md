@@ -84,26 +84,21 @@ The Playwright e2e in `apps/customer/e2e` writes to mukhdar-dev and needs the ow
 
 **Before registering the bundle ID:** the launch checklist (`docs/tasks/24-release.md`) requires every store account to be in the owner's name. Confirm with the owner which Apple Developer team the app lives in before you create the App ID or the App Store Connect record. A bundle ID belongs to the first team that claims it and is hard to move later.
 
-### EAS project (under your own Expo account)
+### EAS project (shared: do NOT create your own)
 
-```bash
-npm i -g eas-cli
-eas login                         # your Expo account
-cd apps/customer
-eas init                          # creates the "mukhdar" project under your account
-```
+The customer app already has **one** EAS project: `@jafar_sadiq20/mukhdar`, ID `9774f741-7bab-47f9-a1a8-6d7cf4a31042` (T47; the ID is public and is the default in `app.config.ts`, with `owner: 'jafar_sadiq20'`). Android (Play closed test) builds from it, and **iOS must build from the same project**: a second project would mean a second projectId, a different Expo push token namespace and separate credentials. Do not run `eas init` to create a new one.
 
-`app.config.ts` is dynamic, so `eas init` cannot write the project ID into it. Instead the config reads it from the `EAS_PROJECT_ID` variable (the project ID is not a secret):
-- locally: put it in `apps/customer/.env`;
-- for cloud builds: `eas env:create --name EAS_PROJECT_ID --value <id> --environment preview` (and `production`, `development`).
+**How the owner shares it with you.** Personal Expo accounts cannot have collaborators, so the owner moves the project to an Expo organization (free) and invites you:
+1. Owner: create an organization in Expo (expo.dev -> Account settings -> Organizations), invite your Expo username (`eyad6789`) as **Developer** (or Admin if you will manage credentials).
+2. Owner: `cd apps/customer && eas project:transfer` and pick the organization (the project ID does not change; `owner` in `app.config.ts` is then updated to the organization name in a small PR, and the EAS environment variables move with the project).
+3. You: `eas login`, then `cd apps/customer && eas project:info` must show the organization and the ID above. Build with `eas build -p ios --profile testflight`.
+Until the transfer is done, ask the owner to run iOS builds, or to invite you after the transfer. Never create a parallel project.
 
-Add the section 6 values the same way (`eas env:create`, visibility "plaintext" is fine because they are public). `apps/customer/.env` does **not** reach cloud builds.
+Environment variables: the `preview` environment already has the four public values (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_PRIVACY_URL`, `EXPO_PUBLIC_TERMS_URL`). `EAS_PROJECT_ID` is optional now (the config has the default). `apps/customer/.env` does **not** reach cloud builds; add anything else with `eas env:create` (visibility "plaintext" is fine for public values).
 
-### Fix `eas.json` first (your first PR)
+### `eas.json` (done in T47, you add the iOS profile)
 
-`apps/customer/eas.json` is missing two things. Copy the pattern from `apps/driver/eas.json`:
-1. Each profile must name its EAS environment (`"environment": "development" | "preview" | "production"`), otherwise the variables above do not reach the build (lesson from review R2 M1 on the driver app).
-2. A store-signed profile for TestFlight that still points at mukhdar-dev. The `production` profile sets `APP_ENV=production`, and `app.config.ts` **refuses to build** a production app that points at the dev project (safety guard, T23 L8). Suggested profile:
+Every profile in `apps/customer/eas.json` now names its EAS environment, and there is an Android `closedtest` profile (`.aab`, store distribution, `preview` environment, points at mukhdar-dev). **Still missing: the iOS TestFlight profile.** Add it (your first PR). The `production` profile sets `APP_ENV=production`, and `app.config.ts` **refuses to build** a production app that points at the dev project (safety guard, T23 L8), so TestFlight against dev needs its own profile:
 
 ```json
 "testflight": {
@@ -114,7 +109,7 @@ Add the section 6 values the same way (`eas env:create`, visibility "plaintext" 
 }
 ```
 
-Then: `eas build -p ios --profile testflight` and `eas submit -p ios --latest`.
+Then: `eas build -p ios --profile testflight` and `eas submit -p ios --latest`. Note `autoIncrement` with `appVersionSource: remote` keeps separate counters per platform.
 
 Consider also adding `ios.config.usesNonExemptEncryption: false` (the app only uses HTTPS) to skip the export-compliance question on each upload.
 
@@ -137,7 +132,7 @@ EXPO_PUBLIC_TERMS_URL=https://mukhdar-admin.jambaz4a11.workers.dev/terms
 EXPO_PUBLIC_SENTRY_DSN=            # leave empty (Sentry off)
 EXPO_PUBLIC_SHOP_WHATSAPP=         # ask the owner (empty = "forgot PIN" WhatsApp link hidden)
 EXPO_PUBLIC_SHOP_PHONE=            # ask the owner (empty = "call the shop" button hidden)
-EAS_PROJECT_ID=                    # your EAS project ID
+EAS_PROJECT_ID=                    # optional: default 9774f741-7bab-47f9-a1a8-6d7cf4a31042 is in app.config.ts
 ```
 
 The publishable key is designed to be public; all access control is in RLS. Never put an `sb_secret_...` or `service_role` key anywhere in the app (the app refuses it).
@@ -154,7 +149,7 @@ App Store requirements already covered in the app: privacy policy link (Account 
 
 - **T33 (driver app):** the Android APK is built; manual testing on two real devices and its report are still pending. It does not block the customer iOS work.
 - **Production launch (T24):** production Supabase project, auth settings, first admin, reviewer account, EAS production builds for iOS and Android, TestFlight / Play internal testing for a week, store listings. All owner-approved steps.
-- `eas.json` for the customer app: missing `environment` keys and a TestFlight profile (section 5).
+- `eas.json` for the customer app: the TestFlight (iOS) profile is still missing (section 5). Environment keys and the Android `closedtest` profile were added in T47; Play closed-test details are in `docs/PLAY-STORE.md`.
 - Shop phone and WhatsApp values are not set for app builds yet (ask the owner).
 - `docs/OPEN-QUESTIONS.md` lists remaining product questions.
 

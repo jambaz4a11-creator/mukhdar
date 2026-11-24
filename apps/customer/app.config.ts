@@ -21,10 +21,14 @@ if (
   );
 }
 
+// T47: معرّف مشروع EAS الوحيد للزبون (عام، ليس سراً؛ iOS وAndroid من المشروع نفسه). EAS_PROJECT_ID يتجاوزه إن وُجد.
+const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '9774f741-7bab-47f9-a1a8-6d7cf4a31042';
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'سوق بسماوي',
   slug: 'mukhdar',
+  owner: 'jafar_sadiq20',
   scheme: 'mukhdar',
   version: '1.0.0',
   orientation: 'portrait',
@@ -69,7 +73,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     appEnv: process.env.APP_ENV ?? 'development',
-    // T14: معرّف مشروع EAS (ليس سراً). بدونه لا يُطلب رمز Expo Push والتطبيق يتخطى التسجيل.
-    ...(process.env.EAS_PROJECT_ID ? { eas: { projectId: process.env.EAS_PROJECT_ID } } : {}),
+    eas: { projectId: EAS_PROJECT_ID },
   },
 });
