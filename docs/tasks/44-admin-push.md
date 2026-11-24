@@ -1,4 +1,6 @@
-# 44: تنبيهات لوحة الأدمن: Web Push + صوت + PWA ⬜
+# 44: تنبيهات لوحة الأدمن: Web Push + صوت + PWA ✅
+
+> **منجزة 2026-11-24** (PR #56 docs، #57 backend، PR الواجهة). migration `20261216000001` على **mukhdar-dev فقط** (`db push --remote` بعد dry-run، local = remote 46 = 46، `db:test:remote` 42/42 و1831 فحصاً)؛ `push-config` (جديدة) و`push-dispatch` منشورتان على dev، `cors:live` 21/21. لا أسرار جديدة ولا Cloudflare ولا إنتاج. **يبقى:** فحص المالك على الآيفون والحاسوب (PREVIEW.md).
 
 > المواصفة: [SPEC-admin-push](../SPEC-admin-push.md). مهمة طويلة بغياب المالك (2026-11-24): القرارات غير المحددة افتراضات بالـ SPEC §9، والأسئلة §10.
 

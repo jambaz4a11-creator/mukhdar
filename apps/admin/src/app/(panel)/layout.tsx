@@ -6,6 +6,7 @@ import { fetchPendingDriverRequestCount } from '@/features/driverRequests/api';
 import { Sidebar } from '@/components/Sidebar';
 import { PanelProviders } from '@/components/PanelProviders';
 import { ServiceUnavailable } from '@/components/ServiceUnavailable';
+import { SoundUnlockBanner } from '@/features/notifications/SoundUnlockBanner';
 
 // حماية ثانية بعد الـ proxy: لا تُعرض صفحات اللوحة لغير الأدمن والموظف.
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +39,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           pendingDriverRequests={pendingDriverRequests}
         />
         <main className="min-w-0 flex-1 p-4 md:p-6">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">{children}</div>
+          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
+            <SoundUnlockBanner />
+            {children}
+          </div>
         </main>
       </div>
     </PanelProviders>

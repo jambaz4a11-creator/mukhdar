@@ -48,6 +48,11 @@ describe('buildCsp', () => {
     expect(dir('script-src')).not.toMatch(/https?:\/\/\*|\*/);
   });
 
+  it('service worker (T44 push) and manifest only from the panel itself', () => {
+    expect(dir('worker-src')).toBe("worker-src 'self'");
+    expect(dir('manifest-src')).toBe("manifest-src 'self'");
+  });
+
   it('allows eval only in development', () => {
     expect(buildCsp({ nonce: 'n', supabaseUrl: REF, dev: true })).toContain("'unsafe-eval'");
   });

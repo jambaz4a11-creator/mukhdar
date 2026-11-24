@@ -52,6 +52,8 @@ export function buildCsp({ nonce, supabaseUrl, dev = false }: CspOptions): strin
     ['base-uri', ["'self'"]],
     ['form-action', ["'self'"]],
     ['manifest-src', ["'self'"]],
+    // T44: service worker الإشعارات (/sw.js). مع 'strict-dynamic' يُتجاهل 'self' بـ script-src الذي كان الاحتياط
+    ['worker-src', ["'self'"]],
   ];
   return directives.map(([name, values]) => `${name} ${values.join(' ')}`).join('; ');
 }

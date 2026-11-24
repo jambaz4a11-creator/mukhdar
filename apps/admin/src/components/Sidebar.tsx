@@ -1,12 +1,19 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isNavActive, type NavItem, type PanelRole } from '@/lib/access';
 import { signOut } from '@/app/actions';
 import { NavIconSvg } from './icons';
 import { usePendingCount } from './usePendingCount';
 import { usePendingDriverRequests } from './usePendingDriverRequests';
+import { usePanel } from './PanelProviders';
+import { DeviceAlerts } from '@/features/notifications/DeviceAlerts';
+import { disableDevicePush } from '@/features/notifications/pushClient';
+import { useTitleCount } from '@/features/notifications/useTitleCount';
+
+/** الخروج لا ينتظر حذف اشتراك الإشعارات أكثر من هذا (بلا شبكة: حذف مؤجَّل + إبطال محلي). */
+const SIGN_OUT_PUSH_WAIT_MS = 3000;
 
 interface Props {
   items: NavItem[];
@@ -23,7 +30,21 @@ export function Sidebar({ items, role, name, pendingOrders, pendingDriverRequest
   const [open, setOpen] = useState(false);
   const pending = usePendingCount(pendingOrders);
   const driverRequests = usePendingDriverRequests(pendingDriverRequests, role === 'admin');
+  const { supabase } = usePanel();
+  const leaving = useRef(false);
   useEffect(() => setOpen(false), [pathname]);
+  // T44: "(N) …" بعنوان التبويب = الطلبات الجديدة (نفس رقم الشارة، حي بـ Realtime)
+  useTitleCount(pending);
+
+  // T44 (SPEC-admin-push §4): حذف اشتراك إشعارات هذا الجهاز **قبل** خروج الخادم (وإلا يبقى الصف بلا جلسة)
+  function onSignOut(e: React.FormEvent<HTMLFormElement>) {
+    if (leaving.current) return; // الإرسال الثاني (requestSubmit) يمر للـ Server Action
+    e.preventDefault();
+    leaving.current = true;
+    const form = e.currentTarget;
+    const wait = new Promise((resolve) => setTimeout(resolve, SIGN_OUT_PUSH_WAIT_MS));
+    void Promise.race([disableDevicePush(supabase), wait]).finally(() => form.requestSubmit());
+  }
 
   return (
     <aside className="border-b border-border bg-surface md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:flex-col md:border-b-0 md:border-l">
@@ -106,13 +127,14 @@ export function Sidebar({ items, role, name, pendingOrders, pendingDriverRequest
             <span className="font-semibold">{name ?? 'بدون اسم'}</span>
             <span className="text-text-muted"> · {role === 'admin' ? 'مدير' : 'موظف'}</span>
           </span>
+          <DeviceAlerts />
           <Link
             href="/change-pin"
             className="flex min-h-11 items-center rounded-control px-3 text-[15px] text-text no-underline hover:bg-primary-soft"
           >
             تغيير الرمز
           </Link>
-          <form action={signOut}>
+          <form action={signOut} onSubmit={onSignOut}>
             <button
               type="submit"
               className="flex min-h-11 w-full items-center rounded-control px-3 text-[15px] text-danger hover:bg-danger-soft"
