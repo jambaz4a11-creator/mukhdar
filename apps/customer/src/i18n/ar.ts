@@ -340,6 +340,9 @@ export const ar = {
     degraded:
       'المتصفح ما يسمح بحفظ الدخول (يمكن وضع التصفح الخاص). إذا سكّرت الصفحة تحتاج تسجّل دخول من جديد.',
   },
+  intro: {
+    skip: 'تخطي المقدمة',
+  },
   offline: {
     banner: `${glossary.noInternet}. نعرض آخر معلومات محفوظة`,
     title: glossary.noInternet,

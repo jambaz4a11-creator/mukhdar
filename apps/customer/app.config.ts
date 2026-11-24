@@ -62,7 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-localization', { supportsRTL: true, forcesRTL: true }],
     [
       'expo-splash-screen',
-      { backgroundColor: '#F7F8F3', image: './assets/images/splash-icon.png', imageWidth: 76 },
+      { backgroundColor: '#F7F8F3', image: './assets/images/splash-icon.png', imageWidth: 180 },
     ],
     // T14: الإشعارات البعيدة تحتاج development build (لا تعمل في Expo Go منذ SDK 53)
     ['expo-notifications', { color: '#1F6B3A' }],
